@@ -1,14 +1,15 @@
 # from https://github.com/Sanster/xy-cut.git
 # Implement XY Cut Algorithm used in 《XYLayoutLM: Towards Layout-Aware Multimodal Networks For Visually-Rich Document Understanding》
 
-from copy import deepcopy  # noqa
-from typing import List, Tuple
+from collections import Counter
+from typing import List
 
 import numpy as np
 from scipy.signal import find_peaks  # noqa
 
-from uniparser_tools.common.dataclass import Item, LayoutType  # noqa
+from uniparser_tools.common.dataclass import BBox, Item, LayoutType  # noqa
 from uniparser_tools.utils.bbox import compute_iou  # noqa
+
 
 PADDING = 5
 
@@ -93,187 +94,69 @@ def split_projection_profile(arr_values: np.array, min_value: float, min_gap: fl
     return arr_start, arr_end
 
 
-def expand_items(items: List[Item]):
+def sticky_items(items: List[Item], *, offset: int = 5, axis: str = "both") -> None:
+    """
+    原地把 items 的 bbox 做“sticky”对齐。
+    axis = 'x'  | 'y'  | 'both'  表示要吸哪条边。
+    offset: 最大吸合距离（像素）
+    """
     if not items:
-        return items
-    page_size = items[0].page_size
-    bboxes = np.asarray([(b.bbox * b.page_size).xyxy_int for b in items])
+        return
 
-    proj_x = projection_by_bboxes(boxes=bboxes, axis=0, length=page_size[0] + 1)
+    # 1. 收集四条边
+    bboxes = np.array([it.p_bbox.xyxy for it in items])  # (N,4)
+    x1, y1, x2, y2 = bboxes[:, 0], bboxes[:, 1], bboxes[:, 2], bboxes[:, 3]
 
-    diff = np.diff(proj_x, n=1, axis=0, prepend=0)
-    pos_diff = np.maximum(diff, 0)
-    neg_diff = np.maximum(-diff, 0)
+    # 2. 定义 helper：把一维坐标分组→众数→统一赋值
+    def _snap(coords: np.ndarray) -> np.ndarray:
+        order = np.argsort(coords)
+        groups = []
+        for idx in order:
+            val = coords[idx]
+            # 找头/尾差距 ≤ offset 的组
+            for g in groups:
+                if abs(val - coords[g[0]]) <= offset or abs(val - coords[g[-1]]) <= offset:
+                    g.append(idx)
+                    break
+            else:
+                groups.append([idx])
 
-    height_threshold = page_size[1] / 20
-    pos_peaks, pos_info = find_peaks(np.concatenate([np.zeros((1,)), pos_diff]), height=height_threshold)
-    neg_peaks, neg_info = find_peaks(np.concatenate([np.zeros((1,)), neg_diff]), height=height_threshold)
-    pos_peaks = pos_peaks - 1  # 因为前面 concat 了一个 0
-    neg_peaks = neg_peaks - 1
+        new_coords = coords.copy()
+        for g in groups:
+            vals = coords[g]
+            cnt = Counter(vals)
+            max_freq = max(cnt.values())
+            modes = [v for v, c in cnt.items() if c == max_freq]
+            snap_val = int(np.mean(modes)) if len(modes) > 1 else int(modes[0])
+            new_coords[g] = snap_val
+        return new_coords
 
-    # neg_peak_heights = neg_info.get("peak_heights", None)
-    # pos_peak_heights = pos_info.get("peak_heights", None)
+    # 3. 按 axis 吸合
+    if axis in ("x", "both"):
+        bboxes[:, 0] = _snap(x1)  # x1
+        bboxes[:, 2] = _snap(x2)  # x2
+    if axis in ("y", "both"):
+        bboxes[:, 1] = _snap(y1)  # y1
+        bboxes[:, 3] = _snap(y2)  # y2
 
-    if not pos_peaks.shape[0]:
-        pos_peaks = [int(bboxes[:, 0].min())]
-        # pos_peak_heights = np.array([0])
-    if not neg_peaks.shape[0]:
-        neg_peaks = [int(bboxes[:, 2].max())]
-        # neg_peak_heights = np.array([0])
-
-    # merge nearby peaks
-    # merged_pos_index = [np.argmax(pos_peak_heights)]
-    # merged_pos_peaks = [pos_peaks[merged_pos_index[0]]]
-    # for i, (p, v) in enumerate(zip(pos_peaks, pos_peak_heights)):
-    #     if i == merged_pos_index[0]:
-    #         continue
-    #     if p - merged_pos_peaks[-1] < PADDING:
-    #         if v > pos_peak_heights[merged_pos_index[-1]]:
-    #             merged_pos_peaks[-1] = p
-    #             merged_pos_index[-1] = i
-    #     else:
-    #         merged_pos_peaks.append(p)
-    #         merged_pos_index.append(i)
-    # pos_peaks = np.sort(np.array(merged_pos_peaks))
-    # pos_peak_heights = np.sort(np.array([pos_peak_heights[i] for i in merged_pos_index]))
-    # debug_print(f"merged pos_peaks: {pos_peaks}")
-
-    # merged_neg_index = [np.argmax(neg_peak_heights)]
-    # merged_neg_peaks = [neg_peaks[merged_neg_index[0]]]
-    # for i, (p, v) in enumerate(zip(neg_peaks, neg_peak_heights)):
-    #     if i == merged_neg_index[0]:
-    #         continue
-    #     if merged_neg_peaks[-1] - p < PADDING:
-    #         if v > neg_peak_heights[merged_neg_index[-1]]:
-    #             merged_neg_peaks[-1] = p
-    #             merged_neg_index[-1] = i
-    #     else:
-    #         merged_neg_peaks.append(p)
-    #         merged_neg_index.append(i)
-    # neg_peaks = np.sort(np.array(merged_neg_peaks))
-    # neg_peak_heights = np.sort(np.array([neg_peak_heights[i] for i in merged_neg_index]))
-    # debug_print(f"merged neg_peaks: {neg_peaks}")
-
-    most_left: int = max(0, pos_peaks[0] - PADDING)
-    most_right: int = min(neg_peaks[-1] + PADDING, page_size[0])
-
-    expand_left_bboxes = []
-    expand_right_bboxes = []
-    for idx, item in enumerate(items):
-        bbox_ = item.bbox * item.page_size
-        if (bbox_.x1 - most_left) > bbox_.width or bbox_.x1 <= most_left:  # item.type != LayoutType.HLine and
-            expand_left_bboxes.append(bbox_.xyxy)
-        else:
-            bbox_.x2 = bbox_.x1 - 1
-            bbox_.x1 = most_left
-            expand_left_bboxes.append(bbox_.xyxy)
-
-        bbox_ = item.bbox * item.page_size
-        if (most_right - bbox_.x2) > bbox_.width or bbox_.x2 >= most_right:  # item.type != LayoutType.HLine and
-            expand_right_bboxes.append(bbox_.xyxy)
-        else:
-            bbox_.x1 = bbox_.x2 + 1
-            bbox_.x2 = most_right
-            expand_right_bboxes.append(bbox_.xyxy)
-
-    # check iou
-    # raw_iou = compute_iou(bboxes, bboxes)
-    # raw_iou[np.eye(raw_iou.shape[0], dtype=bool)] = 0
-    raw_iou = np.zeros((len(items), len(items)), dtype=float)
-
-    left_iou = compute_iou(np.asarray(expand_left_bboxes), bboxes)
-    right_iou = compute_iou(np.asarray(expand_right_bboxes), bboxes)
-
-    expand_items: List[Item] = []
-    for idx, (item, iou_l, iou_r, r_iou) in enumerate(zip(items, left_iou, right_iou, raw_iou)):
-        max_iou_l = np.max(iou_l[r_iou == 0])  # 忽略已经重合的框
-        max_iou_r = np.max(iou_r[r_iou == 0])
-
-        bbox = item.bbox * item.page_size
-        if max_iou_l == 0:
-            bbox.x1 = most_left
-        if max_iou_r == 0:
-            bbox.x2 = most_right
-
-        bbox = bbox / item.page_size
-        item_ = item.clone(item, bbox=bbox)
-        expand_items.append(item_)
-    return expand_items
-
-
-def page_split_projection_profile(expanded_bboxes, page_size: Tuple[int, int], line_height: float = 20):
-    most_left = np.min(expanded_bboxes[:, 0])
-    most_right = np.max(expanded_bboxes[:, 2])
-
-    proj_y = projection_by_bboxes(boxes=expanded_bboxes, axis=1, length=page_size[1] + 1)
-    proj_y_count = projection_by_bboxes(boxes=expanded_bboxes, axis=1, length=page_size[1] + 1, count=1)
-
-    arr_start_y, arr_end_y = split_projection_profile(proj_y, 0, 1)
-
-    try:
-        # single col and full width
-        proj_y_sc = (proj_y_count == 1) & (proj_y == most_right - most_left)
-        arr_start_y_sc, arr_end_y_sc = split_projection_profile(proj_y_sc, 0, 1)
-
-    except Exception:
-        arr_start_y_sc = np.array([0])
-        arr_end_y_sc = np.array([len(proj_y)])
-
-    try:
-        # full width gap and gap width > line_height
-        proj_y_gap = proj_y_count == 0
-        arr_start_y_gap, arr_end_y_gap = split_projection_profile(proj_y_gap, 0, 1)
-
-        keep = (arr_end_y_gap - arr_start_y_gap) > 3 * line_height
-        arr_start_y_gap = arr_start_y_gap[keep]
-        arr_end_y_gap = arr_end_y_gap[keep]
-
-    except Exception:
-        arr_start_y_gap = np.array([])
-        arr_end_y_gap = np.array([])
-
-    # merge arr_start_y, arr_end_y if not inside arr_start_y_, arr_end_y_
-    parts = np.asarray(
-        sorted(
-            {
-                0,
-                *arr_start_y_sc.tolist(),
-                *arr_end_y_sc.tolist(),
-                *arr_start_y_gap.tolist(),
-                *arr_end_y_gap.tolist(),
-                page_size[1] - 1,
-            }
-        )
-    )
-    arr_start_y_sc = parts[:-1]
-    arr_end_y_sc = parts[1:]
-
-    h_ = np.asarray([arr_start_y_sc, np.zeros_like(arr_start_y_sc), arr_end_y_sc, np.ones_like(arr_end_y_sc)]).T
-    h = np.asarray([arr_start_y, np.zeros_like(arr_start_y), arr_end_y, np.ones_like(arr_end_y)]).T
-
-    iou = compute_iou(h_, h)
-
-    keep = np.max(iou, axis=1) > 0
-
-    arr_start_y_sc = arr_start_y_sc[keep]
-    arr_end_y_sc = arr_end_y_sc[keep]
-
-    #  = h[iou[keep] > 0]
-    overlap_x1 = (iou[keep] > 0) * h[:, 0][None, ...]
-    arr_masked = np.ma.masked_where(overlap_x1 == 0, overlap_x1)
-    arr_start_y_sc = arr_masked.min(axis=1).filled(0)  # 全0行返回0
-
-    overlap_x2 = (iou[keep] > 0) * h[:, 2][None, ...]
-    arr_masked = np.ma.masked_where(overlap_x2 == 0, overlap_x2)
-    arr_end_y_sc = arr_masked.max(axis=1).filled(page_size[1] - 1)  # 全0行返回0
-
-    arr_start_y_sc = np.unique(arr_start_y_sc)
-    arr_end_y_sc = np.unique(arr_end_y_sc)
-    return arr_start_y_sc, arr_end_y_sc
+    # 4. 写回对象
+    new_items = []
+    for it, new_box in zip(items, bboxes):
+        new_box = BBox(*new_box)
+        new_items.append(it.clone(it, bbox=new_box / it.page_size))
+    return new_items
 
 
 def recursive_xy_cut(
-    boxes: np.ndarray, indices: List[int], res: List[int], pos_y=None, min_value: int = 0, min_gap: int = 1
+    boxes: np.ndarray,
+    indices: List[int],
+    res: List[int],
+    pos_y=None,
+    min_value_x: int = 0,
+    min_gap_x: int = 1,
+    min_value_y: int = 0,
+    min_gap_y: int = 1,
+    level: int = 0,
 ):
     """
 
@@ -294,7 +177,7 @@ def recursive_xy_cut(
 
     if pos_y is None:
         y_projection = projection_by_bboxes(boxes=y_sorted_boxes, axis=1)
-        pos_y = split_projection_profile(y_projection, min_value, min_gap)
+        pos_y = split_projection_profile(y_projection, min_value_y, min_gap_y)
 
     if not pos_y:
         return
@@ -313,7 +196,7 @@ def recursive_xy_cut(
 
         # 往 x 方向投影
         x_projection = projection_by_bboxes(boxes=x_sorted_boxes_chunk, axis=0)
-        pos_x = split_projection_profile(x_projection, min_value, min_gap)
+        pos_x = split_projection_profile(x_projection, min_value_x, min_gap_x)
         if not pos_x:
             continue
 
@@ -326,22 +209,132 @@ def recursive_xy_cut(
         # x 方向上能分开，继续递归调用
         for c0, c1 in zip(arr_x0, arr_x1):
             _indices = (c0 <= x_sorted_boxes_chunk[:, 0]) & (x_sorted_boxes_chunk[:, 0] < c1)
-            recursive_xy_cut(x_sorted_boxes_chunk[_indices], x_sorted_indices_chunk[_indices], res)
+            recursive_xy_cut(
+                x_sorted_boxes_chunk[_indices],
+                x_sorted_indices_chunk[_indices],
+                res,
+                min_value_x=min_value_x,
+                min_gap_x=min_gap_x,
+                min_value_y=min_value_y,
+                min_gap_y=min_gap_y,
+                level=level + 1,
+            )
     return res
 
 
-def xycut(items: List[Item]):
+def recursive_xy_cut_priority(
+    boxes: np.ndarray,
+    indices: List[int],
+    res: List[int],
+    primary: str = "x",
+    splits_y: List[bool] = [],
+    splits_x: List[bool] = [],
+    min_value_x: int = 0,
+    min_gap_x: int = 1,
+    min_value_y: int = 0,
+    min_gap_y: int = 1,
+    level: int = 0,
+    sequential: bool = False,
+):
+    """通用递归 XY 切分：可以选择 primary 为 'y'（行优先，保持原有行为）或 'x'（列优先）。
+
+    当 primary=='x' 时，先按 x 投影切分，再对每个 x 区间按 y 投影切分，并在需要时递归。
+    当 primary=='y' 时，先按 y 投影切分，再对每个 y 区间按 x 投影切分，并在需要时递归。
+    """
+    assert len(boxes) == len(indices)
+
+    if primary == "x":
+        axis_pri = 0
+        axis_sec = 1
+        min_value_pri, min_gap_pri = min_value_x, min_gap_x
+        min_value_sec, min_gap_sec = min_value_y, min_gap_y
+    else:
+        axis_pri = 1
+        axis_sec = 0
+        min_value_pri, min_gap_pri = min_value_y, min_gap_y
+        min_value_sec, min_gap_sec = min_value_x, min_gap_x
+
+    _idx = boxes[:, axis_pri].argsort()
+    sorted_boxes_pri = boxes[_idx]
+    sorted_indices_pri = indices[_idx]
+
+    projection_pri = projection_by_bboxes(boxes=sorted_boxes_pri, axis=axis_pri)
+    pos_pri = split_projection_profile(projection_pri, min_value_pri, min_gap_pri)
+
+    if not pos_pri:
+        return
+
+    arr_pri_0, arr_pri_1 = pos_pri
+    if sequential and len(arr_pri_0) > 2:
+        arr_pri_0 = arr_pri_0[:2]
+        arr_pri_1 = arr_pri_1[[0, -1]]
+    if axis_pri == 1 and len(splits_y):
+        arr_pri_0 = [0] + splits_y
+        arr_pri_1 = [i - 1 for i in splits_y] + [np.max(boxes[:, axis_pri + 2])]
+    for c0, c1 in zip(arr_pri_0, arr_pri_1):
+        _mask = (c0 <= sorted_boxes_pri[:, axis_pri]) & (sorted_boxes_pri[:, axis_pri] < c1)
+        if not _mask.any():
+            continue
+
+        chunk_boxes = sorted_boxes_pri[_mask]
+        chunk_indices = sorted_indices_pri[_mask]
+
+        _idx2 = chunk_boxes[:, axis_sec].argsort()
+        sorted_boxes_sec = chunk_boxes[_idx2]
+        sorted_indices_sec = chunk_indices[_idx2]
+
+        projection_sec = projection_by_bboxes(boxes=sorted_boxes_sec, axis=axis_sec)
+        pos_sec = split_projection_profile(projection_sec, min_value_sec, min_gap_sec)
+        if not pos_sec:
+            continue
+
+        arr_sec_0, arr_sec_1 = pos_sec
+        if len(arr_sec_0) == 1:
+            # axis_sec 方向无法进一步切分，直接按 axis_sec 排序输出
+            res.extend(sorted_indices_sec)
+            continue
+        if sequential and len(arr_sec_0) > 2:
+            arr_sec_0 = arr_sec_0[:2]
+            arr_sec_1 = arr_sec_1[[0, -1]]
+        if axis_sec == 1 and len(splits_y):
+            arr_sec_0 = [0] + splits_y
+            arr_sec_1 = [i - 1 for i in splits_y] + [np.max(boxes[:, axis_sec + 2])]
+
+        for r0, r1 in zip(arr_sec_0, arr_sec_1):
+            _mask2 = (r0 <= sorted_boxes_sec[:, axis_sec]) & (sorted_boxes_sec[:, axis_sec] < r1)
+            if not _mask2.any():
+                continue
+            recursive_xy_cut_priority(
+                sorted_boxes_sec[_mask2],
+                sorted_indices_sec[_mask2],
+                res,
+                primary="x",
+                min_value_x=min_value_x,
+                min_gap_x=min_gap_x,
+                min_value_y=min_value_y,
+                min_gap_y=min_gap_y,
+                level=level + 1,
+                sequential=sequential,
+            )
+    return res
+
+
+def xycut(items: List[Item], line_height: int = 0):
     # auto remove zero size bboxes
     if not items:
         return []
-    line_heights = [max(items[0].page_size[1] / 80, 10)]
-    for item in items:
-        if item.type != LayoutType.HLine:
-            line_heights.append(item.bbox.height * item.page_size[1])
-        if hasattr(item, "bboxes"):
-            for bbox in item.bboxes:
-                line_heights.append(bbox.height * item.page_size[1])
-    line_height = max(1, np.min(line_heights))
+
+    items = sticky_items(items, offset=5, axis="both")
+
+    if not line_height:
+        line_heights = [max(items[0].page_size[1] / 80, 10)]
+        for item in items:
+            if item.type != LayoutType.HLine:
+                line_heights.append(item.bbox.height * item.page_size[1])
+            if hasattr(item, "bboxes"):
+                for bbox in item.bboxes:
+                    line_heights.append(bbox.height * item.page_size[1])
+        line_height = max(1, np.min(line_heights))
 
     boxes = np.asarray([(b.bbox * b.page_size).shrink(2, b.page_size, axis="y").xyxy_int for b in items])
 
@@ -351,40 +344,66 @@ def xycut(items: List[Item]):
 
     indices: List[int] = np.arange(len(boxes))
     res: List[int] = []
-    recursive_xy_cut(boxes, indices, res, min_gap=line_height)
+    recursive_xy_cut(boxes, indices, res, min_gap_y=line_height)
     assert len(res) == len(set(res)) == len(items), (len(res), len(set(res)), len(items))
     return res
 
 
-def xycut_expanded(items: List[Item]):
-    # auto remove zero size bboxes
+def xycut_expanded(items: List[Item], line_height: int = 0, primary: str = "y", sequential=False):
+    """与 xycut 功能等价，但可以选择 primary='y'（默认，行优先）或 'x'（列优先）。
+    sequential: False => single 1
+    sequential: True => other, one by one
+
+    返回 reading order indices 列表。
+    """
     if not items:
         return []
-    line_heights = [max(items[0].page_size[1] / 80, 10)]
-    page_size = items[0].page_size
-    for item in items:
-        if item.type != LayoutType.HLine:
-            line_heights.append(item.bbox.height * item.page_size[1])
-        if hasattr(item, "bboxes"):
-            for bbox in item.bboxes:
-                line_heights.append(bbox.height * item.page_size[1])
-    line_height = max(1, np.min(line_heights))
 
-    expanded_items = expand_items(items)
-    expanded_bboxes = np.asarray(
-        [(b.bbox * b.page_size).shrink(10, b.page_size, axis="y").xyxy_int for b in expanded_items]
-    )
+    items = sticky_items(items, offset=5, axis="both")
+    min_x, max_x = min([item.bbox.x1 for item in items]), max([item.bbox.x2 for item in items])
+    content_width = max_x - min_x  # 0 ~ 1
+    content_width = max(content_width, 0.6)
+
+    if not line_height:
+        line_heights = [max(items[0].page_size[1] / 80, 10)]
+        for item in items:
+            if item.type != LayoutType.HLine:
+                line_heights.append(item.bbox.height * item.page_size[1])
+            if hasattr(item, "bboxes"):
+                for bbox in item.bboxes:
+                    line_heights.append(bbox.height * item.page_size[1])
+        line_height = max(1, np.min(line_heights))
+
+    splits_y = []
+    for b in items:
+        if b.type == LayoutType.HLine and b.r_bbox.width > content_width * 0.5:
+            splits_y.append(int(b.bbox.y1 * b.page_size[1]))
+        elif b.type == LayoutType.Group:
+            if sequential and b.r_bbox.width > content_width * 0.6:
+                splits_y.append(int(b.bbox.y1 * b.page_size[1]))
+                splits_y.append(int(b.bbox.y2 * b.page_size[1]))
+            elif not sequential and b.r_bbox.width > content_width * 0.5:
+                splits_y.append(int(b.bbox.y1 * b.page_size[1]))
+                splits_y.append(int(b.bbox.y2 * b.page_size[1]))
+    splits_y = sorted(splits_y)
+
+    boxes = np.asarray([(b.bbox * b.page_size).shrink(2, b.page_size, axis="y").xyxy_int for b in items])
 
     # fix zero size bboxes
-    valid_indices = np.prod(expanded_bboxes[:, 2:] - expanded_bboxes[:, :2], axis=1) > 0
-    expanded_bboxes[:, 2:] = np.where(valid_indices[:, None], expanded_bboxes[:, 2:], expanded_bboxes[:, 2:] + 1)
+    valid_indices = np.prod(boxes[:, 2:] - boxes[:, :2], axis=1) > 0
+    boxes[:, 2:] = np.where(valid_indices[:, None], boxes[:, 2:], boxes[:, 2:] + 1)
 
-    _indices = expanded_bboxes[:, 1].argsort()
-    y_sorted_boxes = expanded_bboxes[_indices]
-    pos_y = page_split_projection_profile(y_sorted_boxes, page_size, line_height)
-
-    indices: List[int] = np.arange(len(items))
+    indices: List[int] = np.arange(len(boxes))
     res: List[int] = []
-    recursive_xy_cut(expanded_bboxes, indices, res, pos_y)
+    recursive_xy_cut_priority(
+        boxes,
+        indices,
+        res,
+        primary=primary,
+        min_gap_y=line_height,
+        sequential=sequential,
+        splits_y=splits_y,
+    )
+    # res = list(dict.fromkeys(res))  # remove duplicates and keep order
     assert len(res) == len(set(res)) == len(items), (len(res), len(set(res)), len(items))
     return res
