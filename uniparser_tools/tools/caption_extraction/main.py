@@ -15,6 +15,7 @@ from PIL import Image
 from uniparser_tools.common.constant import LayoutType, LayoutTypeBot, LayoutTypeTop, OrderingMethod
 from uniparser_tools.common.dataclass import (
     BBox,
+    DataclassJSONEncoder,
     ExpressionResult,
     GroupedResult,
     Item,
@@ -214,6 +215,22 @@ def refine_page_tree(items: List[Item]) -> List[Item]:
                 items[idx] = SemanticItem.clone(item)
                 continue
             # append isolated legends to the only image or figure group
+
+            if idx >= 1:
+                prev_item = items[idx - 1]
+                if prev_item.type in [LayoutType.Title] and prev_item.plain.lower().strip().startswith("scheme"):
+                    get_root_logger().debug(f"{prev_item.plain} {item.type} {item.block}")
+                    if item.type in [LayoutType.Image]:
+                        get_root_logger().debug(f"Merge {repr(prev_item.plain)} and {item.type}")
+                        union_bbox = prev_item.bbox.union(item.bbox)
+                        item = GroupedResult.clone(item, bbox=union_bbox, items=[prev_item, item])
+                        items[idx] = item
+                    elif item.type in [LayoutType.Group, LayoutType.FigureGroup]:
+                        get_root_logger().debug(f"Merge {repr(prev_item.plain)} and {item.type}")
+                        union_bbox = prev_item.bbox.union(item.bbox)
+                        item.bbox = union_bbox
+                        item.items.insert(0, prev_item)
+                        items[idx] = item
 
             # 处理没有直属Image但是有直属Chart等
             item_types = [it.type for it in item.items]
@@ -680,12 +697,26 @@ def main(token: str, pdf_path: str, json_path: str, save_dir: str = None, dpi=30
         # 重排 page 内 item 顺序
         get_root_logger().debug("=" * 30 + "reorder_pages" + "=" * 30)
         pages = reorder_pages(pages)
+        json.dump(
+            pages,
+            open(save_dir / "reordered.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+            cls=DataclassJSONEncoder,
+        )
 
         # 合并跨页的 caption
         get_root_logger().debug("=" * 30 + "continue_next_column_image_caption" + "=" * 30)
         pages = continue_next_column_image_caption(pages)
         get_root_logger().debug("=" * 30 + "continue_next_page_image_caption" + "=" * 30)
         pages = continue_next_page_image_caption(pages)
+        json.dump(
+            pages,
+            open(save_dir / "connected-imagecaption.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+            cls=DataclassJSONEncoder,
+        )
 
         # 合并跨页的 paragraph
         get_root_logger().debug("=" * 30 + "continue_paragraphs" + "=" * 30)
@@ -693,6 +724,20 @@ def main(token: str, pdf_path: str, json_path: str, save_dir: str = None, dpi=30
         paragraphs = [item for item in continue_paragraphs(paragraphs) if item.type in [LayoutType.Paragraph]]
         paragraphs_kws = [find_figure_caption_kws([p.plain]) for p in paragraphs]
         get_root_logger().debug(f"Continued {len(paragraphs)} paragraphs")
+        json.dump(
+            paragraphs,
+            open(save_dir / "connected-paragraphs.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+            cls=DataclassJSONEncoder,
+        )
+        json.dump(
+            paragraphs_kws,
+            open(save_dir / "connected-paragraphs-kws.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+            cls=DataclassJSONEncoder,
+        )
 
         kept_caption_kws = []
         ignored_caption_kws = []
@@ -754,6 +799,7 @@ def main(token: str, pdf_path: str, json_path: str, save_dir: str = None, dpi=30
                     get_root_logger().warning(
                         f"{token} Skip non-image group: {group_name} with types {item_types}, {image_main}"
                     )
+                    get_root_logger().debug(tree_repr(group))
                     continue
 
                 if not image_desc:
