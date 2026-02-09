@@ -697,26 +697,28 @@ def main(token: str, pdf_path: str, json_path: str, save_dir: str = None, dpi=30
         # 重排 page 内 item 顺序
         get_root_logger().debug("=" * 30 + "reorder_pages" + "=" * 30)
         pages = reorder_pages(pages)
-        json.dump(
-            pages,
-            open(save_dir / "reordered.json", "w", encoding="utf-8"),
-            ensure_ascii=False,
-            indent=4,
-            cls=DataclassJSONEncoder,
-        )
+        if save_dir:
+            json.dump(
+                pages,
+                open(save_dir / "reordered.json", "w", encoding="utf-8"),
+                ensure_ascii=False,
+                indent=4,
+                cls=DataclassJSONEncoder,
+            )
 
         # 合并跨页的 caption
         get_root_logger().debug("=" * 30 + "continue_next_column_image_caption" + "=" * 30)
         pages = continue_next_column_image_caption(pages)
         get_root_logger().debug("=" * 30 + "continue_next_page_image_caption" + "=" * 30)
         pages = continue_next_page_image_caption(pages)
-        json.dump(
-            pages,
-            open(save_dir / "connected-imagecaption.json", "w", encoding="utf-8"),
-            ensure_ascii=False,
-            indent=4,
-            cls=DataclassJSONEncoder,
-        )
+        if save_dir:
+            json.dump(
+                pages,
+                open(save_dir / "connected-imagecaption.json", "w", encoding="utf-8"),
+                ensure_ascii=False,
+                indent=4,
+                cls=DataclassJSONEncoder,
+            )
 
         # 合并跨页的 paragraph
         get_root_logger().debug("=" * 30 + "continue_paragraphs" + "=" * 30)
@@ -724,20 +726,21 @@ def main(token: str, pdf_path: str, json_path: str, save_dir: str = None, dpi=30
         paragraphs = [item for item in continue_paragraphs(paragraphs) if item.type in [LayoutType.Paragraph]]
         paragraphs_kws = [find_figure_caption_kws([p.plain]) for p in paragraphs]
         get_root_logger().debug(f"Continued {len(paragraphs)} paragraphs")
-        json.dump(
-            paragraphs,
-            open(save_dir / "connected-paragraphs.json", "w", encoding="utf-8"),
-            ensure_ascii=False,
-            indent=4,
-            cls=DataclassJSONEncoder,
-        )
-        json.dump(
-            paragraphs_kws,
-            open(save_dir / "connected-paragraphs-kws.json", "w", encoding="utf-8"),
-            ensure_ascii=False,
-            indent=4,
-            cls=DataclassJSONEncoder,
-        )
+        if save_dir:
+            json.dump(
+                paragraphs,
+                open(save_dir / "connected-paragraphs.json", "w", encoding="utf-8"),
+                ensure_ascii=False,
+                indent=4,
+                cls=DataclassJSONEncoder,
+            )
+            json.dump(
+                paragraphs_kws,
+                open(save_dir / "connected-paragraphs-kws.json", "w", encoding="utf-8"),
+                ensure_ascii=False,
+                indent=4,
+                cls=DataclassJSONEncoder,
+            )
 
         kept_caption_kws = []
         ignored_caption_kws = []
