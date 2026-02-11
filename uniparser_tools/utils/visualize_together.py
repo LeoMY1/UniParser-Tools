@@ -90,9 +90,6 @@ def flatten_semantic_items_obj(item: SemanticItem) -> List[SemanticItem]:
     return res
 
 
-# =============================================================================
-# 1. 颜色配置
-# =============================================================================
 LABEL_COLORS = {
     # Top-level layout types
     LayoutType.DocumentTitle.value: "#1f77b4",  # 文档标题
@@ -761,7 +758,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             <span class="page-badge">Page {current_page_num} / {total_pages}</span>
         </div>
     </div>
-    <div class="header-right">
+    <!-- <div class="header-right">
         <div class="upload-header-btn" onclick="document.getElementById('file-upload-input').click()" 
              ondragover="event.preventDefault(); this.classList.add('dragover');" 
              ondragleave="this.classList.remove('dragover');" 
@@ -774,7 +771,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             </svg>
             <span>点击或拖入文件上传</span>
         </div>
-    </div>
+    </div> -->
 </div>
 <div class="container">
     <div class="left-pane">
@@ -943,7 +940,7 @@ def render_det_to_html(item: SemanticItem, idx: int, pil_image: Image.Image) -> 
 
     is_group = isinstance(item, GroupedResult) or "group" in cat_lower
     is_text_annotation = any(x in cat_lower for x in ["caption", "footnote", "note"])
-    is_header_footer_hline = cat_lower in ["header", "footer", "pageheader", "pagefooter", "hline"]
+    is_header_footer_hline = cat_lower in ["header", "footer", "pageheader", "pagefooter", "hline", "watermark"]
     is_image_type = cat_lower in ["image", "figure"]
 
     if "equationid" in cat_lower or "moleculeid" in cat_lower:
@@ -1155,7 +1152,6 @@ def create_interactive_html_from_data(vis_data: Dict) -> str:
 
     sidebar_parts = ['<div class="page-sidebar">']
 
-    # 动态生成分页标签
     for i in range(total_pages):
         active_cls = "active" if i == current_page else ""
         sidebar_parts.append(
