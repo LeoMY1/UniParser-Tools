@@ -59,16 +59,16 @@ class TableBBoxType(IntEnum):
 
 # fmt: off
 class ParseMode(IntEnum):
-    DumpHosting = -3           # 禁用解析，输出原始图像数据至image hosting server
+    DumpHosting = -3           # 禁用解析，输出原始图像数据至image hosting server 【 ❌ 暂不支持】
     DumpLocal = -2             # 禁用解析，输出原始图像数据至本地
     DumpBase64 = -1            # 禁用解析，输出原始图像数据至base64编码
     Disable = 0                # 禁用解析，禁用输出
     OCRFast = 1                # 快速OCR，默认设置
-    OCRHighQuality = 2         # 高质OCR，【暂不支持】
+    OCRHighQuality = 2         # 高质OCR
 
 
 class ParseModeTextual(IntEnum):
-    DumpHosting = -3           # 禁用解析，输出原始图像数据至image hosting server
+    DumpHosting = -3           # 禁用解析，输出原始图像数据至image hosting server 【 ❌ 暂不支持】
     DumpLocal = -2             # 禁用解析，输出原始图像数据至本地
     DumpBase64 = -1            # 禁用解析，输出原始图像数据至base64编码
     Disable = 0                # 禁用解析，禁用输出

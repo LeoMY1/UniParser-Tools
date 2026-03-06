@@ -97,13 +97,14 @@ def compute_iou(boxes1, boxes2):
     return result
 
 
-def assign(
+def assign_multiple(
     bboxes1: List[BBox],  # foreground @ iof
     bboxes2: List[BBox],  # background @ iof
     method: str = "iou",
     threshold: float = 0.7,
     axis: int = 1,
-) -> List[int]:
+    multiple: bool = True,
+) -> List[List[int]]:
     """
     Assign bboxes1 and bboxes2 based on their overlap and axis
     """
@@ -127,11 +128,26 @@ def assign(
         raise ValueError(f"Unknown method: {method}")
 
     # assign
-    idx: np.ndarray = np.argmax(iou, axis=axis)
-    val = np.max(iou, axis=axis)
-    idx[val <= threshold] = -1
-    hits: List[int] = idx.astype(int).tolist()
+    if multiple:
+        rows, cols = np.where(iou > threshold)
+        hits = [cols[rows == i].astype(int).tolist() for i in range(len(bboxes1))]  # M x n
+    else:
+        idx: np.ndarray = np.argmax(iou, axis=axis)
+        val = np.max(iou, axis=axis)
+        idx[val <= threshold] = -1
+        hits = idx[:, None].astype(int).tolist()  # M x 1
     return hits
+
+
+def assign(
+    bboxes1: List[BBox],  # foreground @ iof
+    bboxes2: List[BBox],  # background @ iof
+    method: str = "iou",
+    threshold: float = 0.7,
+    axis: int = 1,
+) -> List[int]:
+    hits = assign_multiple(bboxes1, bboxes2, method, threshold, axis, multiple=False)
+    return [i for h in hits for i in h]
 
 
 if __name__ == "__main__":

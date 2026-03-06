@@ -81,7 +81,7 @@ def item2format_(item: SemanticItem, item_format: FormatFlag):
             s_ = []
             for item in item.items:
                 s_.append(item2format_(item, item_format))
-            s = "\n".join(s_)
+            s = "\n\n".join(s_)
     return s
 
 
@@ -772,6 +772,7 @@ class MoleculeResult(SemanticItem):
     markush: bool = False
     smi: str = ""
     sru: bool = False
+    drawing: str = ""
 
     @property
     def plain(self):
@@ -786,6 +787,8 @@ class MoleculeResult(SemanticItem):
 
     @property
     def markdown(self):
+        # if self.drawing.strip():
+        #     return f"<div><div>{self.drawing}</div><code>{self.plain}</code></div>"
         return f"***{self.plain}***"
 
     @property
@@ -794,7 +797,8 @@ class MoleculeResult(SemanticItem):
 
     @property
     def html(self):
-        # TODO: SVG display
+        # if self.drawing.strip():
+        #     return f"<div><div>{self.drawing}</div><code>{self.plain}</code></div>"
         return f"<code>{self.plain}</code>"
 
 
@@ -864,22 +868,32 @@ class ExpressionResult(SemanticItem):
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        reactions = []
-        for r in self.reactions:
-            reactions.append(
-                dict(
-                    reactants=",".join([repr(r.text) for r in r.reactants]),
-                    products=",".join([repr(p.text) for p in r.products]),
-                    conditions=",".join([repr(c.text) for c in r.conditions]),
+        try:
+            reactions = []
+            for r in self.reactions:
+                reactions.append(
+                    dict(
+                        reactants=",".join([repr(r.text) for r in r.reactants]),
+                        products=",".join([repr(p.text) for p in r.products]),
+                        conditions=",".join([repr(c.text) for c in r.conditions]),
+                    )
                 )
+            if not len(reactions):
+                return pd.DataFrame()
+            df = pd.DataFrame(reactions, columns=["reactants", "products", "conditions"])
+            df.index.rename("No.", inplace=True)
+            df.reset_index(inplace=True)
+            return df
+        except Exception:
+            get_root_logger().warning(
+                f"{self.token} {self.page} {self.block} {self.type} convert expression to dataframe error: {self.reactions}"
             )
-        df = pd.DataFrame(reactions, columns=["reactants", "products", "conditions"])
-        df.index.rename("No.", inplace=True)
-        df.reset_index(inplace=True)
-        return df
+            return pd.DataFrame()
 
     @property
     def plain(self):
+        if self.df.shape[-1] == 0:
+            return ""
         return self.df.to_markdown(index=False, disable_numparse=True)
 
     @property
@@ -922,22 +936,30 @@ class TabularResult(SemanticItem):
             self.types = [LayoutType(i) for i in self.types]
 
     @functools.cached_property
-    def df(self) -> pd.DataFrame:
+    def full_html(self) -> str:
         html = self.structure
         for placeholder, content in zip(self.placeholders[::-1], self.contents[::-1]):
             # escape tag > < / in content to avoid html parse error
             html = html.replace(placeholder, escape(content))
+        return html
+
+    @functools.cached_property
+    def df(self) -> pd.DataFrame:
         try:
-            df = read_html(StringIO(html))[0]
+            df = read_html(StringIO(self.full_html))[0]
             df = df.dropna(how="all")  # drop empty 'NaN' rows
             df = df[df.astype(bool).sum(axis=1) > 0]  # remove empty 'blacksapce' rows
+            return df
         except Exception:
-            get_root_logger().exception("read_html error")
-            df = pd.DataFrame([""], columns=[""])
-        return df
+            get_root_logger().warning(
+                f"{self.token} {self.page} {self.block} {self.type} convert html to dataframe error: {repr(self.structure)}"
+            )
+            return pd.DataFrame()
 
     @property
     def plain(self):
+        if self.df.shape[-1] == 0:
+            return ""
         return self.df.to_markdown(index=False, disable_numparse=True)
 
     @property
@@ -954,6 +976,13 @@ class TabularResult(SemanticItem):
 
     @property
     def html(self):
+        try:
+            return self.full_html
+        except Exception:
+            get_root_logger().warning(
+                f"{self.token} {self.page} {self.block} {self.type} convert html to dataframe error: {repr(self.full_html)}"
+            )
+            pass
         return self.df.to_html(index=False)
 
     def transpose(self):
@@ -976,14 +1005,22 @@ class ChartResult(SemanticItem):
 
     @functools.cached_property
     def df(self):
-        # chart is not standard markdown table, so we convert it to markdown table
-        underlying_df = pd.DataFrame([[col.strip() for col in row.split("|")] for row in self.data.split("\n")])
-        underlying_df.columns = underlying_df.iloc[0]
-        underlying_df = underlying_df[1:]
-        return underlying_df
+        try:
+            # chart is not standard markdown table, so we convert it to markdown table
+            underlying_df = pd.DataFrame([[col.strip() for col in row.split("|")] for row in self.data.split("\n")])
+            underlying_df.columns = underlying_df.iloc[0]
+            underlying_df = underlying_df[1:]
+            return underlying_df
+        except Exception:
+            get_root_logger().warning(
+                f"{self.token} {self.page} {self.block} {self.type} convert chart to dataframe error: {repr(self.data)}"
+            )
+            return pd.DataFrame()
 
     @property
     def plain(self):
+        if self.df.shape[-1] == 0:
+            return ""
         return self.df.to_markdown(index=False, disable_numparse=True)
 
     @property
@@ -1000,7 +1037,7 @@ class ChartResult(SemanticItem):
 
     @property
     def html(self):
-        return self.df.to_html(index=False)
+        return self.df.style.hide(axis="index").to_html(exclude_styles=True)
 
 
 @dataclass
@@ -1078,23 +1115,23 @@ class GroupedResult(SemanticItem):
 
     @property
     def plain(self):
-        return f"{self.prefix}" + "\n".join([item.plain for item in self.items]) + f"{self.suffix}"
+        return f"{self.prefix}" + "\n\n".join([item.plain for item in self.items]) + f"{self.suffix}"
 
     @property
     def markup(self):
-        return f"{self.prefix}" + "\n".join([item.markup for item in self.items]) + f"{self.suffix}"
+        return f"{self.prefix}" + "\n\n".join([item.markup for item in self.items]) + f"{self.suffix}"
 
     @property
     def markdown(self):
-        return f"{self.prefix}" + "\n".join([item.markdown for item in self.items]) + f"{self.suffix}"
+        return f"{self.prefix}" + "\n\n".join([item.markdown for item in self.items]) + f"{self.suffix}"
 
     @property
     def latex(self):
-        return f"{self.prefix}" + "\n".join([item.latex for item in self.items]) + f"{self.suffix}"
+        return f"{self.prefix}" + "\n\n".join([item.latex for item in self.items]) + f"{self.suffix}"
 
     @property
     def html(self):
-        return f"{self.prefix}" + "\n".join([item.html for item in self.items]) + f"{self.suffix}"
+        return f"{self.prefix}" + "\n\n".join([item.html for item in self.items]) + f"{self.suffix}"
 
 
 if __name__ == "__main__":

@@ -3,11 +3,38 @@ from io import StringIO
 from typing import List, Tuple
 
 import pandas as pd
+import yaml
 from pandas.io.html import _importers, _parser_dispatch, _validate_flavor
 from pandas.io.html import read_html as pandas_read_html
 from PIL import Image
 
 from uniparser_tools.utils.log import get_root_logger
+
+
+Image.MAX_IMAGE_PIXELS = 500000000  # 在导入后立即设置
+
+
+def load_yaml(path: str):
+    """
+    读取 YAML 文件，返回 Python 对象(dict / list / 原子类型）。
+    """
+    with open(path, "r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh)  # safe_load 避免执行任意代码
+
+
+def dump_yaml(data, path: str, *, sort_keys=False):
+    """
+    把 data 写入 YAML 文件。
+    sort_keys=False 保持原有 key 顺序；设 True 可按字母排序。
+    """
+    with open(path, "w", encoding="utf-8") as fh:
+        yaml.dump(
+            data,
+            fh,
+            sort_keys=sort_keys,
+            default_flow_style=False,  # 强制块风格，可读性更好
+            allow_unicode=True,  # 支持中文
+        )
 
 
 def read_html(io: StringIO) -> List[pd.DataFrame]:
@@ -84,7 +111,7 @@ def read_html(io: StringIO) -> List[pd.DataFrame]:
             ret.append(pd.DataFrame(data=data, columns=head))
         return ret
     except Exception:
-        get_root_logger().exception("read_html error")
+        get_root_logger().warning("read_html error")
         return pandas_read_html(io)
 
 

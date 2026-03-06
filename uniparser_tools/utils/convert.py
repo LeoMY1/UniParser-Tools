@@ -60,7 +60,7 @@ def item2format(item: SemanticItem, data: Dict, status: Dict):
     if item.type == LayoutType.Section:
         return ""
 
-    if not data.__dict__.get("marginalia", False):
+    if not data.__dict__.get("marginalia", True):
         if item.type in [
             LayoutType.PageHeader,
             LayoutType.PageFooter,
@@ -99,5 +99,5 @@ def item2format(item: SemanticItem, data: Dict, status: Dict):
             s_ = []
             for item in item.items:
                 s_.append(item2format(item, data, status))
-            s = "\n".join(s_)
+            s = "\n\n".join(s_)
     return s
