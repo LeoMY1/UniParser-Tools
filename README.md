@@ -114,7 +114,29 @@ if result["status"] == "success":
     print(result["content"])
 ```
 
-### 4. 解析图片文件
+### 4. 使用异步回调 (Callbacks)
+
+UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定地址。这对于长耗时任务非常有用，无需轮询结果。
+
+```python
+# 提交带回调地址的异步解析任务
+result = parser.trigger_file(
+    pdf_path="./example.pdf",
+    sync=False,  # 必须为 False 才能触发异步回调
+    callback_url="https://your-server.com/api/callback",
+    callback_secret="your-shared-secret",  # 用于校验回调内容的签名
+    textual=ParseModeTextual.DigitalExported,
+    table=ParseMode.OCRFast,
+)
+
+if result["status"] == "success":
+    token = result["token"]
+    print(f"异步任务已提交，完成后将回调到指定地址。Token: {token}")
+```
+
+回调请求的 Payload 将包含 `checksum` 和 `content`。你可以使用 `callback_secret` 对 `content` 进行 HMAC-SHA256 签名校验，以确保内容未被篡改。
+
+### 5. 解析图片文件
 
 ```python
 from uniparser_tools.common.constant import ParseMode, ParseModeTextual
@@ -199,6 +221,66 @@ if result["status"] == "success":
     print(result["content"])
 ```
 
+## MCP Server
+
+UniParser 提供了基于 [Model Context Protocol](https://modelcontextprotocol.io/) 的 MCP 服务，位于 `mcp_server/` 目录，支持通过 MCP 工具调用 UniParser HTTP API。
+
+### 可用工具
+
+| 工具 | 说明 |
+|------|------|
+| `uniparser_health` | 检查服务健康状态 |
+| `uniparser_version` | 获取服务版本信息 |
+| `uniparser_parse_file` | 解析本机 PDF（传入绝对路径），返回 `content` 文本 |
+| `uniparser_parse_url` | 解析公网 PDF URL，返回 `content` 文本 |
+
+### 快速启动
+
+```bash
+cd mcp_server
+uv sync                          # 安装依赖（与主项目隔离）
+uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
+```
+
+运行时必须设置以下环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `UNIPARSER_BASE_URL` | UniParser 用户服务根 URL，例如 `http://127.0.0.1:40001` |
+| `UNIPARSER_API_KEY` | API 密钥，对应请求头 `X-API-Key` |
+
+默认解析参数和输出格式见 `mcp_server/config.yaml`。
+
+### 接入 Cursor / Claude Code
+
+在 MCP 配置文件中添加（将路径替换为本机实际路径）：
+
+```json
+{
+  "mcpServers": {
+    "uniparser": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/UniParser-Tools/mcp_server",
+        "python",
+        "-m",
+        "uniparser_mcp"
+      ],
+      "env": {
+        "UNIPARSER_BASE_URL": "http://127.0.0.1:40001",
+        "UNIPARSER_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+传输模式默认为 `stdio`，可通过 `UNIPARSER_MCP_TRANSPORT` 环境变量切换为 `sse` 或 `streamable-http`。
+
+详细文档见 [`mcp_server/README.md`](./mcp_server/README.md)。
+
 ## 项目结构
 
 ```
@@ -210,9 +292,15 @@ uniparser_tools/
 ├── utils/            # 工具函数
 └── order/            # 排序算法
 
+mcp_server/           # MCP 服务（独立子项目）
+├── uniparser_mcp/    # MCP server 实现
+├── config.yaml       # 默认解析参数配置
+└── pyproject.toml    # 独立依赖管理
+
 playground/
 ├── 01.quick_start.ipynb          # 快速开始教程
 ├── 02.advance.ipynb              # 高级用法教程
+├── 04.use_callbacks.py           # 异步回调功能演示
 ├── app.caption_extraction.ipynb  # 图文对提取示例
 └── app.molecule_extracrtion.ipynb # 分子提取示例
 ```
@@ -223,6 +311,7 @@ playground/
 
 - **快速开始**：`playground/01.quick_start.ipynb` - 基础用法教程，包括 PDF 和图片解析、多种格式输出
 - **高级用法**：`playground/02.advance.ipynb` - 高级功能教程，包括图片+图题+图注、表格+表题+表注、分子+分子索引、公式+公式索引的提取
+- **异步回调**：`playground/04.use_callbacks.py` - 异步回调演示，用于在异步解析任务完成后自动接收通知和结果
 - **图文对提取**：`playground/app.caption_extraction.ipynb` - 图文对提取完整示例
 - **分子提取**：`playground/app.molecule_extracrtion.ipynb` - 分子结构提取示例
 
