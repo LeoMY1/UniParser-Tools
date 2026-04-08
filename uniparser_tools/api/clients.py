@@ -36,9 +36,8 @@ class TriggerFileData:
     figure: Union[ParseMode, bool]
     expression: Union[ParseMode, bool]
     equation: Union[ParseMode, bool]
-    pages: List[int]
-    timeout: int
-    ordering_method: OrderingMethod
+    pages: List[int] = None
+    ordering_method: OrderingMethod = OrderingMethod.XYCutExp
 
 
 @dataclass
@@ -54,10 +53,9 @@ class TriggerURLData:
     figure: Union[ParseMode, bool]
     expression: Union[ParseMode, bool]
     equation: Union[ParseMode, bool]
-    pages: List[int]
-    timeout: int
-    ordering_method: OrderingMethod
-    proxy: str
+    pages: List[int] = None
+    ordering_method: OrderingMethod = OrderingMethod.XYCutExp
+    proxy: str = None
 
 
 @dataclass
@@ -123,6 +121,48 @@ class UniParserClient:
     def validate_token(self, token: str):
         assert re.match(r"^[-\._?=&a-zA-Z0-9]{1,128}$", token), f"token: {token} contains illegal characters"
 
+    def health(self):
+        try:
+            headers = {"X-API-Key": self.api_key}
+            response = requests.get(f"{self.host}/health", headers=headers, timeout=30)
+        except Exception:
+            return {
+                "status": StatusFlag.Error,
+                "description": traceback.format_exc(),
+            }
+        if response.status_code >= 400:
+            return {
+                "status": "error",
+                "http_status": response.status_code,
+                "description": response.reason_phrase,
+                "body": response.text,
+            }
+        try:
+            return response.json()
+        except json.decoder.JSONDecodeError:
+            return {"status": StatusFlag.Error, "message": response.text}
+
+    def version(self):
+        try:
+            headers = {"X-API-Key": self.api_key}
+            response = requests.get(f"{self.host}/version", headers=headers, timeout=30)
+        except Exception:
+            return {
+                "status": StatusFlag.Error,
+                "description": traceback.format_exc(),
+            }
+        if response.status_code >= 400:
+            return {
+                "status": "error",
+                "http_status": response.status_code,
+                "description": response.reason_phrase,
+                "body": response.text,
+            }
+        try:
+            return response.json()
+        except json.decoder.JSONDecodeError:
+            return {"status": StatusFlag.Error, "message": response.text}
+
     def trigger_file(
         self,
         file_path: str,
@@ -137,8 +177,8 @@ class UniParserClient:
         expression: Union[ParseMode, bool] = ParseMode.Disable,
         equation: Union[ParseMode, bool] = ParseMode.Disable,
         pages: List[int] = None,
-        timeout: int = 1800,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
+        **kwargs,
     ):
         """
         sync: True=同步解析，该请求会在解析完成后才返回; False=异步解析，该请求会立即返回，解析结果需要通过GetResult接口获取
@@ -158,7 +198,6 @@ class UniParserClient:
             expression=expression,
             equation=equation,
             pages=pages,
-            timeout=timeout,
             ordering_method=ordering_method,
         )
 
@@ -194,8 +233,8 @@ class UniParserClient:
         expression: Union[ParseMode, bool] = ParseMode.Disable,
         equation: Union[ParseMode, bool] = ParseMode.Disable,
         pages: List[int] = None,
-        timeout: int = 1800,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
+        **kwargs,
     ):
         if not token:
             token = self.to_token(snip_path)
@@ -212,7 +251,6 @@ class UniParserClient:
             expression=expression,
             equation=equation,
             pages=pages,
-            timeout=timeout,
             ordering_method=ordering_method,
         )
 
@@ -247,9 +285,9 @@ class UniParserClient:
         expression: Union[ParseMode, bool] = ParseMode.Disable,
         equation: Union[ParseMode, bool] = ParseMode.Disable,
         pages: List[int] = None,
-        timeout: int = 1800,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
         proxy: str = None,
+        **kwargs,
     ):
         if not token:
             token = self.to_token(pdf_url)
@@ -267,7 +305,6 @@ class UniParserClient:
             expression=expression,
             equation=equation,
             pages=pages,
-            timeout=timeout,
             ordering_method=ordering_method,
             proxy=proxy,
         )
