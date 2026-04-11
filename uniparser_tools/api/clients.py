@@ -38,6 +38,8 @@ class TriggerFileData:
     equation: Union[ParseMode, bool]
     pages: List[int] = None
     ordering_method: OrderingMethod = OrderingMethod.XYCutExp
+    callback_url: str = None
+    callback_secret: str = None
 
 
 @dataclass
@@ -56,6 +58,8 @@ class TriggerURLData:
     pages: List[int] = None
     ordering_method: OrderingMethod = OrderingMethod.XYCutExp
     proxy: str = None
+    callback_url: str = None
+    callback_secret: str = None
 
 
 @dataclass
@@ -178,10 +182,14 @@ class UniParserClient:
         equation: Union[ParseMode, bool] = ParseMode.Disable,
         pages: List[int] = None,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
+        callback_url: str = None,
+        callback_secret: str = None,
         **kwargs,
     ):
         """
         sync: True=同步解析，该请求会在解析完成后才返回; False=异步解析，该请求会立即返回，解析结果需要通过GetResult接口获取
+        callback_url: 异步解析完成后的回调地址
+        callback_secret: 回调验证密钥
         """
         if not token:
             token = self.to_token(file_path)
@@ -199,6 +207,8 @@ class UniParserClient:
             equation=equation,
             pages=pages,
             ordering_method=ordering_method,
+            callback_url=callback_url,
+            callback_secret=callback_secret,
         )
 
         try:
@@ -234,6 +244,8 @@ class UniParserClient:
         equation: Union[ParseMode, bool] = ParseMode.Disable,
         pages: List[int] = None,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
+        callback_url: str = None,
+        callback_secret: str = None,
         **kwargs,
     ):
         if not token:
@@ -252,6 +264,8 @@ class UniParserClient:
             equation=equation,
             pages=pages,
             ordering_method=ordering_method,
+            callback_url=callback_url,
+            callback_secret=callback_secret,
         )
 
         try:
@@ -287,6 +301,8 @@ class UniParserClient:
         pages: List[int] = None,
         ordering_method: OrderingMethod = OrderingMethod.GapTree,
         proxy: str = None,
+        callback_url: str = None,
+        callback_secret: str = None,
         **kwargs,
     ):
         if not token:
@@ -307,6 +323,8 @@ class UniParserClient:
             pages=pages,
             ordering_method=ordering_method,
             proxy=proxy,
+            callback_url=callback_url,
+            callback_secret=callback_secret,
         )
         try:
             headers = {"X-API-Key": self.api_key}
