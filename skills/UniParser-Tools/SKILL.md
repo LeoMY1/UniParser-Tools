@@ -226,9 +226,25 @@ Set `UNIPARSER_MCP_TRANSPORT` to override the default:
 
 ## Error Handling
 
+Every `UniParserClient` method **returns a `dict` and never raises HTTP/network exceptions**. Transport failures, auth problems, rate limits and server-side validation errors are all normalized into the same shape, so callers only need to check `status`:
+
 ```python
 result = parser.trigger_file(file_path="./document.pdf")
 if result["status"] != "success":
-    print(f"Failed: {result.get('message')}")
-    print(f"Details: {result.get('description')}")
+    # Unified error path — no need to distinguish HTTP codes here.
+    print(result.get("description") or result.get("message"))
+    raise RuntimeError(f"trigger failed: {result}")
+
+token = result["token"]
 ```
+
+Return-shape contract:
+
+| Field | When | Meaning |
+|-------|------|---------|
+| `status` | always | `"success"` or `"error"` (see `StatusFlag`) |
+| `token` | trigger / fetch calls | Task token; included on errors too for traceability |
+| `description` | errors | Business reason, typically a value of `ErrorFlag` (e.g. `Token_Invalid`, `File_Size_Exceeded`, `Domain_Not_Allowed`) or a local traceback |
+| `message` | errors | Raw server body (only when the response is not JSON) |
+
+> Raw HTTP status codes (`401`, `403`, `429`, …) are only relevant when hitting the REST endpoints directly (curl / custom clients). See `<host>/api` → Authentication for that surface. The Python SDK intentionally hides them.

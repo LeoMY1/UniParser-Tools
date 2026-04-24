@@ -60,7 +60,7 @@ pip install -e .
 
 - **获取方式**：在 UniParser 服务首页（如 `https://uniparser.dp.tech/`）注册访客账号，或向运维/业务方申请长期 API-Key。
 - **推荐存储**：使用环境变量 `UNIPARSER_API_KEY`，避免在代码中硬编码。
-- **常见错误**：`401` 表示缺失/过期；`429` 表示触发并发上限（公开服务最大 5 并发）。
+- **错误处理**：Key 缺失/过期、限流等情况都会被客户端统一包装成 `{"status": "error", ...}` 返回，详见下方 [错误处理](#错误处理)。
 
 ```python
 import os
@@ -298,6 +298,31 @@ result = parser.get_formatted(
 if result["status"] == "success":
     print(result["content"])
 ```
+
+## 错误处理
+
+`UniParserClient` 的所有方法**都返回 `dict`，不会抛 `requests`/HTTP 异常**。网络错误、鉴权失败、限流、业务校验失败等都被统一包装到返回值里，调用方只需判断 `status` 字段即可，不需要关心底层 HTTP 细节。
+
+```python
+result = parser.trigger_file(file_path="./paper.pdf")
+if result["status"] != "success":
+    # 统一错误入口
+    print(result.get("description") or result.get("message"))
+    raise RuntimeError(f"trigger failed: {result}")
+
+token = result["token"]
+```
+
+返回体字段约定：
+
+| 字段 | 出现场景 | 说明 |
+|------|----------|------|
+| `status` | 始终存在 | `"success"` / `"error"`（见 `StatusFlag`） |
+| `token` | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯 |
+| `description` | 错误时 | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
+| `message` | 错误时 | 服务端返回的原始报文（非 JSON 时才填充） |
+
+> 直接调用 REST API（curl / 自研客户端）时才需要关注 `401/403/429/…` 等原始 HTTP 状态码，详见各部署实例 `<host>/api` 上的 Authentication 章节。
 
 ## 面向 AI Agent
 
