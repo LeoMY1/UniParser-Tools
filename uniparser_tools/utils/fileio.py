@@ -4,7 +4,6 @@ from typing import List, Tuple
 
 import pandas as pd
 import yaml
-from pandas.io.html import _importers, _parser_dispatch, _validate_flavor
 from pandas.io.html import read_html as pandas_read_html
 from PIL import Image
 
@@ -39,8 +38,15 @@ def dump_yaml(data, path: str, *, sort_keys=False):
 
 def read_html(io: StringIO) -> List[pd.DataFrame]:
     try:
+        from pandas.io.html import _parser_dispatch, _validate_flavor
+
+        try:
+            from pandas.io.html import _importers
+        except ImportError:
+            _importers = None
         # modified from pandas.io.html.read_html v1.5.3
-        _importers()
+        if _importers:
+            _importers()
 
         # init args
         flavor = None
