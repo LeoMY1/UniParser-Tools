@@ -54,6 +54,56 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+## API-Key 配置
+
+所有请求都通过 `X-API-Key` 请求头认证，`UniParserClient` 会自动注入。
+
+- **获取方式**：在 UniParser 服务首页（如 `https://uniparser.dp.tech/`）注册访客账号，或向运维/业务方申请长期 API-Key。
+- **推荐存储**：使用环境变量 `UNIPARSER_API_KEY`，避免在代码中硬编码。
+- **常见错误**：`401` 表示缺失/过期；`429` 表示触发并发上限（公开服务最大 5 并发）。
+
+```python
+import os
+parser = UniParserClient(
+    host="https://uniparser.dp.tech/",
+    api_key=os.getenv("UNIPARSER_API_KEY"),
+)
+```
+
+## 解析配置：7 个语义类 + 2 个枚举
+
+提交解析任务时（`trigger_file` / `trigger_snip` / `trigger_url`），可分别设置 7 类语义元素的处理模式：
+
+| 字段 | 含义 | 枚举类型 |
+|------|------|---------|
+| `textual` | 普通文本（段落、标题等） | `ParseModeTextual` |
+| `equation` | 数学公式 | `ParseMode` |
+| `table` | 表格 | `ParseMode` |
+| `chart` | 图表 | `ParseMode` |
+| `figure` | 图片 / 插图 | `ParseMode` |
+| `expression` | 化学反应式 | `ParseMode` |
+| `molecule` | 化学分子结构 | `ParseMode` |
+
+### `ParseMode`（除 textual 外都用这个）
+
+| 取值 | 名称 | 含义 |
+|------|------|------|
+| `-3` / `-2` | `DumpHosting` / `DumpLocal` | 保留接口，默认关闭 |
+| `-1` | `DumpBase64` | 禁用解析，输出原始图像 Base64 |
+| `0`  | `Disable`   | 禁用解析，不输出 |
+| `1`  | `OCRFast`   | 快速 OCR（默认） |
+| `2`  | `OCRHighQuality` | 高质 OCR |
+
+### `ParseModeTextual`（仅用于 `textual`）
+
+| 取值 | 名称 | 含义 |
+|------|------|------|
+| `-1` | `DumpBase64` | 输出原始图像 Base64 |
+| `0`  | `Disable`   | 不解析、不输出 |
+| `1`  | `OCRFast`   | 快速 OCR |
+| `2`  | `OCRHighQuality` | 高质 OCR，支持行内公式 |
+| `3`  | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
+
 ## 快速开始
 
 > ‼️‼️‼️ 以下仅为代码功能示例，具体运行代码请参考 `playground/*.ipynb` ‼️‼️‼️
@@ -74,21 +124,21 @@ parser = UniParserClient(
 )
 ```
 
-### 2. 解析 PDF 文件
+### 2. 解析 PDF 文件（科学文献推荐默认）
 
 ```python
 from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
-# 提交解析任务
+# 科学文献解析模式（推荐默认值）
 result = parser.trigger_file(
     pdf_path="./example.pdf",
-    textual=ParseModeTextual.DigitalExported,
-    table=ParseMode.OCRFast,
-    molecule=ParseMode.OCRFast,
-    chart=ParseMode.DumpBase64,
-    figure=ParseMode.DumpBase64,
-    expression=ParseMode.DumpBase64,
-    equation=ParseMode.OCRFast,
+    textual=ParseModeTextual.OCRHighQuality,  # high quality
+    equation=ParseMode.OCRHighQuality,        # high quality
+    table=ParseMode.OCRHighQuality,           # high quality
+    chart=ParseMode.DumpBase64,               # original image base64
+    figure=ParseMode.DumpBase64,              # original image base64
+    expression=ParseMode.DumpBase64,          # original image base64
+    molecule=ParseMode.OCRFast,               # fast
 )
 
 if result["status"] == "success":
@@ -97,6 +147,29 @@ if result["status"] == "success":
 ```
 
 ### 3. 获取解析结果
+
+#### 输出配置（`get_result` / `get_formatted` 通用开关）
+
+| 开关 | 默认 | 说明 |
+|------|------|------|
+| `content` | `True` | 返回全文纯/富文本，适合 LLM |
+| `objects` | `False` | JSON 语义块列表，适合语义分析 |
+| `pages_dict` | `False` | 按页组织的原始解析布局 |
+| `pages_tree` | `False` | 带父子关系的嵌套树，适合复杂分析 |
+| `return_half` | `False` | 解析进行中即取已完成部分 |
+| `molecule_source` | `False` | 返回分子原始源（SMILES/mol 等） |
+
+同一 token 可复用，多次获取不同组合不会重复计费。
+
+#### 输出格式（`FormatFlag`，仅作用于 `content` / `objects` 中的文本字段）
+
+| 取值 | 适用场景 |
+|------|----------|
+| `FormatFlag.Plain` | 纯文本，适合检索 |
+| `FormatFlag.Markup` | 默认标记文本 |
+| `FormatFlag.Markdown` | ⭐ 推荐给 LLM |
+| `FormatFlag.Latex` | LaTeX，适合公式 |
+| `FormatFlag.Html` | HTML，适合表格 |
 
 ```python
 from uniparser_tools.common.constant import FormatFlag
@@ -125,8 +198,13 @@ result = parser.trigger_file(
     sync=False,  # 必须为 False 才能触发异步回调
     callback_url="https://your-server.com/api/callback",
     callback_secret="your-shared-secret",  # 用于校验回调内容的签名
-    textual=ParseModeTextual.DigitalExported,
-    table=ParseMode.OCRFast,
+    textual=ParseModeTextual.OCRHighQuality,
+    equation=ParseMode.OCRHighQuality,
+    table=ParseMode.OCRHighQuality,
+    chart=ParseMode.DumpBase64,
+    figure=ParseMode.DumpBase64,
+    expression=ParseMode.DumpBase64,
+    molecule=ParseMode.OCRFast,
 )
 
 if result["status"] == "success":
@@ -220,6 +298,23 @@ result = parser.get_formatted(
 if result["status"] == "success":
     print(result["content"])
 ```
+
+## 面向 AI Agent
+
+本仓库内置了 Cursor / Claude Code 兼容的 Skill 文件：
+
+```
+skills/UniParser-Tools/SKILL.md
+```
+
+当你的 AI 编程助手（Cursor、Claude Code、Codex、Gemini Code 等）需要调用 UniParser-Tools 时，建议先读取该 `SKILL.md`，其中包含快速开始、常见模式、MCP 集成、数据类与 API 参考。配套的进一步文档位于同目录下：
+
+- `skills/UniParser-Tools/api-reference.md`
+- `skills/UniParser-Tools/patterns.md`
+- `skills/UniParser-Tools/data-classes.md`
+- `skills/UniParser-Tools/layout-types.md`
+- `skills/UniParser-Tools/utilities.md`
+- `skills/UniParser-Tools/notes.md`
 
 ## MCP Server
 

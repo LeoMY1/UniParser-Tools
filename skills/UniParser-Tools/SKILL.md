@@ -10,24 +10,34 @@ Quick start guide for using UniParser-Tools to parse documents and extract struc
 import os
 from uniparser_tools.api.clients import UniParserClient
 
+# The API key is passed as the X-API-Key HTTP header on every request.
+# Obtain one from the UniParser home page (guest registration) or from
+# your operations/business contact. Recommended to store in
+# UNIPARSER_API_KEY so secrets are not hard-coded.
 api_key = os.getenv('UNIPARSER_API_KEY')
 parser = UniParserClient(
     host="https://uniparser.dp.tech/",
-    api_key=api_key
+    api_key=api_key,
 )
 ```
 
-### 2. Parse a PDF File
+### 2. Parse a PDF File (Scientific Literature defaults)
 
 ```python
 from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
+# Recommended defaults for scientific papers and patents.
+# `textual` uses `ParseModeTextual`, every other field uses `ParseMode`.
+# Values: DumpBase64=-1, Disable=0, OCRFast=1, OCRHighQuality=2, DigitalExported=3 (textual only).
 result = parser.trigger_file(
     file_path="./document.pdf",
-    textual=ParseModeTextual.DigitalExported,
-    table=ParseMode.OCRFast,
-    equation=ParseMode.OCRFast,
-    figure=ParseMode.DumpBase64,
+    textual=ParseModeTextual.OCRHighQuality,  # high quality
+    equation=ParseMode.OCRHighQuality,        # high quality
+    table=ParseMode.OCRHighQuality,           # high quality
+    chart=ParseMode.DumpBase64,               # original image base64
+    figure=ParseMode.DumpBase64,              # original image base64
+    expression=ParseMode.DumpBase64,          # original image base64
+    molecule=ParseMode.OCRFast,               # fast
 )
 
 if result["status"] == "success":
@@ -35,6 +45,19 @@ if result["status"] == "success":
 ```
 
 ### 3. Get Results
+
+Both `get_result` and `get_formatted` share the same **output switches** – turn on whatever you need. Tokens are reusable, so you can call these multiple times without re-parsing.
+
+| Switch | Default | Purpose |
+|--------|---------|---------|
+| `content` | `True` | Full document text (best for LLMs) |
+| `objects` | `False` | Flat JSON list of semantic blocks |
+| `pages_dict` | `False` | Raw per-page layout |
+| `pages_tree` | `False` | Nested per-page tree with parent/child links |
+| `return_half` | `False` | Return partial results while parsing still runs |
+| `molecule_source` | `False` | Include molecule source (SMILES / mol, …) |
+
+`get_formatted` additionally accepts a `FormatFlag` per semantic family (`textual`, `table`, `molecule`, `chart`, `figure`, `expression`, `equation`). Available flags: `Plain`, `Markup` (default), `Markdown`, `Latex`, `Html`.
 
 ```python
 from uniparser_tools.common.constant import FormatFlag
@@ -70,7 +93,13 @@ result = parser.trigger_file(
     sync=False,  # Required for async mode
     callback_url="https://your-server.com/api/callback",
     callback_secret="your-shared-secret",
-    textual=ParseModeTextual.DigitalExported,
+    textual=ParseModeTextual.OCRHighQuality,
+    equation=ParseMode.OCRHighQuality,
+    table=ParseMode.OCRHighQuality,
+    chart=ParseMode.DumpBase64,
+    figure=ParseMode.DumpBase64,
+    expression=ParseMode.DumpBase64,
+    molecule=ParseMode.OCRFast,
 )
 
 if result["status"] == "success":

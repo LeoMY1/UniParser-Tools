@@ -42,3 +42,11 @@ indent-style = "space"
 docstring-code-format = true
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "live: tests that hit a real UniParser backend (skipped unless UNIPARSER_TEST_API_KEY and UNIPARSER_TEST_HOST are set)",
+]
