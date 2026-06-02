@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import uuid
@@ -40,6 +39,33 @@ def parse_error(stage: str, result: dict) -> int:
     return 1
 
 
+def processing_error(stage: str, result: dict) -> int:
+    emit_json_stderr(
+        {
+            "ok": False,
+            "error": {
+                "code": "PROCESSING",
+                "message": result.get("description")
+                or result.get("message")
+                or "Task still processing; retry fetch later.",
+                "stage": stage,
+            },
+            "token": result.get("token"),
+        }
+    )
+    return 2
+
+
+def check_api_status(result: dict, stage: str) -> int | None:
+    """Return exit code if not success; None when status is success."""
+    status = result.get("status")
+    if status == "success":
+        return None
+    if status == "processing":
+        return processing_error(stage, result)
+    return parse_error(stage, result)
+
+
 def get_api_key() -> str | None:
     return (os.getenv("UNIPARSER_API_KEY") or "").strip() or None
 
@@ -54,36 +80,23 @@ def check_api_key() -> int | None:
     )
 
 
-def _try_import_uniparser() -> bool:
+def check_uniparser_installed() -> int | None:
     try:
         import uniparser_tools  # noqa: F401
-
-        return True
     except ImportError:
-        return False
-
-
-def ensure_uniparser_installed() -> int | None:
-    if _try_import_uniparser():
-        return None
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", INSTALL_CMD],
-        check=False,
-    )
-    if _try_import_uniparser():
-        return None
-    return config_error(
-        "uniparser_tools is not installed. Run once: "
-        f'pip install "{INSTALL_CMD}"'
-    )
+        return config_error(
+            "uniparser_tools is not installed. Run once: "
+            f'pip install "{INSTALL_CMD}"'
+        )
+    return None
 
 
 def run_startup_checks() -> int | None:
-    """API key + package install. Returns exit code if checks fail."""
+    """API key + package presence. Returns exit code if checks fail."""
     code = check_api_key()
     if code is not None:
         return code
-    return ensure_uniparser_installed()
+    return check_uniparser_installed()
 
 
 def default_output_dir() -> Path:

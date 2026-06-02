@@ -22,7 +22,7 @@ Install once into the **same Python environment** that runs the scripts below:
 pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
 ```
 
-`scripts/parse_document.py` checks `import uniparser_tools` at startup; if missing, it runs the command above automatically once, then retries.
+`scripts/parse_document.py` and `scripts/fetch_by_token.py` check `import uniparser_tools` at startup; if missing, they exit with `CONFIG_ERROR` and the install command above (no automatic `pip install`).
 
 Manual verify:
 
@@ -184,6 +184,7 @@ python3 scripts/fetch_by_token.py --token "THE_TOKEN" --output-dir "./results" -
 ### On failure
 
 - Show the stderr JSON `error.message` and stop (unless a recovery step below applies).
+- **stderr JSON `error.code`**: `CONFIG_ERROR` (exit 1) — missing API key or package; `PROCESSING` (exit 2) — job still running, retry `fetch_by_token.py` later; `PARSE_ERROR` (exit 1) — real failure.
 - Do not fall back to vision-only reading of the document as a substitute for UniParser.
 - For **long-running jobs**, **Token is duplicated**, or **502 on `--pdf-url`**, see the sections below before starting another `parse_document.py`.
 

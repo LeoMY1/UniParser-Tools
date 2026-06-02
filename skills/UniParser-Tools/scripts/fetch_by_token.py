@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib_common import (  # noqa: E402
     DEFAULT_HOST,
+    check_api_status,
     config_error,
     default_output_dir,
     fetch_markdown,
-    parse_error,
     print_success,
     run_startup_checks,
     save_markdown_result,
@@ -53,17 +54,15 @@ def main() -> int:
         else default_output_dir()
     )
 
-    import os
-
     client = UniParserClient(host=DEFAULT_HOST, api_key=os.environ["UNIPARSER_API_KEY"])
     formatted = fetch_markdown(client, token)
-    if formatted.get("status") != "success":
+    if (code := check_api_status(formatted, "get_formatted")) is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "formatted_error.json").write_text(
             json.dumps(formatted, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        return parse_error("get_formatted", formatted)
+        return code
 
     summary = save_markdown_result(
         out_dir=out_dir,
