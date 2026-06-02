@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parents[2] / "skills" / "uniparser-tools"
+SKILL_ROOT = Path(__file__).resolve().parents[2] / "skills" / "UniParser-Tools"
 PARSE_SCRIPT = SKILL_ROOT / "scripts" / "parse_document.py"
 FETCH_SCRIPT = SKILL_ROOT / "scripts" / "fetch_by_token.py"
 
