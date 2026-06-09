@@ -1,4 +1,4 @@
-"""Smoke tests for skills/uniparser-tools CLI scripts (no network)."""
+"""Smoke tests for skills/UniParser-Tools CLI scripts (no network)."""
 
 from __future__ import annotations
 
