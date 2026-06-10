@@ -114,8 +114,16 @@ def source_stem_from_path(path: Path) -> str:
 
 
 def source_stem_from_url(url: str) -> str:
-    stem = Path(urlparse(url).path).stem
-    return stem or "url_document"
+    """Last URL path segment; strip only known doc extensions (not arXiv ID dots)."""
+    segment = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+    if not segment:
+        return "url_document"
+    lower = segment.lower()
+    for ext in (".pdf", ".png", ".jpg", ".jpeg", ".webp"):
+        if lower.endswith(ext):
+            segment = segment[: -len(ext)]
+            break
+    return segment or "url_document"
 
 
 def default_output_dir(source_stem: str) -> Path:
