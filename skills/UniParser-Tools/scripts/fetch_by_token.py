@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -57,8 +58,6 @@ def main() -> int:
         help="Overwrite output directory if it already exists",
     )
     args = parser.parse_args()
-
-    import os
 
     client = UniParserClient(host=DEFAULT_HOST, api_key=os.environ["UNIPARSER_API_KEY"])
 

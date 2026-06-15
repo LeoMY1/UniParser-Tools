@@ -17,7 +17,7 @@ Install once into the **same Python environment** that runs the scripts below:
 pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
 ```
 
-`scripts/parse_document.py` checks `import uniparser_tools` at startup; if missing, it runs the command above automatically once, then retries.
+`scripts/parse_document.py` and `scripts/fetch_by_token.py` check `import uniparser_tools` at startup; if missing, they exit with `CONFIG_ERROR` and the install command above (no automatic `pip install`).
 
 Manual verify:
 
@@ -95,7 +95,7 @@ python3 scripts/fetch_by_token.py --pdf-url "https://example.com/paper.pdf"
 
 **Default output** (when `--output-dir` is omitted): `~/Uni-Parser-Skill/<source_stem>/`
 
-`<source_stem>` = filename without extension (`paper.pdf` → `paper`; URL uses the path segment).
+`<source_stem>` = local file stem (`paper.pdf` → `paper`); for URLs, the last path segment with only `.pdf`/image suffix removed (`…/2606.05847` → `2606.05847`, not `2606`).
 
 **Files written on success:**
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -79,32 +78,23 @@ def check_api_key() -> int | None:
     )
 
 
-def _try_import_uniparser() -> bool:
+def check_uniparser_installed() -> int | None:
     try:
         import uniparser_tools  # noqa: F401
-
-        return True
     except ImportError:
-        return False
-
-
-def ensure_uniparser_installed() -> int | None:
-    if _try_import_uniparser():
-        return None
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", INSTALL_CMD],
-        check=False,
-    )
-    if _try_import_uniparser():
-        return None
-    return config_error(f'uniparser_tools is not installed. Run once: pip install "{INSTALL_CMD}"')
+        return config_error(
+            "uniparser_tools is not installed. Run once: "
+            f'pip install "{INSTALL_CMD}"'
+        )
+    return None
 
 
 def run_startup_checks() -> int | None:
+    """API key + package presence. Returns exit code if checks fail."""
     code = check_api_key()
     if code is not None:
         return code
-    return ensure_uniparser_installed()
+    return check_uniparser_installed()
 
 
 def source_stem_from_path(path: Path) -> str:
