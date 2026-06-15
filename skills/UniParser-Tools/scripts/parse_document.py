@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -85,8 +86,6 @@ def main() -> int:
     out_dir, dir_code = resolve_output_dir(source_stem, args.output_dir, overwrite=args.overwrite)
     if dir_code is not None:
         return dir_code
-
-    import os
 
     client = UniParserClient(host=DEFAULT_HOST, api_key=os.environ["UNIPARSER_API_KEY"])
     trigger_kwargs = scientific_paper_trigger_kwargs(sync=not args.async_mode)
