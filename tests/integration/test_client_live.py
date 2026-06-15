@@ -3,6 +3,7 @@
 Skipped automatically unless ``UNIPARSER_TEST_API_KEY`` and
 ``UNIPARSER_TEST_HOST`` are set.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

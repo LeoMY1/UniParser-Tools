@@ -3,6 +3,7 @@
 These invariants were previously enforced only in an ``if __name__ == \"__main__\"``
 block inside the module; they're lifted to real tests here.
 """
+
 from __future__ import annotations
 
 import pytest

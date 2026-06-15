@@ -4,11 +4,13 @@ These are the primary consumers of pandas (TabularResult/ExpressionResult/ChartR
 and therefore the most likely place where the pandas 1.5.3 -> 2.3.3 upgrade
 could introduce regressions.
 """
+
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
+from tests.utils import make_chart_data, make_reaction_dict, make_tabular_payload
 from uniparser_tools.common.constant import LayoutType
 from uniparser_tools.common.dataclass import (
     BBox,
@@ -22,8 +24,6 @@ from uniparser_tools.common.dataclass import (
     TabularResult,
     TextualResult,
 )
-
-from tests.utils import make_chart_data, make_reaction_dict, make_tabular_payload
 
 
 ITEM_KWARGS = dict(
@@ -239,7 +239,9 @@ class TestGroupedResult:
         def _text(txt: str) -> TextualResult:
             return TextualResult(
                 **{**ITEM_KWARGS, "type": LayoutType.Paragraph},
-                bboxes=[], contents=[], text=txt,
+                bboxes=[],
+                contents=[],
+                text=txt,
             )
 
         g = GroupedResult(

@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -36,9 +35,7 @@ def _config_yaml_path() -> Path:
     for candidate in (here / "config.yaml", here.parent / "config.yaml"):
         if candidate.is_file():
             return candidate
-    raise ValueError(
-        f"未找到 config.yaml（已尝试: {here / 'config.yaml'}, {here.parent / 'config.yaml'}）"
-    )
+    raise ValueError(f"未找到 config.yaml（已尝试: {here / 'config.yaml'}, {here.parent / 'config.yaml'}）")
 
 
 @lru_cache(maxsize=1)
@@ -69,9 +66,7 @@ def _client() -> UniParserClient:
     base = (os.environ.get("UNIPARSER_BASE_URL") or "").strip().rstrip("/")
     key = (os.environ.get("UNIPARSER_API_KEY") or "").strip()
     if not base:
-        raise ValueError(
-            "未设置 UNIPARSER_BASE_URL（可在 .cursor/mcp.json 的 env 中配置）"
-        )
+        raise ValueError("未设置 UNIPARSER_BASE_URL（可在 .cursor/mcp.json 的 env 中配置）")
     if not key:
         raise ValueError("未设置 UNIPARSER_API_KEY（可在 .cursor/mcp.json 的 env 中配置）")
     return UniParserClient(base, key)
@@ -166,9 +161,7 @@ def _resolve_mcp_transport() -> Literal["stdio", "sse", "streamable-http"]:
         return "sse"
     if raw == "stdio":
         return "stdio"
-    raise ValueError(
-        f"UNIPARSER_MCP_TRANSPORT 无效: {raw!r}，应为 stdio、sse 或 streamable-http"
-    )
+    raise ValueError(f"UNIPARSER_MCP_TRANSPORT 无效: {raw!r}，应为 stdio、sse 或 streamable-http")
 
 
 def main() -> None:
