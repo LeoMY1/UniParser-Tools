@@ -4,11 +4,12 @@ These functions drive the ``pages_dict`` -> dataclass conversion used by
 most downstream consumers of the SDK, so we exercise each branch of the
 ``build_item`` dispatcher.
 """
+
 from __future__ import annotations
 
 import pytest
 
-from uniparser_tools.common.constant import LayoutType
+from tests.utils import make_reaction_dict
 from uniparser_tools.common.dataclass import (
     ChartResult,
     EquationResult,
@@ -21,8 +22,6 @@ from uniparser_tools.common.dataclass import (
     TextualResult,
 )
 from uniparser_tools.utils.convert import build_item, dict2obj
-
-from tests.utils import make_reaction_dict
 
 
 BASE_BLOCK = dict(

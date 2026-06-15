@@ -18,6 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib_common import (  # noqa: E402
     DEFAULT_HOST,
@@ -39,9 +40,7 @@ def main() -> int:
 
     from uniparser_tools.api.clients import UniParserClient
 
-    parser = argparse.ArgumentParser(
-        description="Fetch UniParser results for an existing job (by input or token)"
-    )
+    parser = argparse.ArgumentParser(description="Fetch UniParser results for an existing job (by input or token)")
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--token", help="UniParser task token (optional; prefer input flags)")
     input_group.add_argument("--file-path", help="Same local PDF path used in parse_document.py")
@@ -74,9 +73,7 @@ def main() -> int:
         return resolved
     token, source_stem = resolved
 
-    out_dir, dir_code = resolve_output_dir(
-        source_stem, args.output_dir, overwrite=args.overwrite
-    )
+    out_dir, dir_code = resolve_output_dir(source_stem, args.output_dir, overwrite=args.overwrite)
     if dir_code is not None:
         return dir_code
 

@@ -4,6 +4,7 @@ Kept deliberately small and deterministic so assertions don't drift when
 the underlying pandas / tabulate version changes formatting whitespace
 slightly.
 """
+
 from __future__ import annotations
 
 
@@ -52,10 +53,7 @@ def make_reaction_dict(reactants=("A",), products=("B",), conditions=("cat",)):
     bbox = [0.0, 0.0, 0.1, 0.1]
 
     def _components(texts, category="[Mol]", category_id=1):
-        return [
-            {"bbox": bbox, "category": category, "category_id": category_id, "text": t}
-            for t in texts
-        ]
+        return [{"bbox": bbox, "category": category, "category_id": category_id, "text": t} for t in texts]
 
     return {
         "reactants": _components(reactants, "[Mol]", 1),

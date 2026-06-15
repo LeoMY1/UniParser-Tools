@@ -2,6 +2,7 @@
 
 These invariants were previously only checked in the module ``__main__`` block.
 """
+
 from __future__ import annotations
 
 import pytest

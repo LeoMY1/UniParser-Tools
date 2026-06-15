@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+
 DEFAULT_HOST = "https://uniparser.dp.tech/"
 INSTALL_CMD = "git+https://github.com/dptech-corp/UniParser-Tools.git"
 
@@ -96,10 +97,7 @@ def ensure_uniparser_installed() -> int | None:
     )
     if _try_import_uniparser():
         return None
-    return config_error(
-        "uniparser_tools is not installed. Run once: "
-        f'pip install "{INSTALL_CMD}"'
-    )
+    return config_error(f'uniparser_tools is not installed. Run once: pip install "{INSTALL_CMD}"')
 
 
 def run_startup_checks() -> int | None:
@@ -139,13 +137,9 @@ def resolve_fetch_target(
     client,
 ) -> tuple[str, str] | int:
     """Resolve task token and source_stem for fetch_by_token. Returns exit code on error."""
-    provided = sum(
-        1 for value in (token, file_path, image_path, pdf_url) if value is not None
-    )
+    provided = sum(1 for value in (token, file_path, image_path, pdf_url) if value is not None)
     if provided != 1:
-        return config_error(
-            "Provide exactly one of --token, --file-path, --image-path, or --pdf-url."
-        )
+        return config_error("Provide exactly one of --token, --file-path, --image-path, or --pdf-url.")
 
     if token is not None:
         resolved = token.strip()
@@ -179,11 +173,7 @@ def resolve_output_dir(
     *,
     overwrite: bool,
 ) -> tuple[Path | None, int | None]:
-    out = (
-        Path(output_dir).expanduser().resolve()
-        if output_dir
-        else default_output_dir(source_stem)
-    )
+    out = Path(output_dir).expanduser().resolve() if output_dir else default_output_dir(source_stem)
     if out.exists() and not overwrite:
         return None, dir_exists_error(out)
     if out.exists() and overwrite:

@@ -18,6 +18,7 @@ import json
 import sys
 from pathlib import Path
 
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib_common import (  # noqa: E402
     DEFAULT_HOST,
@@ -42,9 +43,7 @@ def main() -> int:
 
     from uniparser_tools.api.clients import UniParserClient
 
-    parser = argparse.ArgumentParser(
-        description="Parse documents with UniParser-Tools (https://uniparser.dp.tech/)"
-    )
+    parser = argparse.ArgumentParser(description="Parse documents with UniParser-Tools (https://uniparser.dp.tech/)")
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--file-path", help="Local PDF file path")
     input_group.add_argument("--image-path", help="Local image path (snippet)")
@@ -83,9 +82,7 @@ def main() -> int:
         source_stem = source_stem_from_url(args.pdf_url)
         input_type = "url"
 
-    out_dir, dir_code = resolve_output_dir(
-        source_stem, args.output_dir, overwrite=args.overwrite
-    )
+    out_dir, dir_code = resolve_output_dir(source_stem, args.output_dir, overwrite=args.overwrite)
     if dir_code is not None:
         return dir_code
 
