@@ -3,6 +3,7 @@
 The real HTTP calls are covered in ``tests/integration`` and are skipped
 unless credentials are provided.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -80,9 +81,7 @@ class TestClientErrorShapes:
         assert result.get("status") == "error"
         assert "description" in result
 
-    def test_trigger_file_returns_error_dict_on_request_failure(
-        self, monkeypatch, tmp_path
-    ) -> None:
+    def test_trigger_file_returns_error_dict_on_request_failure(self, monkeypatch, tmp_path) -> None:
         p = tmp_path / "dummy.pdf"
         p.write_bytes(b"%PDF-1.4 tiny")
         monkeypatch.setattr(clients_mod.requests, "post", self._raise_conn_err)

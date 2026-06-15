@@ -326,20 +326,68 @@ token = result["token"]
 
 ## 面向 AI Agent
 
-本仓库内置了 Cursor / Claude Code 兼容的 Skill 文件：
+本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手在对话中自动完成 PDF / 图片 / 公网 PDF 链接 → 结构化 Markdown 与版面 JSON 的解析。用户只需安装 Skill、配置 API Key，并用自然语言或下方触发词发起任务；具体执行步骤由 Skill 内的 `SKILL.md` 指导 Agent，无需手动敲命令。
 
+### 快速使用 Skill
+
+**1. 为 Agent 安装 Skill**
+
+将本仓库中的 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。
+
+安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
+
+**2. 配置 API Key**
+
+在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key，写入环境变量（Agent 终端需能读到）：
+
+```bash
+export UNIPARSER_API_KEY="your-api-key"
 ```
-skills/UniParser-Tools/SKILL.md
-```
 
-当你的 AI 编程助手（Cursor、Claude Code、Codex、Gemini Code 等）需要调用 UniParser-Tools 时，建议先读取该 `SKILL.md`，其中包含快速开始、常见模式、MCP 集成、数据类与 API 参考。配套的进一步文档位于同目录下：
+**3. 在 Agent 中使用 Skill**
 
-- `skills/UniParser-Tools/api-reference.md`
-- `skills/UniParser-Tools/patterns.md`
-- `skills/UniParser-Tools/data-classes.md`
-- `skills/UniParser-Tools/layout-types.md`
-- `skills/UniParser-Tools/utilities.md`
-- `skills/UniParser-Tools/notes.md`
+在 Agent 对话中上传文件、粘贴公网 PDF 链接，或使用类似表述即可触发 Skill，例如：
+
+- 中文：`解析这个 PDF`、`PDF 转 Markdown`、`提取论文`、`文档解析`、`表格提取`、`公式识别`、`化学分子`
+- 英文：`parse this PDF`、`extract this paper`、`PDF to markdown`、`UniParser`、`scientific paper`
+
+支持的输入：**本地 PDF**、**本地图片**（png / jpg 等）、**可公网访问的 PDF URL**。
+
+**4. 使用效果与结果位置**
+
+解析成功后，Agent 会在回复中给出 **Markdown 文件路径**（以及需要时的 **版面结构文件路径**），并可将正文摘要或全文交付给你。典型效果包括：
+
+- 按阅读顺序输出的 **Markdown 全文**（`{源文件主名}.md`，如 `paper.pdf` → `paper.md`）
+- **表格** 转为 Markdown 表格
+- **公式** 转为 LaTeX
+- **图片 / 图表** 等以 base64 等形式出现在结果中（视文档类型而定）
+- **版面结构树** `pages_tree.json`，便于需要章节、块级布局时使用
+- 面向科技文献的默认识别策略（高质量 OCR 等，由 Skill 配置）
+
+默认将结果写入用户主目录下：
+
+`~/Uni-Parser-Skill/<源文件主名>/`
+
+例如解析 `paper.pdf` 时，默认目录为 `~/Uni-Parser-Skill/paper/`。该目录在**解析成功完成后**才会写入文件，通常包含：
+
+| 文件 | 说明 |
+|------|------|
+| `{源文件主名}.md` | 解析得到的完整 Markdown |
+| `pages_tree.json` | 结构化版面树（页面与语义块层次） |
+| `formatted_meta.json` | 元数据（不含全文 `content`） |
+
+若你在对话中指定了输出目录，Agent 也可将结果保存到你提供的路径。若目标目录已存在，Agent 会先征求你是否覆盖后再继续。大文档解析可能耗时数分钟至十余分钟；重复提交同一文件时 Agent 会按 Skill 说明从已有任务恢复，而不会重复上传。
+
+Agent 实现细节、错误恢复与 SDK 安装说明见 `skills/UniParser-Tools/SKILL.md`。
+
+### 参考文档
+
+- `skills/UniParser-Tools/references/api-reference.md`
+- `skills/UniParser-Tools/references/patterns.md`
+- `skills/UniParser-Tools/references/data-classes.md`
+- `skills/UniParser-Tools/references/layout-types.md`
+- `skills/UniParser-Tools/references/utilities.md`
+- `skills/UniParser-Tools/references/notes.md`
 
 ## MCP Server
 

@@ -8,6 +8,7 @@ These tests focus on the subtle parts:
 * ``load_yaml`` / ``dump_yaml`` are trivial, but we guard round-tripping.
 * ``is_valid_image`` must accept real PNGs and reject non-images.
 """
+
 from __future__ import annotations
 
 from io import StringIO
@@ -16,14 +17,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.utils import MALFORMED_HTML, MULTIHEADER_HTML, ROWSPAN_HTML, SIMPLE_HTML
 from uniparser_tools.utils.fileio import (
     dump_yaml,
     is_valid_image,
     load_yaml,
     read_html,
 )
-
-from tests.utils import MALFORMED_HTML, MULTIHEADER_HTML, ROWSPAN_HTML, SIMPLE_HTML
 
 
 class TestReadHtml:

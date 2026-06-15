@@ -7,19 +7,20 @@ to the specified callback_url with the results.
 """
 
 import os
-import time
+
 from uniparser_tools.api.clients import UniParserClient
 from uniparser_tools.common.constant import ParseMode, ParseModeTextual
+
 
 def main():
     # 1. Initialize the client
     # Make sure to set your API key in the environment variables
-    api_key = os.getenv('UNIPARSER_API_KEY')
+    api_key = os.getenv("UNIPARSER_API_KEY")
     if not api_key:
         print("Please set the UNIPARSER_API_KEY environment variable.")
         return
 
-    host = "https://uniparser.dp.tech/" # Replace with your actual host if different
+    host = "https://uniparser.dp.tech/"  # Replace with your actual host if different
     parser = UniParserClient(host=host, api_key=api_key)
 
     # 2. Define callback parameters
@@ -44,20 +45,21 @@ def main():
         textual=ParseModeTextual.DigitalExported,
         table=ParseMode.OCRFast,
         callback_url=callback_url,
-        callback_secret=callback_secret
+        callback_secret=callback_secret,
     )
 
     if result["status"] == "success":
         token = result["token"]
-        print(f"Task submitted successfully!")
+        print("Task submitted successfully!")
         print(f"Token: {token}")
         print("\nUniParser will now process the file in the background.")
         print("Once finished, it will POST the result to your callback URL.")
         print("The payload will include a 'checksum' for you to verify using your 'callback_secret'.")
     else:
         print(f"Failed to submit task: {result.get('message')}")
-        if 'description' in result:
+        if "description" in result:
             print(f"Details: {result['description']}")
+
 
 if __name__ == "__main__":
     main()

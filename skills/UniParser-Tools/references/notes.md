@@ -52,8 +52,9 @@ All API methods return a dict with consistent structure:
 
 ## Common Error Messages
 
+CLI workflow errors (config, duplicate token, 502, etc.) are documented in SKILL.md **Common issues**. This table covers additional SDK/API messages when calling the client directly:
+
 | Error | Cause | Solution |
 |-------|-------|----------|
 | `token: ... contains illegal characters` | Invalid token format | Token must match `^[-\._?=&a-zA-Z0-9]{1,128}$` |
-| `api_key can not be empty` | Missing API key | Set `UNIPARSER_API_KEY` environment variable |
 | `host must start with http or https` | Invalid host URL | Use full URL including protocol |
