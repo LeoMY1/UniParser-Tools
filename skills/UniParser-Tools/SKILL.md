@@ -1,6 +1,6 @@
 ---
 name: uniparser-tools
-description: "Parse PDFs, document images, and public PDF URLs into structured Markdown via UniParser (https://uniparser.dp.tech/)—tables, equations as LaTeX, figures, and reading order. Use when the user wants to parse or extract a document, paper, patent, report, or PDF/image/URL into Markdown. Trigger terms: UniParser, uniparser_tools, 文档解析, PDF解析, 论文解析, 专利解析, PDF转Markdown, 表格提取, 公式识别, 化学分子, scientific paper, layout extraction, dp.tech, document parsing."
+description: "Parse PDFs, document images, and public PDF URLs into structured Markdown via UniParser (https://uniparser.dp.tech/) — tables, equations as LaTeX, figures, and reading order. Use when the user wants to parse or extract a document, paper, patent, report, or PDF/image/URL into Markdown. Trigger terms: UniParser, uniparser_tools, 文档解析, PDF解析, 论文解析, 专利解析, PDF转Markdown, 表格提取, 公式识别, 化学分子, scientific paper, layout extraction, dp.tech, document parsing."
 ---
 
 # UniParser-Tools Skill
