@@ -26,6 +26,13 @@ def source_stem_from_path(path: Path) -> str:
     return path.stem or "document"
 
 
+def display_label_for_input(resolved: ResolvedInput) -> str:
+    if resolved.path is not None:
+        return resolved.path.name
+    segment = urlparse(resolved.raw).path.rstrip("/").rsplit("/", 1)[-1]
+    return segment or "url_document"
+
+
 def source_stem_from_url(url: str) -> str:
     segment = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
     if not segment:

@@ -14,13 +14,18 @@ def config_error(message: str) -> int:
     return 1
 
 
+def input_error(message: str) -> int:
+    emit_json_stderr({"ok": False, "error": {"code": "INPUT_ERROR", "message": message}})
+    return 1
+
+
 def missing_token_error() -> int:
     emit_json_stderr(
         {
             "ok": False,
             "error": {
                 "code": "MISSING_TOKEN",
-                "message": "--token is required. Use the token from a successful parse trigger response or trigger_meta.json.",
+                "message": "--token is required. Use the token from a prior successful parse trigger response.",
             },
         }
     )

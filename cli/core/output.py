@@ -7,13 +7,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from cli.core.errors import dir_exists_error
+
 
 def default_output_dir(source_stem: str) -> Path:
     return (Path.home() / "Uni-Parser-Skill" / source_stem).expanduser().resolve()
 
 
+def fetch_source_stem(token: str) -> str:
+    return f"token_{token[:8]}"
+
+
 def default_fetch_output_dir(token: str) -> Path:
-    return (Path.home() / "Uni-Parser-Skill" / f"token_{token[:8]}").expanduser().resolve()
+    return (Path.home() / "Uni-Parser-Skill" / fetch_source_stem(token)).expanduser().resolve()
+
+
+def _ensure_output_dir(out: Path, *, overwrite: bool) -> tuple[Path | None, int | None]:
+    if out.exists() and not overwrite:
+        return None, dir_exists_error(out)
+    if out.exists() and overwrite:
+        shutil.rmtree(out)
+    return out, None
 
 
 def resolve_output_dir(
@@ -22,14 +36,19 @@ def resolve_output_dir(
     *,
     overwrite: bool,
 ) -> tuple[Path | None, int | None]:
-    from cli.core.errors import dir_exists_error
-
     out = Path(output_dir).expanduser().resolve() if output_dir else default_output_dir(source_stem)
-    if out.exists() and not overwrite:
-        return None, dir_exists_error(out)
-    if out.exists() and overwrite:
-        shutil.rmtree(out)
-    return out, None
+    return _ensure_output_dir(out, overwrite=overwrite)
+
+
+def resolve_fetch_output_dir(
+    token: str,
+    output_dir: str | None,
+    *,
+    overwrite: bool,
+) -> tuple[Path | None, int | None]:
+    if output_dir:
+        return resolve_output_dir(fetch_source_stem(token), output_dir, overwrite=overwrite)
+    return _ensure_output_dir(default_fetch_output_dir(token), overwrite=overwrite)
 
 
 def write_trigger_meta(
@@ -96,9 +115,7 @@ def emit_success(summary: dict, *, json_output: bool) -> None:
     print(f"Output directory: {summary['output_dir']}")
     if summary.get("trigger_meta_path"):
         print(f"Trigger meta: {summary['trigger_meta_path']}", file=sys.stderr)
-    print(f"Markdown saved to: {summary['markdown_path']}", file=sys.stderr)
-    print(f"Output directory: {summary['output_dir']}", file=sys.stderr)
 
 
-def status_line(message: str) -> None:
-    print(message, file=sys.stderr)
+def print_parsing_status(label: str) -> None:
+    print(f"Parsing... {label}", file=sys.stderr)

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from cli.core.defaults import PENDING_STATUSES, POLL_INTERVAL_SEC, POLL_TIMEOUT_SEC
 from cli.core.errors import parse_error
-from cli.core.input import InputKind, ResolvedInput
-from cli.core.output import save_parse_results, write_trigger_meta
+from cli.core.input import InputKind, ResolvedInput, display_label_for_input
+from cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
 
 
 def scientific_paper_trigger_kwargs(*, sync: bool = True) -> dict:
@@ -39,15 +38,9 @@ def trigger_input(client, resolved: ResolvedInput, *, sync: bool) -> tuple[dict,
     return trigger, "trigger_url"
 
 
-def poll_until_success(
-    client,
-    token: str,
-    *,
-    on_poll: Callable[[str | None, float], None] | None = None,
-) -> dict | int:
+def poll_until_success(client, token: str) -> dict | int:
     deadline = time.time() + POLL_TIMEOUT_SEC
     last: dict[str, Any] = {}
-    start = time.time()
 
     while time.time() < deadline:
         last = client.get_result(
@@ -58,8 +51,6 @@ def poll_until_success(
             pages_tree=False,
         )
         status = last.get("status")
-        if on_poll is not None:
-            on_poll(status, time.time() - start)
         if status == "success":
             return last
         if status == "error":
@@ -107,9 +98,10 @@ def complete_fetch(
     *,
     out_dir: Path,
     source_stem: str,
-    on_poll: Callable[[str | None, float], None] | None = None,
+    parsing_label: str,
 ) -> dict[str, Any] | int:
-    poll_result = poll_until_success(client, token, on_poll=on_poll)
+    print_parsing_status(parsing_label)
+    poll_result = poll_until_success(client, token)
     if isinstance(poll_result, int):
         return poll_result
 
@@ -139,7 +131,6 @@ def run_parse(
     *,
     out_dir: Path,
     async_mode: bool,
-    on_poll: Callable[[str | None, float], None] | None = None,
 ) -> dict[str, Any] | int:
     trigger, stage = trigger_input(client, resolved, sync=not async_mode)
     if trigger.get("status") != "success":
@@ -162,7 +153,7 @@ def run_parse(
         token,
         out_dir=out_dir,
         source_stem=resolved.source_stem,
-        on_poll=on_poll,
+        parsing_label=display_label_for_input(resolved),
     )
     if isinstance(summary, int):
         return summary

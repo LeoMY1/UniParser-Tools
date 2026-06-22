@@ -15,15 +15,18 @@ from cli.commands.version import version_cmd
     envvar="UNIPARSER_API_KEY",
     help="API key (X-API-Key); overrides env and ~/.uniparser/config.yaml",
 )
-@click.option("--json", "json_output", is_flag=True, help="Machine-readable JSON on stdout")
-@click.option("-v", "--verbose", is_flag=True, help="Print poll progress to stderr")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Machine-readable JSON on stdout (must appear before the subcommand)",
+)
 @click.pass_context
-def cli(ctx: click.Context, api_key: str | None, json_output: bool, verbose: bool) -> None:
+def cli(ctx: click.Context, api_key: str | None, json_output: bool) -> None:
     """UniParser CLI — parse documents via https://uniparser.dp.tech/"""
     ctx.ensure_object(dict)
     ctx.obj["api_key"] = api_key
     ctx.obj["json_output"] = json_output
-    ctx.obj["verbose"] = verbose
 
 
 cli.add_command(auth_cmd)

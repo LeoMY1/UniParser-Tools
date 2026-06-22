@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from click.testing import CliRunner
 
+from cli.core.credentials import ApiKeySource
 from cli.core.input import InputKind, resolve_input
 from cli.main import cli
 
@@ -24,9 +25,23 @@ def env_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
 
 
+@pytest.fixture
+def no_config_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    config_path = Path("/nonexistent/uniparser-cli-test-config/config.yaml")
+    monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+
+
 class TestCliConfig:
-    def test_parse_without_api_key(self, runner: CliRunner, env_without_api_key: None) -> None:
-        result = runner.invoke(cli, ["parse", "/tmp/paper.pdf"])
+    def test_parse_without_api_key(
+        self,
+        runner: CliRunner,
+        env_without_api_key: None,
+        no_config_file: None,
+        tmp_path: Path,
+    ) -> None:
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        result = runner.invoke(cli, ["parse", str(pdf)])
         assert result.exit_code == 1
         payload = json.loads(result.stderr.strip())
         assert payload["ok"] is False
@@ -53,11 +68,14 @@ class TestCliConfig:
 
         pdf = tmp_path / "paper.pdf"
         pdf.write_bytes(b"%PDF-1.4")
-        result = runner.invoke(cli, ["parse", str(pdf)])
+        out = tmp_path / "out"
+        result = runner.invoke(cli, ["parse", str(pdf), "-o", str(out)])
         assert result.exit_code == 1
         mock_client.trigger_file.assert_called_once()
 
-    def test_fetch_without_api_key(self, runner: CliRunner, env_without_api_key: None) -> None:
+    def test_fetch_without_api_key(
+        self, runner: CliRunner, env_without_api_key: None, no_config_file: None
+    ) -> None:
         result = runner.invoke(cli, ["fetch", "--token", "abc123"])
         assert result.exit_code == 1
         payload = json.loads(result.stderr.strip())
@@ -78,6 +96,36 @@ class TestInputResolve:
 
     def test_missing_file(self) -> None:
         assert isinstance(resolve_input("/nonexistent/file.pdf"), str)
+
+
+class TestParseInputErrors:
+    def test_parse_missing_file_returns_input_error_without_api_key(
+        self,
+        runner: CliRunner,
+        no_config_file: None,
+    ) -> None:
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+        result = runner.invoke(cli, ["parse", "/nonexistent/file.pdf"], env=env)
+        assert result.exit_code == 1
+        payload = json.loads(result.stderr.strip())
+        assert payload["error"]["code"] == "INPUT_ERROR"
+
+    def test_parse_missing_file_returns_input_error(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        no_config_file: None,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        result = runner.invoke(
+            cli,
+            ["parse", "/nonexistent/file.pdf"],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+        assert result.exit_code == 1
+        payload = json.loads(result.stderr.strip())
+        assert payload["error"]["code"] == "INPUT_ERROR"
+        assert "File not found" in payload["error"]["message"]
 
 
 class TestParseCommand:
@@ -109,6 +157,7 @@ class TestParseCommand:
             env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
         )
         assert result.exit_code == 0, result.stderr
+        assert "Parsing... paper.pdf" in result.stderr
         payload = json.loads(result.stdout)
         assert payload["token"] == "tok-parse-1"
         assert (out / "trigger_meta.json").is_file()
@@ -142,6 +191,7 @@ class TestFetchCommand:
             env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
         )
         assert result.exit_code == 0, result.stderr
+        assert "Parsing... token_abcdef12" in result.stderr
         payload = json.loads(result.stdout)
         assert payload["token"] == "abcdef123456"
         assert payload["fetched_by_token"] is True
@@ -169,6 +219,34 @@ class TestHealthVersion:
         assert result.exit_code == 0
         assert "uniparser-tools:" in result.stdout
 
+    def test_version_without_api_key(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch, no_config_file: None
+    ) -> None:
+        monkeypatch.setattr(
+            "cli.commands.version.resolve_api_key_source",
+            lambda ctx: ApiKeySource(api_key=None, source=""),
+        )
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+        result = runner.invoke(cli, ["version"], env=env)
+        assert result.exit_code == 0
+        assert "uniparser-tools:" in result.stdout
+        assert "remote: skipped (no API key)" in result.stdout
+
+    def test_version_json_without_api_key(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch, no_config_file: None
+    ) -> None:
+        monkeypatch.setattr(
+            "cli.commands.version.resolve_api_key_source",
+            lambda ctx: ApiKeySource(api_key=None, source=""),
+        )
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+        result = runner.invoke(cli, ["--json", "version"], env=env)
+        assert result.exit_code == 0
+        payload = json.loads(result.stdout)
+        assert "local" in payload
+        assert payload["remote"] is None
+        assert payload["remote_skipped"] is True
+
 
 class TestHelp:
     def test_parse_help(self, runner: CliRunner) -> None:
@@ -176,6 +254,7 @@ class TestHelp:
         assert result.exit_code == 0
         assert "--output-dir" in result.stdout
         assert "--async" in result.stdout
+        assert "--verbose" not in result.stdout
 
     def test_fetch_help(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["fetch", "--help"])
@@ -190,6 +269,7 @@ class TestAuthCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
+        monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
         config_dir = tmp_path / ".uniparser"
         config_path = config_dir / "config.yaml"
         monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
@@ -197,9 +277,47 @@ class TestAuthCommand:
 
         result = runner.invoke(cli, ["auth"], input="my-secret-key\n")
         assert result.exit_code == 0, result.stderr
+        assert "Enter your API key" in result.stdout
         assert "API key saved successfully" in result.stdout
         assert config_path.is_file()
         assert "my-secret-key" in config_path.read_text(encoding="utf-8")
+
+    def test_auth_keeps_existing_on_enter(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
+        config_dir = tmp_path / ".uniparser"
+        config_dir.mkdir()
+        config_path = config_dir / "config.yaml"
+        config_path.write_text("api_key: existing-key\n", encoding="utf-8")
+        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+
+        result = runner.invoke(cli, ["auth"], input="\n")
+        assert result.exit_code == 0, result.stderr
+        assert "Current API key source: config" in result.stdout
+        assert "Keeping existing API key." in result.stdout
+        assert config_path.read_text(encoding="utf-8") == "api_key: existing-key\n"
+
+    def test_auth_interactive_shows_env_source(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        config_dir = tmp_path / ".uniparser"
+        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_dir / "config.yaml")
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+        env["UNIPARSER_API_KEY"] = "env-key"
+
+        result = runner.invoke(cli, ["auth"], input="\n", env=env)
+        assert result.exit_code == 0, result.stderr
+        assert "Current API key source: env" in result.stdout
+        assert "Keeping existing API key." in result.stdout
 
     def test_auth_show_masked(
         self,
@@ -207,6 +325,7 @@ class TestAuthCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
+        monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
         config_dir = tmp_path / ".uniparser"
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
@@ -216,15 +335,26 @@ class TestAuthCommand:
 
         result = runner.invoke(cli, ["auth", "--show"])
         assert result.exit_code == 0
+        assert "API key source: config" in result.stdout
         assert "abcd...mnop" in result.stdout
 
-    def test_auth_show_without_config(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
-        config_dir = Path("/nonexistent/uniparser-config-test")
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_dir / "config.yaml")
+    def test_auth_show_env_source(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+        env["UNIPARSER_API_KEY"] = "env-secret-key"
+        result = runner.invoke(cli, ["auth", "--show"], env=env)
+        assert result.exit_code == 0
+        assert "API key source: env" in result.stdout
+        assert "env-...-key" in result.stdout
 
-        result = runner.invoke(cli, ["auth", "--show"])
+    def test_auth_show_without_config(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
+        monkeypatch.setattr("cli.core.credentials.read_api_key_from_config", lambda: None)
+        env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
+
+        result = runner.invoke(cli, ["auth", "--show"], env=env)
         assert result.exit_code == 1
-        assert "No API key configured" in result.stdout
+        assert "No API key configured." in result.stdout
+        assert "uniparser auth" in result.stdout
 
     def test_auth_verify_success(
         self,
@@ -232,6 +362,7 @@ class TestAuthCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
+        monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
         config_dir = tmp_path / ".uniparser"
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
@@ -241,4 +372,5 @@ class TestAuthCommand:
 
         result = runner.invoke(cli, ["auth", "--verify"])
         assert result.exit_code == 0
-        assert "API key is configured" in result.stdout
+        assert "API key is configured." in result.stdout
+        assert "Source: config" in result.stdout
