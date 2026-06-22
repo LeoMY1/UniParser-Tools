@@ -82,10 +82,7 @@ def check_uniparser_installed() -> int | None:
     try:
         import uniparser_tools  # noqa: F401
     except ImportError:
-        return config_error(
-            "uniparser_tools is not installed. Run once: "
-            f'pip install "{INSTALL_CMD}"'
-        )
+        return config_error(f'uniparser_tools is not installed. Run once: pip install "{INSTALL_CMD}"')
     return None
 
 

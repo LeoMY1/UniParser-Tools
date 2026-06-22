@@ -73,9 +73,7 @@ class TestCliConfig:
         assert result.exit_code == 1
         mock_client.trigger_file.assert_called_once()
 
-    def test_fetch_without_api_key(
-        self, runner: CliRunner, env_without_api_key: None, no_config_file: None
-    ) -> None:
+    def test_fetch_without_api_key(self, runner: CliRunner, env_without_api_key: None, no_config_file: None) -> None:
         result = runner.invoke(cli, ["fetch", "--token", "abc123"])
         assert result.exit_code == 1
         payload = json.loads(result.stderr.strip())

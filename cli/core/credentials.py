@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import click
 import yaml
 from click.core import ParameterSource
+
 
 CONFIG_DIR = Path.home() / ".uniparser"
 CONFIG_PATH = CONFIG_DIR / "config.yaml"

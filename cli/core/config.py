@@ -20,7 +20,6 @@ def make_client(ctx: click.Context):
     if not api_key:
         return None, config_error("No API key found. Run 'uniparser auth' to configure your API key.")
     try:
-        import uniparser_tools
         from uniparser_tools.api.clients import UniParserClient
     except ImportError:
         return None, config_error(
