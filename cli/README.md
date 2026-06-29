@@ -47,6 +47,7 @@ uniparser parse /path/to/report.pdf
 ~/Uni-Parser-Skill/report/
 ├── report.md           # 解析后的 Markdown
 ├── pages_tree.json     # 文档版面结构（可选查阅）
+├── formatted_meta.json # 格式化元数据
 └── trigger_meta.json   # 任务信息（含 token，便于中断后恢复）
 ```
 
@@ -89,6 +90,69 @@ uniparser auth
 ```bash
 uniparser auth --show      # 查看 Key 来源与脱敏后的 Key
 uniparser auth --verify    # 检查是否已配置（不联网校验）
+```
+
+### 使用实例
+
+#### 首次配置
+
+```bash
+uniparser auth
+```
+
+终端交互示例（输入 Key 后）：
+
+```text
+UniParser API Key Setup
+Get your API key from: https://uniparser.dp.tech/
+
+Enter your API key: ********
+API key saved successfully
+```
+
+写入 `~/.uniparser/config.yaml`：
+
+```yaml
+api_key: your-api-key-here
+```
+
+#### 保留已有 Key
+
+若已配置过，直接回车即可保留：
+
+```text
+Current API key source: config
+Enter new API key (or press Enter to keep current):
+Keeping existing API key.
+```
+
+#### 查看当前配置（`--show`）
+
+```bash
+uniparser auth --show
+```
+
+```text
+API key source: config
+API key: abcd...mnop
+```
+
+未配置时：
+
+```text
+No API key configured.
+Run 'uniparser auth' to set up your API key.
+```
+
+#### 检查是否已配置（`--verify`）
+
+```bash
+uniparser auth --verify
+```
+
+```text
+API key is configured.
+  Source: config
 ```
 
 ---
@@ -151,12 +215,98 @@ uniparser parse paper.pdf -o ./results/ --overwrite --async
 
 `trigger_meta.json` 会记录本次实际提交的 `trigger_kwargs`，便于复现配置。
 
-### 输出目录示例
+### 使用实例
+
+#### 解析本地 PDF（默认输出目录）
 
 ```bash
-uniparser parse paper.pdf -o ./results/
-uniparser parse paper.pdf -o ./results/ --overwrite
+uniparser parse paper.pdf
 ```
+
+解析过程中 **stderr** 显示进度：
+
+```text
+Parsing... paper.pdf
+```
+
+完成后 **stdout** 打印结果路径：
+
+```text
+Token: a1b2c3d4e5f6789012345678901234ab
+Markdown: /Users/you/Uni-Parser-Skill/paper/paper.md
+Pages tree: /Users/you/Uni-Parser-Skill/paper/pages_tree.json
+Output directory: /Users/you/Uni-Parser-Skill/paper
+```
+
+**stderr** 还会提示 meta 文件路径：
+
+```text
+Trigger meta: /Users/you/Uni-Parser-Skill/paper/trigger_meta.json
+```
+
+默认输出目录结构：
+
+```text
+~/Uni-Parser-Skill/paper/
+├── paper.md              # 解析后的 Markdown（主要结果）
+├── pages_tree.json       # 版面结构树
+├── formatted_meta.json   # 格式化元数据（不含正文）
+└── trigger_meta.json     # 任务 token 与 trigger_kwargs
+```
+
+
+#### 指定输出目录与解析参数
+
+```bash
+uniparser parse paper.pdf -o ./out/paper --overwrite --textual digital --molecule disable
+```
+
+`trigger_meta.json` 中 `trigger_kwargs` 会反映覆盖项，例如：
+
+```json
+"trigger_kwargs": {
+  "textual": "digital",
+  "equation": "ocr-hq",
+  "table": "ocr-hq",
+  "chart": "base64",
+  "figure": "base64",
+  "expression": "base64",
+  "molecule": "disable",
+  "sync": true
+}
+```
+
+#### 三种输入类型
+
+| 输入 | 命令 | 进度提示（stderr） |
+|------|------|-------------------|
+| 本地 PDF | `uniparser parse report.pdf` | `Parsing... report.pdf` |
+| 本地图片 | `uniparser parse figure.png` | `Parsing... figure.png` |
+| 公网 PDF 链接 | `uniparser parse https://example.com/paper.pdf` | `Parsing... paper.pdf` |
+
+#### 常见错误
+
+文件不存在时，**stderr** 输出 JSON 错误（exit code 1）：
+
+```bash
+uniparser parse /no/such/file.pdf
+```
+
+```json
+{"ok": false, "error": {"code": "INPUT_ERROR", "message": "File not found: /no/such/file.pdf"}}
+```
+
+输出目录已存在且未加 `--overwrite` 时：
+
+```bash
+uniparser parse paper.pdf -o ./out/paper
+```
+
+```json
+{"ok": false, "error": {"code": "DIR_EXISTS", "message": "Output directory already exists: ...", "output_dir": "..."}}
+```
+
+> 说明：成功信息在 stdout；进度 `Parsing...` 与部分路径提示在 stderr；错误统一为 stderr 单行 JSON。
 
 ### 输出说明
 
@@ -166,9 +316,10 @@ uniparser parse paper.pdf -o ./results/ --overwrite
 |------|------|
 | `<文件名>.md` | 完整 Markdown 正文（主要结果） |
 | `pages_tree.json` | 版面结构树，便于按章节/块定位 |
+| `formatted_meta.json` | 格式化元数据（不含 `content` 正文） |
 | `trigger_meta.json` | 任务 token、输入信息及 `trigger_kwargs`，供 `fetch` 恢复使用 |
 
-解析过程中终端会显示一行 `Parsing... <文件名>`。大文档可能需要等待数分钟。
+大文档可能需要等待数分钟；详见上文「使用实例」中的终端输出示例。
 
 ---
 
