@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import click
 
-from cli.core.config import ctx_flag, make_client
-from cli.core.errors import input_error
-from cli.core.input import resolve_input
-from cli.core.output import emit_success, resolve_output_dir
-from cli.core.parse_options import PARSE_MODE_CHOICES, TEXTUAL_CHOICES, resolve_trigger_kwargs
-from cli.core.pipeline import run_parse
+from uniparser_tools.cli.core.config import ctx_flag, make_client
+from uniparser_tools.cli.core.errors import input_error
+from uniparser_tools.cli.core.input import resolve_input
+from uniparser_tools.cli.core.output import emit_success, resolve_output_dir
+from uniparser_tools.cli.core.parse_options import PARSE_MODE_CHOICES, TEXTUAL_CHOICES, resolve_trigger_kwargs
+from uniparser_tools.cli.core.pipeline import run_parse
 
 
 def _parse_mode_option(name: str, help_text: str):

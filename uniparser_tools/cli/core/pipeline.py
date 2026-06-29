@@ -5,11 +5,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from cli.core.defaults import PENDING_STATUSES, POLL_INTERVAL_SEC, POLL_TIMEOUT_SEC
-from cli.core.errors import parse_error
-from cli.core.input import InputKind, ResolvedInput, display_label_for_input
-from cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
-from cli.core.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
+from uniparser_tools.cli.core.defaults import PENDING_STATUSES, POLL_INTERVAL_SEC, POLL_TIMEOUT_SEC
+from uniparser_tools.cli.core.errors import parse_error
+from uniparser_tools.cli.core.input import InputKind, ResolvedInput, display_label_for_input
+from uniparser_tools.cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
+from uniparser_tools.cli.core.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
 
 
 def scientific_paper_trigger_kwargs(*, sync: bool = True) -> dict:
@@ -88,9 +88,7 @@ def complete_fetch(
     *,
     out_dir: Path,
     source_stem: str,
-    parsing_label: str,
 ) -> dict[str, Any] | int:
-    print_parsing_status(parsing_label)
     poll_result = poll_until_success(client, token)
     if isinstance(poll_result, int):
         return poll_result
@@ -122,6 +120,7 @@ def run_parse(
     out_dir: Path,
     trigger_kwargs: dict,
 ) -> dict[str, Any] | int:
+    print_parsing_status(display_label_for_input(resolved))
     trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
         save_stage_error(out_dir, "trigger_error.json", trigger)
@@ -144,7 +143,6 @@ def run_parse(
         token,
         out_dir=out_dir,
         source_stem=resolved.source_stem,
-        parsing_label=display_label_for_input(resolved),
     )
     if isinstance(summary, int):
         return summary

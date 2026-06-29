@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import click
 
-from cli.core.credentials import (
+from uniparser_tools.cli.core.credentials import (
     API_KEY_URL,
     mask_api_key,
     resolve_api_key_source,

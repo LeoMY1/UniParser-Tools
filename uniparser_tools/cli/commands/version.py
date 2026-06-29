@@ -4,8 +4,8 @@ import json
 
 import click
 
-from cli.core.config import ctx_flag, make_client
-from cli.core.credentials import resolve_api_key_source
+from uniparser_tools.cli.core.config import ctx_flag, make_client
+from uniparser_tools.cli.core.credentials import resolve_api_key_source
 
 
 def format_remote_version(remote: object) -> str:

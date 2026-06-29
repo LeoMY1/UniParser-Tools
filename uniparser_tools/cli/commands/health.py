@@ -4,7 +4,7 @@ import json
 
 import click
 
-from cli.core.config import ctx_flag, make_client
+from uniparser_tools.cli.core.config import ctx_flag, make_client
 
 
 @click.command("health")

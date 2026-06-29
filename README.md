@@ -64,7 +64,7 @@ pip install -e .
 uniparser --help
 ```
 
-CLI 完整说明见 [`cli/README.md`](./cli/README.md)。
+CLI 完整说明见 [`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md)。
 
 ## CLI 命令行
 
@@ -82,7 +82,7 @@ CLI 完整说明见 [`cli/README.md`](./cli/README.md)。
 
 **`--json` 须写在子命令之前：** `uniparser --json parse paper.pdf`
 
-参数、输出文件、错误码等详见 [`cli/README.md`](./cli/README.md)。
+参数、输出文件、错误码等详见 [`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md)。
 
 首次使用：
 
@@ -489,7 +489,7 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
 ## 项目结构
 
 ```
-cli/                  # uniparser 命令行工具（见 cli/README.md）
+uniparser_tools/cli/  # uniparser 命令行工具（见 uniparser_tools/cli/README.md）
 ├── commands/         # auth, parse, fetch, health, version
 └── core/             # 配置、凭证、pipeline、输出
 
@@ -518,7 +518,7 @@ playground/
 
 项目提供了丰富的示例和教程，位于 `playground/` 目录下：
 
-- **CLI 命令行**：[`cli/README.md`](./cli/README.md) - `uniparser` 安装、子命令与参数说明
+- **CLI 命令行**：[`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md) - `uniparser` 安装、子命令与参数说明
 - **快速开始**：`playground/01.quick_start.ipynb` - 基础用法教程，包括 PDF 和图片解析、多种格式输出
 - **高级用法**：`playground/02.advance.ipynb` - 高级功能教程，包括图片+图题+图注、表格+表题+表注、分子+分子索引、公式+公式索引的提取
 - **异步回调**：`playground/04.use_callbacks.py` - 异步回调演示，用于在异步解析任务完成后自动接收通知和结果

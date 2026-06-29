@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cli.core.parse_options import (
+from uniparser_tools.cli.core.parse_options import (
     PARSE_MODE_ALIASES,
     SCIENTIFIC_PAPER_DEFAULTS,
     TEXTUAL_ALIASES,

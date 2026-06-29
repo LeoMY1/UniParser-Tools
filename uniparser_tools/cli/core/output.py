@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cli.core.errors import dir_exists_error
+from uniparser_tools.cli.core.errors import dir_exists_error
 
 
 def default_output_dir(source_stem: str) -> Path:
@@ -121,4 +121,4 @@ def emit_success(summary: dict, *, json_output: bool) -> None:
 
 
 def print_parsing_status(label: str) -> None:
-    print(f"Parsing... {label}", file=sys.stderr)
+    print(f"Parsing... {label}", file=sys.stderr, flush=True)
