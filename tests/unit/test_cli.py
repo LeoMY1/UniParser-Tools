@@ -13,6 +13,7 @@ from click.testing import CliRunner
 from cli.core.credentials import ApiKeySource
 from cli.core.input import InputKind, resolve_input
 from cli.main import cli
+from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
 
 @pytest.fixture
@@ -161,7 +162,84 @@ class TestParseCommand:
         assert (out / "trigger_meta.json").is_file()
         meta = json.loads((out / "trigger_meta.json").read_text(encoding="utf-8"))
         assert meta["token"] == "tok-parse-1"
+        assert meta["trigger_kwargs"]["textual"] == "ocr-hq"
+        assert meta["trigger_kwargs"]["sync"] is True
+        assert "preset" not in meta
         assert (out / "paper.md").is_file()
+
+    def test_parse_default_trigger_kwargs(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+
+        mock_client = MagicMock()
+        mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
+        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+
+        out = tmp_path / "out"
+        runner.invoke(
+            cli,
+            ["parse", str(pdf), "-o", str(out)],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+
+        _, call_kwargs = mock_client.trigger_file.call_args
+        assert call_kwargs["sync"] is True
+        assert call_kwargs["textual"] is ParseModeTextual.OCRHighQuality
+        assert call_kwargs["equation"] is ParseMode.OCRHighQuality
+        assert call_kwargs["table"] is ParseMode.OCRHighQuality
+        assert call_kwargs["chart"] is ParseMode.DumpBase64
+        assert call_kwargs["figure"] is ParseMode.DumpBase64
+        assert call_kwargs["expression"] is ParseMode.DumpBase64
+        assert call_kwargs["molecule"] is ParseMode.OCRFast
+
+    def test_parse_molecule_disable_override(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+
+        mock_client = MagicMock()
+        mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
+        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+
+        out = tmp_path / "out"
+        runner.invoke(
+            cli,
+            ["parse", str(pdf), "-o", str(out), "--molecule", "disable"],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+
+        _, call_kwargs = mock_client.trigger_file.call_args
+        assert call_kwargs["molecule"] is ParseMode.Disable
+        assert call_kwargs["table"] is ParseMode.OCRHighQuality
+
+    def test_parse_invalid_equation_mode_rejected(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+
+        result = runner.invoke(
+            cli,
+            ["parse", str(pdf), "--equation", "digital"],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+        assert result.exit_code != 0
+        assert "digital" in result.stderr.lower() or "invalid" in result.stderr.lower()
 
 
 class TestFetchCommand:
@@ -252,6 +330,8 @@ class TestHelp:
         assert result.exit_code == 0
         assert "--output-dir" in result.stdout
         assert "--async" in result.stdout
+        assert "--textual" in result.stdout
+        assert "--molecule" in result.stdout
         assert "--verbose" not in result.stdout
 
     def test_fetch_help(self, runner: CliRunner) -> None:

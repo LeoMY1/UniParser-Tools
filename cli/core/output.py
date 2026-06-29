@@ -57,15 +57,18 @@ def write_trigger_meta(
     token: str,
     input_type: str,
     input_value: str,
+    trigger_kwargs: dict | None = None,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     meta_path = out_dir / "trigger_meta.json"
-    payload = {
+    payload: dict[str, Any] = {
         "token": token,
         "input_type": input_type,
         "input": input_value,
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     }
+    if trigger_kwargs is not None:
+        payload["trigger_kwargs"] = trigger_kwargs
     meta_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta_path
 

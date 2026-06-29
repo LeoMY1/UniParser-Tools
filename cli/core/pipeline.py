@@ -9,25 +9,15 @@ from cli.core.defaults import PENDING_STATUSES, POLL_INTERVAL_SEC, POLL_TIMEOUT_
 from cli.core.errors import parse_error
 from cli.core.input import InputKind, ResolvedInput, display_label_for_input
 from cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
+from cli.core.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
 
 
 def scientific_paper_trigger_kwargs(*, sync: bool = True) -> dict:
-    from uniparser_tools.common.constant import ParseMode, ParseModeTextual
-
-    return {
-        "sync": sync,
-        "textual": ParseModeTextual.OCRHighQuality,
-        "equation": ParseMode.OCRHighQuality,
-        "table": ParseMode.OCRHighQuality,
-        "chart": ParseMode.DumpBase64,
-        "figure": ParseMode.DumpBase64,
-        "expression": ParseMode.DumpBase64,
-        "molecule": ParseMode.OCRFast,
-    }
+    return resolve_trigger_kwargs(sync=sync, overrides={})
 
 
-def trigger_input(client, resolved: ResolvedInput, *, sync: bool) -> tuple[dict, str]:
-    kwargs = scientific_paper_trigger_kwargs(sync=sync)
+def trigger_input(client, resolved: ResolvedInput, *, trigger_kwargs: dict) -> tuple[dict, str]:
+    kwargs = trigger_kwargs
     if resolved.kind is InputKind.FILE:
         trigger = client.trigger_file(file_path=str(resolved.path), **kwargs)
         return trigger, "trigger_file"
@@ -130,9 +120,9 @@ def run_parse(
     resolved: ResolvedInput,
     *,
     out_dir: Path,
-    async_mode: bool,
+    trigger_kwargs: dict,
 ) -> dict[str, Any] | int:
-    trigger, stage = trigger_input(client, resolved, sync=not async_mode)
+    trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
         save_stage_error(out_dir, "trigger_error.json", trigger)
         return parse_error(stage, trigger)
@@ -146,6 +136,7 @@ def run_parse(
         token=token,
         input_type=resolved.kind.value,
         input_value=resolved.raw,
+        trigger_kwargs=serialize_trigger_kwargs(trigger_kwargs),
     )
 
     summary = complete_fetch(

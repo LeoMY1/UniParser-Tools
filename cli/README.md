@@ -116,7 +116,42 @@ uniparser parse https://example.com/paper.pdf
 | `--overwrite` | 输出目录已存在时，先清空再写入 |
 | `--async` | 异步提交任务（适合较大文档） |
 
+### 解析配置（7 类语义）
+
+未指定的字段使用 **scientific-paper** 默认值（与网站推荐科学文献配置一致）。只写你关心的 `--xxx` 即可覆盖对应项。
+
+| 选项 | 含义 | 可选值 | 默认值 |
+|------|------|--------|--------|
+| `--textual` | 普通文本 | `disable` / `ocr-fast` / `ocr-hq` / `digital` / `base64` | `ocr-hq` |
+| `--equation` | 数学公式 | `disable` / `ocr-fast` / `ocr-hq` / `base64` | `ocr-hq` |
+| `--table` | 表格 | 同上 | `ocr-hq` |
+| `--chart` | 图表 | 同上 | `base64` |
+| `--figure` | 插图 | 同上 | `base64` |
+| `--expression` | 化学反应式 | 同上 | `base64` |
+| `--molecule` | 化学分子 | 同上 | `ocr-fast` |
+
 示例：
+
+```bash
+# 全部默认（scientific-paper）
+uniparser parse paper.pdf
+
+# 数字 PDF 直接抽文本，其余保持默认
+uniparser parse paper.pdf --textual digital
+
+# 关闭分子解析
+uniparser parse paper.pdf --molecule disable
+
+# 多项覆盖
+uniparser parse paper.pdf --textual digital --table ocr-fast --molecule disable
+
+# 与输出目录、异步组合
+uniparser parse paper.pdf -o ./results/ --overwrite --async
+```
+
+`trigger_meta.json` 会记录本次实际提交的 `trigger_kwargs`，便于复现配置。
+
+### 输出目录示例
 
 ```bash
 uniparser parse paper.pdf -o ./results/
@@ -131,7 +166,7 @@ uniparser parse paper.pdf -o ./results/ --overwrite
 |------|------|
 | `<文件名>.md` | 完整 Markdown 正文（主要结果） |
 | `pages_tree.json` | 版面结构树，便于按章节/块定位 |
-| `trigger_meta.json` | 任务 token 与输入信息，供 `fetch` 恢复使用 |
+| `trigger_meta.json` | 任务 token、输入信息及 `trigger_kwargs`，供 `fetch` 恢复使用 |
 
 解析过程中终端会显示一行 `Parsing... <文件名>`。大文档可能需要等待数分钟。
 
