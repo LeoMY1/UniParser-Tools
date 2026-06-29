@@ -1,25 +1,52 @@
 [project]
 name = "uniparser-tools"
-dynamic = ["version", "dependencies"]
+dynamic = ["version"]
 description = "Document parser tools based on UniParser"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
 keywords = ["ocr", "document-parser", "uniparser"]
+dependencies = [
+    "click>=8.1.0,<9",
+    "PyMuPDF==1.25.4",
+    "pytz==2024.2",
+    "html5lib==1.1",
+    "markdown==3.6",
+    "latex2mathml==3.77.0",
+    "pylatexenc==2.10",
+    "tabulate==0.9.0",
+    "pandas==2.3.3",
+    "pillow>=10.4.0",
+    "requests==2.32.4",
+    "scipy==1.17.1",
+    "numpy==1.26.4",
+    "lxml==5.3.0",
+    "jinja2==3.1.2",
+    "PyYAML==6.0.2",
+    "opencv-python-headless==4.10.0.84",
+]
+
+[project.urls]
+Homepage = "https://github.com/dptech-corp/UniParser-Tools"
+Repository = "https://github.com/dptech-corp/UniParser-Tools"
+Documentation = "https://uniparser.dp.tech/"
 
 [project.scripts]
 uniparser = "uniparser_tools.cli.main:cli"
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0,<76", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ['.']
-exclude = ['build', 'workspace', 'temp', 'temp.*', 'models', 'models.*', 'tests', 'tests.*']
+where = ["."]
+include = ["uniparser_tools*"]
+
+[tool.setuptools.package-data]
+"uniparser_tools.utils" = ["templates/*.html"]
 
 [tool.setuptools.dynamic]
 version = { attr = "uniparser_tools.__version__" }
-dependencies = { file = ["requirements.txt"] }
 
 [tool.ruff]
 target-version = "py310"

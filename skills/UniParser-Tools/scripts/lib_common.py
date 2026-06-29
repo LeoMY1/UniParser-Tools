@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 
 DEFAULT_HOST = "https://uniparser.dp.tech/"
-INSTALL_CMD = "git+https://github.com/dptech-corp/UniParser-Tools.git"
+INSTALL_CMD = "uniparser-tools"
 
 # Hard-coded polling (not documented in SKILL.md as tunable).
 POLL_INTERVAL_SEC = 3
@@ -82,7 +82,7 @@ def check_uniparser_installed() -> int | None:
     try:
         import uniparser_tools  # noqa: F401
     except ImportError:
-        return config_error(f'uniparser_tools is not installed. Run once: pip install "{INSTALL_CMD}"')
+        return config_error(f"uniparser_tools is not installed. Run once: pip install {INSTALL_CMD}")
     return None
 
 

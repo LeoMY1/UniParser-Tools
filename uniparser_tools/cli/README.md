@@ -8,7 +8,15 @@
 
 ## 安装
 
-在仓库根目录执行（**必须**用这一条，才会安装 `uniparser` 命令）：
+需要 **Python 3.11+**。
+
+从 PyPI 安装（推荐）：
+
+```bash
+pip install uniparser-tools
+```
+
+从本仓库源码安装：
 
 ```bash
 cd /path/to/UniParser-Tools

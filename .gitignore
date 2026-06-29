@@ -70,3 +70,7 @@ deploy
 
 *.bak
 .cursor/
+
+# OpenSpec — local dev only (specs + agent helpers stay on disk, not in remote)
+openspec/
+AGENTS.md

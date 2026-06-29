@@ -9,9 +9,13 @@ Parse local PDFs, document images, and public PDF URLs into Markdown and structu
 
 ## Installation
 
-**Do not use** `pip install uniparser-tools` — the package is not reliably published on PyPI.
+Requires **Python 3.11+**. Install into the **same Python environment** that runs the scripts below:
 
-Install once into the **same Python environment** that runs the scripts below:
+```bash
+pip install uniparser-tools
+```
+
+From source (development):
 
 ```bash
 pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
@@ -118,7 +122,7 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| `CONFIG_ERROR` | Missing `UNIPARSER_API_KEY` or `uniparser_tools` not installed | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; re-check key one-liner |
+| `CONFIG_ERROR` | Missing `UNIPARSER_API_KEY` or `uniparser_tools` not installed | **Configuration** + `pip install uniparser-tools`; re-check key one-liner |
 | `DIR_EXISTS` | Output directory already exists | Ask user; re-run with `--overwrite` if they agree |
 | `Token is duplicated` | Job for this API key + exact input already exists | Do **not** re-run `parse_document.py`. `python3 scripts/fetch_by_token.py` with the **same** flag and path/URL (e.g. `--file-path "/abs/path/paper.pdf"`) |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `parse_document.py` for the same input. Re-run the same `fetch_by_token.py` command; files appear only after exit 0 |

@@ -22,7 +22,5 @@ def make_client(ctx: click.Context):
     try:
         from uniparser_tools.api.clients import UniParserClient
     except ImportError:
-        return None, config_error(
-            'uniparser_tools is not installed. Run: pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"'
-        )
+        return None, config_error("uniparser_tools is not installed. Run: pip install uniparser-tools")
     return UniParserClient(host=resolve_host(), api_key=api_key), None
