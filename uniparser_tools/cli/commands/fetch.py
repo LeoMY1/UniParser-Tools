@@ -4,10 +4,10 @@ from pathlib import Path
 
 import click
 
-from cli.core.config import ctx_flag, make_client
-from cli.core.errors import missing_token_error
-from cli.core.output import emit_success, fetch_source_stem, resolve_fetch_output_dir
-from cli.core.pipeline import complete_fetch
+from uniparser_tools.cli.core.config import ctx_flag, make_client
+from uniparser_tools.cli.core.errors import missing_token_error
+from uniparser_tools.cli.core.output import emit_success, fetch_source_stem, resolve_fetch_output_dir
+from uniparser_tools.cli.core.pipeline import complete_fetch
 
 
 @click.command("fetch")

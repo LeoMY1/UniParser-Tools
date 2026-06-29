@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
 
-from cli.core.defaults import IMAGE_SUFFIXES
+from uniparser_tools.cli.core.defaults import IMAGE_SUFFIXES
 
 
 class InputKind(str, Enum):

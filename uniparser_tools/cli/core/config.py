@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import click
 
-from cli.core.credentials import resolve_api_key_source
-from cli.core.defaults import UNIPARSER_BASE_URL
-from cli.core.errors import config_error
+from uniparser_tools.cli.core.credentials import resolve_api_key_source
+from uniparser_tools.cli.core.defaults import UNIPARSER_BASE_URL
+from uniparser_tools.cli.core.errors import config_error
 
 
 def resolve_host() -> str:

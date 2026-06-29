@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import click
 
-from cli.commands.auth import auth_cmd
-from cli.commands.fetch import fetch_cmd
-from cli.commands.health import health_cmd
-from cli.commands.parse import parse_cmd
-from cli.commands.version import version_cmd
+from uniparser_tools.cli.commands.auth import auth_cmd
+from uniparser_tools.cli.commands.fetch import fetch_cmd
+from uniparser_tools.cli.commands.health import health_cmd
+from uniparser_tools.cli.commands.parse import parse_cmd
+from uniparser_tools.cli.commands.version import version_cmd
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})

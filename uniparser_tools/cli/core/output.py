@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cli.core.errors import dir_exists_error
+from uniparser_tools.cli.core.errors import dir_exists_error
 
 
 def default_output_dir(source_stem: str) -> Path:

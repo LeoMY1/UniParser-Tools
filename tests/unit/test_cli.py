@@ -10,9 +10,9 @@ from unittest.mock import MagicMock
 import pytest
 from click.testing import CliRunner
 
-from cli.core.credentials import ApiKeySource
-from cli.core.input import InputKind, resolve_input
-from cli.main import cli
+from uniparser_tools.cli.core.credentials import ApiKeySource
+from uniparser_tools.cli.core.input import InputKind, resolve_input
+from uniparser_tools.cli.main import cli
 from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
 
@@ -29,7 +29,7 @@ def env_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def no_config_file(monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = Path("/nonexistent/uniparser-cli-test-config/config.yaml")
-    monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+    monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
 
 class TestCliConfig:
@@ -60,12 +60,12 @@ class TestCliConfig:
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
         config_path.write_text("api_key: file-key\n", encoding="utf-8")
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
         mock_client = MagicMock()
         mock_client.trigger_file.return_value = {"status": "error", "description": "stop early"}
-        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         pdf = tmp_path / "paper.pdf"
         pdf.write_bytes(b"%PDF-1.4")
@@ -147,7 +147,7 @@ class TestParseCommand:
         ]
         mock_client.get_formatted.return_value = {"status": "success", "content": "# Hi"}
 
-        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
         result = runner.invoke(
@@ -179,7 +179,7 @@ class TestParseCommand:
 
         mock_client = MagicMock()
         mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
-        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
         runner.invoke(
@@ -210,7 +210,7 @@ class TestParseCommand:
 
         mock_client = MagicMock()
         mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
-        monkeypatch.setattr("cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
         runner.invoke(
@@ -258,7 +258,7 @@ class TestFetchCommand:
         ]
         mock_client.get_formatted.return_value = {"status": "success", "content": "body"}
 
-        monkeypatch.setattr("cli.commands.fetch.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.fetch.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "fetch-out"
         result = runner.invoke(
@@ -279,7 +279,7 @@ class TestHealthVersion:
         monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
         mock_client = MagicMock()
         mock_client.health.return_value = {"status": "success"}
-        monkeypatch.setattr("cli.commands.health.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.health.make_client", lambda ctx: (mock_client, None))
 
         result = runner.invoke(cli, ["--json", "health"], env={**os.environ, "UNIPARSER_API_KEY": "test-key"})
         assert result.exit_code == 0
@@ -289,7 +289,7 @@ class TestHealthVersion:
         monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
         mock_client = MagicMock()
         mock_client.version.return_value = {"status": "success", "version": "1.0"}
-        monkeypatch.setattr("cli.commands.version.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.commands.version.make_client", lambda ctx: (mock_client, None))
 
         result = runner.invoke(cli, ["version"], env={**os.environ, "UNIPARSER_API_KEY": "test-key"})
         assert result.exit_code == 0
@@ -299,7 +299,7 @@ class TestHealthVersion:
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch, no_config_file: None
     ) -> None:
         monkeypatch.setattr(
-            "cli.commands.version.resolve_api_key_source",
+            "uniparser_tools.cli.commands.version.resolve_api_key_source",
             lambda ctx: ApiKeySource(api_key=None, source=""),
         )
         env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
@@ -312,7 +312,7 @@ class TestHealthVersion:
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch, no_config_file: None
     ) -> None:
         monkeypatch.setattr(
-            "cli.commands.version.resolve_api_key_source",
+            "uniparser_tools.cli.commands.version.resolve_api_key_source",
             lambda ctx: ApiKeySource(api_key=None, source=""),
         )
         env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
@@ -350,8 +350,8 @@ class TestAuthCommand:
         monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
         config_dir = tmp_path / ".uniparser"
         config_path = config_dir / "config.yaml"
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
         result = runner.invoke(cli, ["auth"], input="my-secret-key\n")
         assert result.exit_code == 0, result.stderr
@@ -371,8 +371,8 @@ class TestAuthCommand:
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
         config_path.write_text("api_key: existing-key\n", encoding="utf-8")
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
         result = runner.invoke(cli, ["auth"], input="\n")
         assert result.exit_code == 0, result.stderr
@@ -387,8 +387,8 @@ class TestAuthCommand:
         tmp_path: Path,
     ) -> None:
         config_dir = tmp_path / ".uniparser"
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_dir / "config.yaml")
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_dir / "config.yaml")
         env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
         env["UNIPARSER_API_KEY"] = "env-key"
 
@@ -408,8 +408,8 @@ class TestAuthCommand:
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
         config_path.write_text("api_key: abcdefghijklmnop\n", encoding="utf-8")
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
         result = runner.invoke(cli, ["auth", "--show"])
         assert result.exit_code == 0
@@ -426,7 +426,7 @@ class TestAuthCommand:
 
     def test_auth_show_without_config(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("UNIPARSER_API_KEY", raising=False)
-        monkeypatch.setattr("cli.core.credentials.read_api_key_from_config", lambda: None)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.read_api_key_from_config", lambda: None)
         env = {k: v for k, v in os.environ.items() if k != "UNIPARSER_API_KEY"}
 
         result = runner.invoke(cli, ["auth", "--show"], env=env)
@@ -445,8 +445,8 @@ class TestAuthCommand:
         config_dir.mkdir()
         config_path = config_dir / "config.yaml"
         config_path.write_text("api_key: configured\n", encoding="utf-8")
-        monkeypatch.setattr("cli.core.credentials.CONFIG_DIR", config_dir)
-        monkeypatch.setattr("cli.core.credentials.CONFIG_PATH", config_path)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_DIR", config_dir)
+        monkeypatch.setattr("uniparser_tools.cli.core.credentials.CONFIG_PATH", config_path)
 
         result = runner.invoke(cli, ["auth", "--verify"])
         assert result.exit_code == 0
