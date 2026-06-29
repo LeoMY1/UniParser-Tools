@@ -366,7 +366,7 @@ uniparser version
 
 ## 脚本与自动化：`--json`
 
-在命令**最前面**加上 `--json`，成功时会在标准输出打印 JSON，便于脚本解析：
+在命令**最前面**加上 `--json`，成功时会在**标准输出（stdout）**打印 JSON，便于脚本解析：
 
 ```bash
 uniparser --json parse paper.pdf
@@ -379,6 +379,52 @@ uniparser --json fetch --token YOUR_TOKEN
 uniparser --json parse paper.pdf    # 正确
 uniparser parse paper.pdf --json    # 错误
 ```
+
+### `parse` 成功时的输出示例
+
+```bash
+uniparser --json parse /path/to/report.pdf
+```
+
+**stderr**（进度，与是否 `--json` 无关）：
+
+```text
+Parsing... report.pdf
+```
+
+**stdout**（成功时唯一的 JSON，exit code 0）：
+
+```json
+{
+  "ok": true,
+  "output_dir": "/Users/you/Uni-Parser-Skill/report",
+  "pages_tree_path": "/Users/you/Uni-Parser-Skill/report/pages_tree.json",
+  "markdown_path": "/Users/you/Uni-Parser-Skill/report/report.md",
+  "content_chars": 12345,
+  "token": "a1b2c3d4e5f6789012345678901234ab",
+  "input_type": "file",
+  "trigger_meta_path": "/Users/you/Uni-Parser-Skill/report/trigger_meta.json"
+}
+```
+
+| 字段 | 含义 |
+|------|------|
+| `ok` | 是否成功（`true`） |
+| `output_dir` | 结果目录绝对路径 |
+| `markdown_path` | 主 Markdown 文件路径 |
+| `pages_tree_path` | 版面结构树 JSON 路径 |
+| `content_chars` | Markdown 正文字符数（随文档而异） |
+| `token` | 任务 token，可用于 `uniparser fetch --token` |
+| `input_type` | 输入类型：`file` / `image` / `url` |
+| `trigger_meta_path` | `trigger_meta.json` 路径（含 `trigger_kwargs`） |
+
+脚本中可只解析 stdout，例如：
+
+```bash
+uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['markdown_path'])"
+```
+
+失败时仍为 **stderr 单行 JSON**（`ok: false`），见上文 parse「常见错误」；exit code 为 1。
 
 ---
 

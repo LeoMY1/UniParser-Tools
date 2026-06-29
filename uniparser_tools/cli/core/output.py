@@ -121,4 +121,4 @@ def emit_success(summary: dict, *, json_output: bool) -> None:
 
 
 def print_parsing_status(label: str) -> None:
-    print(f"Parsing... {label}", file=sys.stderr)
+    print(f"Parsing... {label}", file=sys.stderr, flush=True)

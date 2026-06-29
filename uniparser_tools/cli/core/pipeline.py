@@ -88,9 +88,7 @@ def complete_fetch(
     *,
     out_dir: Path,
     source_stem: str,
-    parsing_label: str,
 ) -> dict[str, Any] | int:
-    print_parsing_status(parsing_label)
     poll_result = poll_until_success(client, token)
     if isinstance(poll_result, int):
         return poll_result
@@ -122,6 +120,7 @@ def run_parse(
     out_dir: Path,
     trigger_kwargs: dict,
 ) -> dict[str, Any] | int:
+    print_parsing_status(display_label_for_input(resolved))
     trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
         save_stage_error(out_dir, "trigger_error.json", trigger)
@@ -144,7 +143,6 @@ def run_parse(
         token,
         out_dir=out_dir,
         source_stem=resolved.source_stem,
-        parsing_label=display_label_for_input(resolved),
     )
     if isinstance(summary, int):
         return summary
