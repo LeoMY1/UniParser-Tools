@@ -363,23 +363,43 @@ token = result["token"]
 
 ## 面向 AI Agent
 
-本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手在对话中自动完成 PDF / 图片 / 公网 PDF 链接 → 结构化 Markdown 与版面 JSON 的解析。用户只需安装 Skill、配置 API Key，并用自然语言或下方触发词发起任务；具体执行步骤由 Skill 内的 `SKILL.md` 指导 Agent，无需手动敲命令。
+本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手在对话中自动完成 PDF / 图片 / 公网 PDF 链接 → 结构化 Markdown 与版面 JSON 的解析。用户安装 Skill 与 **`uniparser` CLI**、配置 API Key 后，用自然语言或下方触发词发起任务；`SKILL.md` 指导 Agent 调用 `uniparser parse` / `uniparser fetch`，无需手写 SDK 或手动维护脚本。
 
 ### 快速使用 Skill
 
-**1. 为 Agent 安装 Skill**
+**1. 安装 CLI 与 Skill**
 
-将本仓库中的 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。
+需要 **Python 3.11+**。在 Agent 使用的同一 Python 环境中安装命令行工具：
 
-安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
+```bash
+pip install uniparser-tools
+```
+
+或从源码安装：
+
+```bash
+pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
+```
+
+验证：`uniparser --help`
+
+将本仓库中的 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
 
 **2. 配置 API Key**
 
-在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key，写入环境变量（Agent 终端需能读到）：
+在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key。任选其一（Agent 终端需能读到）：
+
+```bash
+uniparser auth
+```
+
+或设置环境变量：
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
 ```
+
+Agent 解析前可用 `uniparser auth --verify` 检查是否已配置。
 
 **3. 在 Agent 中使用 Skill**
 
@@ -412,10 +432,11 @@ export UNIPARSER_API_KEY="your-api-key"
 | `{源文件主名}.md` | 解析得到的完整 Markdown |
 | `pages_tree.json` | 结构化版面树（页面与语义块层次） |
 | `formatted_meta.json` | 元数据（不含全文 `content`） |
+| `trigger_meta.json` | 任务 token 与解析参数（供 `uniparser fetch` 中断恢复） |
 
-若你在对话中指定了输出目录，Agent 也可将结果保存到你提供的路径。若目标目录已存在，Agent 会先征求你是否覆盖后再继续。大文档解析可能耗时数分钟至十余分钟；重复提交同一文件时 Agent 会按 Skill 说明从已有任务恢复，而不会重复上传。
+若你在对话中指定了输出目录，Agent 也可将结果保存到你提供的路径。若目标目录已存在，Agent 会先征求你是否覆盖后再继续。大文档解析可能耗时数分钟至十余分钟；重复提交同一输入时 Agent 会按 Skill 说明用已有 **token** 执行 `uniparser fetch`，而不会重复上传。
 
-Agent 实现细节、错误恢复与 SDK 安装说明见 `skills/UniParser-Tools/SKILL.md`。
+Agent 实现细节、`uniparser` 命令与错误恢复见 `skills/UniParser-Tools/SKILL.md`。
 
 ### 参考文档
 
