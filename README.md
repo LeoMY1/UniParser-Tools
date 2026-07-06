@@ -461,17 +461,6 @@ Agent 会回复 Markdown 路径，并在需要版面结构时提供 `pages_tree.
 
 Agent 实现细节、CLI 命令与错误恢复见 [SKILL.md](./skills/UniParser-Tools/SKILL.md)。
 
-### 参考文档
-
-- [API reference](./skills/UniParser-Tools/references/api-reference.md)
-- [Common patterns](./skills/UniParser-Tools/references/patterns.md)
-- [Data classes](./skills/UniParser-Tools/references/data-classes.md)
-- [Layout types](./skills/UniParser-Tools/references/layout-types.md)
-- [Utilities](./skills/UniParser-Tools/references/utilities.md)
-- [Important notes](./skills/UniParser-Tools/references/notes.md)
-
-
-
 ## MCP Server
 
 UniParser 提供了基于 [Model Context Protocol](https://modelcontextprotocol.io/) 的 MCP 服务，位于 `mcp_server/` 目录，支持通过 MCP 工具调用 UniParser HTTP API。
