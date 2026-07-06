@@ -363,43 +363,29 @@ token = result["token"]
 
 ## 面向 AI Agent
 
-本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手在对话中自动完成 PDF / 图片 / 公网 PDF 链接 → 结构化 Markdown 与版面 JSON 的解析。用户安装 Skill 与 **`uniparser` CLI**、配置 API Key 后，用自然语言或下方触发词发起任务；`SKILL.md` 指导 Agent 调用 `uniparser parse` / `uniparser fetch`，无需手写 SDK 或手动维护脚本。
+本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手自动完成 PDF / 图片 / 公网 PDF 链接 → Markdown 与版面 JSON 的解析。用户只需要安装 Skill、准备 API Key，然后在对话里提出解析需求；CLI 安装与具体执行步骤由 Agent 按 `SKILL.md` 自动完成。
 
 ### 快速使用 Skill
 
-**1. 安装 CLI 与 Skill**
+**1. 安装 Skill**
 
-需要 **Python 3.11+**。在 Agent 使用的同一 Python 环境中安装命令行工具：
-
-```bash
-pip install uniparser-tools
-```
-
-或从源码安装：
+使用 `skills` 命令安装：
 
 ```bash
-pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
+npx skills add dptech-corp/UniParser-Tools
 ```
 
-验证：`uniparser --help`
+也可以手动安装：将 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
 
-将本仓库中的 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
+**2. 准备 API Key**
 
-**2. 配置 API Key**
-
-在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key。任选其一（Agent 终端需能读到）：
-
-```bash
-uniparser auth
-```
-
-或设置环境变量：
+在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key。你可以让 Agent 按 Skill 指引配置，也可以提前设置环境变量：
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
 ```
 
-Agent 解析前可用 `uniparser auth --verify` 检查是否已配置。
+不要把 API Key 直接粘贴到公开对话或代码仓库中。
 
 **3. 在 Agent 中使用 Skill**
 
@@ -410,22 +396,9 @@ Agent 解析前可用 `uniparser auth --verify` 检查是否已配置。
 
 支持的输入：**本地 PDF**、**本地图片**（png / jpg 等）、**可公网访问的 PDF URL**。
 
-**4. 使用效果与结果位置**
+**4. 查看输出结果**
 
-解析成功后，Agent 会在回复中给出 **Markdown 文件路径**（以及需要时的 **版面结构文件路径**），并可将正文摘要或全文交付给你。典型效果包括：
-
-- 按阅读顺序输出的 **Markdown 全文**（`{源文件主名}.md`，如 `paper.pdf` → `paper.md`）
-- **表格** 转为 Markdown 表格
-- **公式** 转为 LaTeX
-- **图片 / 图表** 等以 base64 等形式出现在结果中（视文档类型而定）
-- **版面结构树** `pages_tree.json`，便于需要章节、块级布局时使用
-- 面向科技文献的默认识别策略（高质量 OCR 等，由 Skill 配置）
-
-默认将结果写入用户主目录下：
-
-`~/Uni-Parser-Skill/<源文件主名>/`
-
-例如解析 `paper.pdf` 时，默认目录为 `~/Uni-Parser-Skill/paper/`。该目录在**解析成功完成后**才会写入文件，通常包含：
+默认输出到 `~/Uni-Parser-Skill/<源文件主名>/`，通常包含：
 
 | 文件 | 说明 |
 |------|------|
@@ -434,9 +407,9 @@ Agent 解析前可用 `uniparser auth --verify` 检查是否已配置。
 | `formatted_meta.json` | 元数据（不含全文 `content`） |
 | `trigger_meta.json` | 任务 token 与解析参数（供 `uniparser fetch` 中断恢复） |
 
-若你在对话中指定了输出目录，Agent 也可将结果保存到你提供的路径。若目标目录已存在，Agent 会先征求你是否覆盖后再继续。大文档解析可能耗时数分钟至十余分钟；重复提交同一输入时 Agent 会按 Skill 说明用已有 **token** 执行 `uniparser fetch`，而不会重复上传。
+Agent 会回复 Markdown 路径，并在需要版面结构时提供 `pages_tree.json`。大文档可能耗时数分钟至十余分钟；中断或重复任务可按 Skill 说明用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
 
-Agent 实现细节、`uniparser` 命令与错误恢复见 `skills/UniParser-Tools/SKILL.md`。
+Agent 实现细节、CLI 命令与错误恢复见 `skills/UniParser-Tools/SKILL.md`。
 
 ### 参考文档
 
