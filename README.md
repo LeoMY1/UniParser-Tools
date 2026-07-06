@@ -35,12 +35,16 @@ UniParser Tools 是一个强大的文档解析工具包，支持对 PDF 文件�
 - **Plain**：纯文本格式输出
 - **Markup**：标记文本格式输出
 
+
+
 ### 高级功能
 
 - **图文对提取**：自动提取图片及其对应的标题、图注
 - **表格结构化提取**：提取表格及其表题、表注
 - **分子索引关联**：提取分子结构及其索引信息
 - **公式索引关联**：提取公式及其编号信息
+
+
 
 ## 安装
 
@@ -50,7 +54,7 @@ UniParser Tools 是一个强大的文档解析工具包，支持对 PDF 文件�
 pip install -r requirements.txt
 ```
 
-使用 **`uniparser` 命令行工具**时，还需将本仓库安装为可编辑包（入口在 `pyproject.toml` 中注册）：
+使用 `uniparser` **命令行工具**时，还需将本仓库安装为可编辑包（入口在 `pyproject.toml` 中注册）：
 
 ```bash
 pip install -e .
@@ -64,25 +68,27 @@ pip install -e .
 uniparser --help
 ```
 
-CLI 完整说明见 [`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md)。
+CLI 完整说明见 `[uniparser_tools/cli/README.md](./uniparser_tools/cli/README.md)`。
 
 ## CLI 命令行
 
 `uniparser` 提供 `auth`、`parse`、`fetch`、`health`、`version` 等子命令。
 
-| 命令 | 说明 |
-|------|------|
-| `uniparser auth` | 交互式配置 API Key（写入 `~/.uniparser/config.yaml`） |
-| `uniparser parse INPUT` | 解析本地 PDF/图片或公网 PDF URL |
-| `uniparser fetch --token TOKEN` | 用已有 token 轮询并下载结果 |
-| `uniparser health` | 检查服务健康状态（需要 API Key） |
-| `uniparser version` | 查看本地包版本（无 API Key 时跳过远端查询） |
+
+| 命令                              | 说明                                           |
+| ------------------------------- | -------------------------------------------- |
+| `uniparser auth`                | 交互式配置 API Key（写入 `~/.uniparser/config.yaml`） |
+| `uniparser parse INPUT`         | 解析本地 PDF/图片或公网 PDF URL                       |
+| `uniparser fetch --token TOKEN` | 用已有 token 轮询并下载结果                            |
+| `uniparser health`              | 检查服务健康状态（需要 API Key）                         |
+| `uniparser version`             | 查看本地包版本（无 API Key 时跳过远端查询）                   |
+
 
 **API Key 优先级：** `--api-key` > `UNIPARSER_API_KEY` > `~/.uniparser/config.yaml`
 
-**`--json` 须写在子命令之前：** `uniparser --json parse paper.pdf`
+`--json` **须写在子命令之前：** `uniparser --json parse paper.pdf`
 
-参数、输出文件、错误码等详见 [`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md)。
+参数、输出文件、错误码等详见 `[uniparser_tools/cli/README.md](./uniparser_tools/cli/README.md)`。
 
 首次使用：
 
@@ -90,6 +96,8 @@ CLI 完整说明见 [`uniparser_tools/cli/README.md`](./uniparser_tools/cli/READ
 uniparser auth
 uniparser parse report.pdf
 ```
+
+
 
 ## API-Key 配置
 
@@ -107,43 +115,59 @@ parser = UniParserClient(
 )
 ```
 
+
+
 ## 解析配置：7 个语义类 + 2 个枚举
 
 提交解析任务时（`trigger_file` / `trigger_snip` / `trigger_url`），可分别设置 7 类语义元素的处理模式：
 
-| 字段 | 含义 | 枚举类型 |
-|------|------|---------|
-| `textual` | 普通文本（段落、标题等） | `ParseModeTextual` |
-| `equation` | 数学公式 | `ParseMode` |
-| `table` | 表格 | `ParseMode` |
-| `chart` | 图表 | `ParseMode` |
-| `figure` | 图片 / 插图 | `ParseMode` |
-| `expression` | 化学反应式 | `ParseMode` |
-| `molecule` | 化学分子结构 | `ParseMode` |
+
+| 字段           | 含义           | 枚举类型               |
+| ------------ | ------------ | ------------------ |
+| `textual`    | 普通文本（段落、标题等） | `ParseModeTextual` |
+| `equation`   | 数学公式         | `ParseMode`        |
+| `table`      | 表格           | `ParseMode`        |
+| `chart`      | 图表           | `ParseMode`        |
+| `figure`     | 图片 / 插图      | `ParseMode`        |
+| `expression` | 化学反应式        | `ParseMode`        |
+| `molecule`   | 化学分子结构       | `ParseMode`        |
+
+
+
 
 ### `ParseMode`（除 textual 外都用这个）
 
-| 取值 | 名称 | 含义 |
-|------|------|------|
-| `-3` / `-2` | `DumpHosting` / `DumpLocal` | 保留接口，默认关闭 |
-| `-1` | `DumpBase64` | 禁用解析，输出原始图像 Base64 |
-| `0`  | `Disable`   | 禁用解析，不输出 |
-| `1`  | `OCRFast`   | 快速 OCR（默认） |
-| `2`  | `OCRHighQuality` | 高质 OCR |
+
+| 取值          | 名称                          | 含义                 |
+| ----------- | --------------------------- | ------------------ |
+| `-3` / `-2` | `DumpHosting` / `DumpLocal` | 保留接口，默认关闭          |
+| `-1`        | `DumpBase64`                | 禁用解析，输出原始图像 Base64 |
+| `0`         | `Disable`                   | 禁用解析，不输出           |
+| `1`         | `OCRFast`                   | 快速 OCR（默认）         |
+| `2`         | `OCRHighQuality`            | 高质 OCR             |
+
+
+
 
 ### `ParseModeTextual`（仅用于 `textual`）
 
-| 取值 | 名称 | 含义 |
-|------|------|------|
-| `-1` | `DumpBase64` | 输出原始图像 Base64 |
-| `0`  | `Disable`   | 不解析、不输出 |
-| `1`  | `OCRFast`   | 快速 OCR |
-| `2`  | `OCRHighQuality` | 高质 OCR，支持行内公式 |
+
+| 取值   | 名称                | 含义               |
+| ---- | ----------------- | ---------------- |
+| `-1` | `DumpBase64`      | 输出原始图像 Base64    |
+| `0`  | `Disable`         | 不解析、不输出          |
+| `1`  | `OCRFast`         | 快速 OCR           |
+| `2`  | `OCRHighQuality`  | 高质 OCR，支持行内公式    |
 | `3`  | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
+
+
+
 
 ## 快速开始
 
 > ‼️‼️‼️ 以下仅为代码功能示例，具体运行代码请参考 `playground/*.ipynb` ‼️‼️‼️
+
+
 
 ### 1. 初始化客户端
 
@@ -160,6 +184,8 @@ parser = UniParserClient(
     api_key=api_key
 )
 ```
+
+
 
 ### 2. 解析 PDF 文件（科学文献推荐默认）
 
@@ -183,30 +209,38 @@ if result["status"] == "success":
     print(f"解析成功，token: {token}")
 ```
 
+
+
 ### 3. 获取解析结果
+
+
 
 #### 输出配置（`get_result` / `get_formatted` 通用开关）
 
-| 开关 | 默认 | 说明 |
-|------|------|------|
-| `content` | `True` | 返回全文纯/富文本，适合 LLM |
-| `objects` | `False` | JSON 语义块列表，适合语义分析 |
-| `pages_dict` | `False` | 按页组织的原始解析布局 |
-| `pages_tree` | `False` | 带父子关系的嵌套树，适合复杂分析 |
-| `return_half` | `False` | 解析进行中即取已完成部分 |
+
+| 开关                | 默认      | 说明                    |
+| ----------------- | ------- | --------------------- |
+| `content`         | `True`  | 返回全文纯/富文本，适合 LLM      |
+| `objects`         | `False` | JSON 语义块列表，适合语义分析     |
+| `pages_dict`      | `False` | 按页组织的原始解析布局           |
+| `pages_tree`      | `False` | 带父子关系的嵌套树，适合复杂分析      |
+| `return_half`     | `False` | 解析进行中即取已完成部分          |
 | `molecule_source` | `False` | 返回分子原始源（SMILES/mol 等） |
+
 
 同一 token 可复用，多次获取不同组合不会重复计费。
 
 #### 输出格式（`FormatFlag`，仅作用于 `content` / `objects` 中的文本字段）
 
-| 取值 | 适用场景 |
-|------|----------|
-| `FormatFlag.Plain` | 纯文本，适合检索 |
-| `FormatFlag.Markup` | 默认标记文本 |
-| `FormatFlag.Markdown` | ⭐ 推荐给 LLM |
-| `FormatFlag.Latex` | LaTeX，适合公式 |
-| `FormatFlag.Html` | HTML，适合表格 |
+
+| 取值                    | 适用场景       |
+| --------------------- | ---------- |
+| `FormatFlag.Plain`    | 纯文本，适合检索   |
+| `FormatFlag.Markup`   | 默认标记文本     |
+| `FormatFlag.Markdown` | ⭐ 推荐给 LLM  |
+| `FormatFlag.Latex`    | LaTeX，适合公式 |
+| `FormatFlag.Html`     | HTML，适合表格  |
+
 
 ```python
 from uniparser_tools.common.constant import FormatFlag
@@ -223,6 +257,8 @@ result = parser.get_formatted(
 if result["status"] == "success":
     print(result["content"])
 ```
+
+
 
 ### 4. 使用异步回调 (Callbacks)
 
@@ -269,7 +305,11 @@ if result["status"] == "success":
     # 使用 token 获取解析结果
 ```
 
+
+
 ## 使用示例
+
+
 
 ### 图文对提取
 
@@ -316,6 +356,8 @@ if results:
         pass
 ```
 
+
+
 ### 多种格式输出
 
 可以在同一次格式化输出中设置不同语义元素的输出模式：
@@ -336,9 +378,11 @@ if result["status"] == "success":
     print(result["content"])
 ```
 
+
+
 ## 错误处理
 
-`UniParserClient` 的所有方法**都返回 `dict`，不会抛 `requests`/HTTP 异常**。网络错误、鉴权失败、限流、业务校验失败等都被统一包装到返回值里，调用方只需判断 `status` 字段即可，不需要关心底层 HTTP 细节。
+`UniParserClient` 的所有方法**都返回** `dict`**，不会抛** `requests`**/HTTP 异常**。网络错误、鉴权失败、限流、业务校验失败等都被统一包装到返回值里，调用方只需判断 `status` 字段即可，不需要关心底层 HTTP 细节。
 
 ```python
 result = parser.trigger_file(file_path="./paper.pdf")
@@ -352,18 +396,22 @@ token = result["token"]
 
 返回体字段约定：
 
-| 字段 | 出现场景 | 说明 |
-|------|----------|------|
-| `status` | 始终存在 | `"success"` / `"error"`（见 `StatusFlag`） |
-| `token` | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯 |
-| `description` | 错误时 | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
-| `message` | 错误时 | 服务端返回的原始报文（非 JSON 时才填充） |
+
+| 字段            | 出现场景     | 说明                                                                                                  |
+| ------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `status`      | 始终存在     | `"success"` / `"error"`（见 `StatusFlag`）                                                             |
+| `token`       | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯                                                                              |
+| `description` | 错误时      | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
+| `message`     | 错误时      | 服务端返回的原始报文（非 JSON 时才填充）                                                                             |
+
 
 > 直接调用 REST API（curl / 自研客户端）时才需要关注 `401/403/429/…` 等原始 HTTP 状态码，详见各部署实例 `<host>/api` 上的 Authentication 章节。
 
+
+
 ## 面向 AI Agent
 
-本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手自动完成 PDF / 图片 / 公网 PDF 链接 → Markdown 与版面 JSON 的解析。用户只需要安装 Skill、准备 API Key，然后在对话里提出解析需求；CLI 安装与具体执行步骤由 Agent 按 `SKILL.md` 自动完成。
+本仓库提供 **Agent Skill**（[skills/UniParser-Tools/](./skills/UniParser-Tools/)），让 Cursor、Claude Code 等助手自动完成 PDF / 图片 / 公网 PDF 链接 → Markdown 与版面 JSON 的解析。用户只需要安装 Skill、准备 API Key，然后在对话里提出解析需求；CLI 安装与具体执行步骤由 Agent 按 [SKILL.md](./skills/UniParser-Tools/SKILL.md) 自动完成。
 
 ### 快速使用 Skill
 
@@ -375,7 +423,7 @@ token = result["token"]
 npx skills add dptech-corp/UniParser-Tools
 ```
 
-也可以手动安装：将 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
+也可以手动安装：将 [skills/UniParser-Tools/](./skills/UniParser-Tools/) 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
 
 **2. 准备 API Key**
 
@@ -400,25 +448,29 @@ export UNIPARSER_API_KEY="your-api-key"
 
 默认输出到 `~/Uni-Parser-Skill/<源文件主名>/`，通常包含：
 
-| 文件 | 说明 |
-|------|------|
-| `{源文件主名}.md` | 解析得到的完整 Markdown |
-| `pages_tree.json` | 结构化版面树（页面与语义块层次） |
-| `formatted_meta.json` | 元数据（不含全文 `content`） |
-| `trigger_meta.json` | 任务 token 与解析参数（供 `uniparser fetch` 中断恢复） |
+
+| 文件                    | 说明                                       |
+| --------------------- | ---------------------------------------- |
+| `{源文件主名}.md`          | 解析得到的完整 Markdown                         |
+| `pages_tree.json`     | 结构化版面树（页面与语义块层次）                         |
+| `formatted_meta.json` | 元数据（不含全文 `content`）                      |
+| `trigger_meta.json`   | 任务 token 与解析参数（供 `uniparser fetch` 中断恢复） |
+
 
 Agent 会回复 Markdown 路径，并在需要版面结构时提供 `pages_tree.json`。大文档可能耗时数分钟至十余分钟；中断或重复任务可按 Skill 说明用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
 
-Agent 实现细节、CLI 命令与错误恢复见 `skills/UniParser-Tools/SKILL.md`。
+Agent 实现细节、CLI 命令与错误恢复见 [SKILL.md](./skills/UniParser-Tools/SKILL.md)。
 
 ### 参考文档
 
-- `skills/UniParser-Tools/references/api-reference.md`
-- `skills/UniParser-Tools/references/patterns.md`
-- `skills/UniParser-Tools/references/data-classes.md`
-- `skills/UniParser-Tools/references/layout-types.md`
-- `skills/UniParser-Tools/references/utilities.md`
-- `skills/UniParser-Tools/references/notes.md`
+- [API reference](./skills/UniParser-Tools/references/api-reference.md)
+- [Common patterns](./skills/UniParser-Tools/references/patterns.md)
+- [Data classes](./skills/UniParser-Tools/references/data-classes.md)
+- [Layout types](./skills/UniParser-Tools/references/layout-types.md)
+- [Utilities](./skills/UniParser-Tools/references/utilities.md)
+- [Important notes](./skills/UniParser-Tools/references/notes.md)
+
+
 
 ## MCP Server
 
@@ -426,12 +478,16 @@ UniParser 提供了基于 [Model Context Protocol](https://modelcontextprotocol.
 
 ### 可用工具
 
-| 工具 | 说明 |
-|------|------|
-| `uniparser_health` | 检查服务健康状态 |
-| `uniparser_version` | 获取服务版本信息 |
+
+| 工具                     | 说明                               |
+| ---------------------- | -------------------------------- |
+| `uniparser_health`     | 检查服务健康状态                         |
+| `uniparser_version`    | 获取服务版本信息                         |
 | `uniparser_parse_file` | 解析本机 PDF（传入绝对路径），返回 `content` 文本 |
-| `uniparser_parse_url` | 解析公网 PDF URL，返回 `content` 文本 |
+| `uniparser_parse_url`  | 解析公网 PDF URL，返回 `content` 文本     |
+
+
+
 
 ### 快速启动
 
@@ -443,10 +499,12 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
 
 运行时必须设置以下环境变量：
 
-| 变量 | 说明 |
-|------|------|
+
+| 变量                   | 说明                                              |
+| -------------------- | ----------------------------------------------- |
 | `UNIPARSER_BASE_URL` | UniParser 用户服务根 URL，例如 `http://127.0.0.1:40001` |
-| `UNIPARSER_API_KEY` | API 密钥，对应请求头 `X-API-Key` |
+| `UNIPARSER_API_KEY`  | API 密钥，对应请求头 `X-API-Key`                        |
+
 
 默认解析参数和输出格式见 `mcp_server/config.yaml`。
 
@@ -478,7 +536,7 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
 
 传输模式默认为 `stdio`，可通过 `UNIPARSER_MCP_TRANSPORT` 环境变量切换为 `sse` 或 `streamable-http`。
 
-详细文档见 [`mcp_server/README.md`](./mcp_server/README.md)。
+详细文档见 `[mcp_server/README.md](./mcp_server/README.md)`。
 
 ## 项目结构
 
@@ -508,16 +566,20 @@ playground/
 └── app.molecule_extracrtion.ipynb # 分子提取示例
 ```
 
+
+
 ## 详细文档
 
 项目提供了丰富的示例和教程，位于 `playground/` 目录下：
 
-- **CLI 命令行**：[`uniparser_tools/cli/README.md`](./uniparser_tools/cli/README.md) - `uniparser` 安装、子命令与参数说明
+- **CLI 命令行**：`[uniparser_tools/cli/README.md](./uniparser_tools/cli/README.md)` - `uniparser` 安装、子命令与参数说明
 - **快速开始**：`playground/01.quick_start.ipynb` - 基础用法教程，包括 PDF 和图片解析、多种格式输出
 - **高级用法**：`playground/02.advance.ipynb` - 高级功能教程，包括图片+图题+图注、表格+表题+表注、分子+分子索引、公式+公式索引的提取
 - **异步回调**：`playground/04.use_callbacks.py` - 异步回调演示，用于在异步解析任务完成后自动接收通知和结果
 - **图文对提取**：`playground/app.caption_extraction.ipynb` - 图文对提取完整示例
 - **分子提取**：`playground/app.molecule_extracrtion.ipynb` - 分子结构提取示例
+
+
 
 ## 注意事项
 
@@ -526,6 +588,8 @@ playground/
 3. **服务端点**：不同 host 对应功能不完全相同，解析质量也不一样，具体请在售后群中咨询
 4. **图文对提取**：必须使用特定端口（30001）进行解析，其他接口不支持提取图文对
 5. **Token 复用**：解析任务提交后会返回一个 token，可以持有该 token 多次获取不同格式的结果
+
+
 
 ## 依赖要求
 
@@ -539,6 +603,8 @@ playground/
 - scipy
 - lxml
 - 等
+
+
 
 ## 许可证
 
