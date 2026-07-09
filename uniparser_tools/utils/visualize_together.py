@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, List, Union
 
-import fitz  # PyMuPDF
+from uniparser_tools.utils import pdf_render as fitz  # PDFium-backed, permissive license (was PyMuPDF)
 from jinja2 import Environment, FileSystemLoader
 from PIL import Image
 
