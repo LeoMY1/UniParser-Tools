@@ -12,14 +12,10 @@ Parse local PDFs, document images, and public PDF URLs into Markdown and structu
 Requires **Python 3.11+**. Install into the **same Python environment** that runs `uniparser`:
 
 ```bash
-pip install uniparser-tools
-```
-
-From source (development):
-
-```bash
 pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
 ```
+
+PyPI is not published yet; use the git install above (no automatic `pip install`—if missing, exit with this command).
 
 Verify:
 
@@ -111,9 +107,9 @@ uniparser fetch --token "TASK_TOKEN_FROM_PRIOR_RUN"
 
 Token sources: stdout JSON from a prior `uniparser --json parse …`, `trigger_meta.json` under the output directory, or the `token` field in a failed parse stderr JSON.
 
-**Default output for `fetch`** (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). To write into the same directory as a prior `parse`, pass `-o` explicitly (e.g. `-o ~/Uni-Parser-Skill/paper/`).
+**Default output for** `fetch` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). To write into the same directory as a prior `parse`, pass `-o` explicitly (e.g. `-o ~/Uni-Parser-Skill/paper/`).
 
-**Default output for `parse`** (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/<source_stem>/`
+**Default output for** `parse` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/<source_stem>/`
 
 `<source_stem>` = local file stem (`paper.pdf` → `paper`); for URLs, the last path segment with only `.pdf`/image suffix removed (`…/2606.05847` → `2606.05847`, not `2606`).
 
@@ -134,17 +130,19 @@ Then read stdout JSON fields `markdown_path`, `pages_tree_path`, `output_dir`, a
 
 **Parse options** (CLI flags; defaults match scientific-paper preset):
 
-| Field | Flag | Default |
-|-------|------|---------|
-| Text | `--textual` | `ocr-hq` |
-| Equation | `--equation` | `ocr-hq` |
-| Table | `--table` | `ocr-hq` |
-| Chart | `--chart` | `base64` |
-| Figure | `--figure` | `base64` |
-| Chemical expression | `--expression` | `base64` |
-| Molecule | `--molecule` | `ocr-fast` |
 
-Choices: `disable`, `ocr-fast`, `ocr-hq`, `digital` (textual only), `base64` (non-textual fields). `sync=true` by default (`--async` for `sync=false`).
+| Field               | Flag           | Default    |
+| ------------------- | -------------- | ---------- |
+| Text                | `--textual`    | `ocr-hq`   |
+| Equation            | `--equation`   | `ocr-hq`   |
+| Table               | `--table`      | `ocr-hq`   |
+| Chart               | `--chart`      | `base64`   |
+| Figure              | `--figure`     | `base64`   |
+| Chemical expression | `--expression` | `base64`   |
+| Molecule            | `--molecule`   | `ocr-fast` |
+
+
+Choices: `disable`, `ocr-fast`, `ocr-hq`, `digital` (textual only), `base64`. `sync=true` by default (`--async` for `sync=false`).
 
 Example:
 
@@ -154,11 +152,13 @@ uniparser parse paper.pdf --textual digital --molecule disable
 
 ## I/O contract
 
-| Outcome | Exit code | stdout | stderr |
-|---------|-----------|--------|--------|
-| Success (human mode) | 0 | Human-readable paths | Progress (`Parsing... filename`) |
-| Success (`--json`) | 0 | Single JSON object (`ok: true`) | Progress (same as above) |
-| Failure | 1 | (empty or unused) | Single JSON line (`ok: false`, `error.code`, `error.message`) |
+
+| Outcome              | Exit code | stdout                          | stderr                                                        |
+| -------------------- | --------- | ------------------------------- | ------------------------------------------------------------- |
+| Success (human mode) | 0         | Human-readable paths            | Progress (`Parsing... filename`)                              |
+| Success (`--json`)   | 0         | Single JSON object (`ok: true`) | Progress (same as above)                                      |
+| Failure              | 1         | (empty or unused)               | Single JSON line (`ok: false`, `error.code`, `error.message`) |
+
 
 `--json` must appear **before** the subcommand:
 
@@ -167,18 +167,20 @@ uniparser --json parse paper.pdf    # correct
 uniparser parse paper.pdf --json    # wrong
 ```
 
-**`parse` success JSON fields** (`uniparser --json parse INPUT`):
+`parse` **success JSON fields** (`uniparser --json parse INPUT`):
 
-| Field | Meaning |
-|-------|---------|
-| `ok` | `true` on success |
-| `output_dir` | Result directory (absolute path) |
-| `markdown_path` | Main Markdown file |
-| `pages_tree_path` | Layout tree JSON |
-| `content_chars` | Markdown body length |
-| `token` | Task token for `uniparser fetch --token` |
-| `input_type` | `file` / `image` / `url` |
-| `trigger_meta_path` | Path to `trigger_meta.json` |
+
+| Field               | Meaning                                  |
+| ------------------- | ---------------------------------------- |
+| `ok`                | `true` on success                        |
+| `output_dir`        | Result directory (absolute path)         |
+| `markdown_path`     | Main Markdown file                       |
+| `pages_tree_path`   | Layout tree JSON                         |
+| `content_chars`     | Markdown body length                     |
+| `token`             | Task token for `uniparser fetch --token` |
+| `input_type`        | `file` / `image` / `url`                 |
+| `trigger_meta_path` | Path to `trigger_meta.json`              |
+
 
 **Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `DIR_EXISTS`, `PARSE_ERROR`.
 
@@ -186,32 +188,37 @@ uniparser parse paper.pdf --json    # wrong
 
 On failure, show stderr JSON `error.message`. Do not substitute vision-only reading for UniParser output.
 
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| `CONFIG_ERROR` | No API key or `uniparser` not installed | **Configuration** + `pip install uniparser-tools`; `uniparser auth --verify` |
-| `DIR_EXISTS` | Output directory already exists | Ask user; re-run with `--overwrite` if they agree |
-| `Token is duplicated` | Job for this API key + exact input already exists | Do **not** re-run `uniparser parse`. Read `token` from stderr JSON or `trigger_meta.json`; run `uniparser fetch --token TOKEN` |
-| Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0 |
-| `502 Bad Gateway` on URL input | Server failed fetching or processing remote PDF | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists |
-| `PARSE_ERROR` | Server `status: error` at trigger / poll / fetch | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
 
-**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests ([references/notes.md](./references/notes.md)); PDF URLs must be publicly accessible. Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
+| Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
+| `DIR_EXISTS`                                                             | Output directory already exists                                                 | Ask user; re-run with `--overwrite` if they agree                                                                                                             |
+| `Token is duplicated`                                                    | Job for this API key + exact input already exists                               | Do **not** re-run `uniparser parse`. Read `token` from stderr JSON or `trigger_meta.json`; run `uniparser fetch --token TOKEN`                                |
+| Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
+| `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
+| `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
+
+
+**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests ([Important notes](./references/notes.md)); PDF URLs must be publicly accessible. Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
 
 ## Advanced
 
-For callbacks, custom `ParseMode`, or SDK examples, see [references/patterns.md](./references/patterns.md) and [references/api-reference.md](./references/api-reference.md).
+For callbacks, custom `ParseMode`, or SDK examples, see [Common patterns](./references/patterns.md) and [API reference](./references/api-reference.md).
 
-Full CLI reference (flags, examples, JSON details): [uniparser_tools/cli/README.md](../../uniparser_tools/cli/README.md) in this repository.
+Full CLI reference (flags, examples, JSON details): [CLI README](../../uniparser_tools/cli/README.md) in this repository.
 
 Optional MCP server setup is in the [UniParser-Tools GitHub repo](https://github.com/dptech-corp/UniParser-Tools); it is separate from this CLI workflow.
 
 ## Reference documents
 
-| Topic | File |
-|-------|------|
-| API reference | [references/api-reference.md](./references/api-reference.md) |
-| Common patterns | [references/patterns.md](./references/patterns.md) |
-| Data classes | [references/data-classes.md](./references/data-classes.md) |
-| Layout types | [references/layout-types.md](./references/layout-types.md) |
-| Utilities | [references/utilities.md](./references/utilities.md) |
-| Important notes | [references/notes.md](./references/notes.md) |
+
+| Topic           | File                                              |
+| --------------- | ------------------------------------------------- |
+| API reference   | [api-reference.md](./references/api-reference.md) |
+| Common patterns | [patterns.md](./references/patterns.md)           |
+| Data classes    | [data-classes.md](./references/data-classes.md)   |
+| Layout types    | [layout-types.md](./references/layout-types.md)   |
+| Utilities       | [utilities.md](./references/utilities.md)         |
+| Important notes | [notes.md](./references/notes.md)                 |
+
+
