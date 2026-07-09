@@ -557,31 +557,24 @@ UniParser 提供了基于 [Model Context Protocol](https://modelcontextprotocol.
 
 | 工具 | 说明 |
 |------|------|
-| `uniparser_health` | 检查服务健康状态 |
-| `uniparser_version` | 获取服务版本信息 |
-| `uniparser_parse_file` | 解析本机 PDF（传入绝对路径），返回 `content` 文本 |
-| `uniparser_parse_url` | 解析公网 PDF URL，返回 `content` 文本 |
+| `uniparser_parse` | 解析本地 PDF / 图片或公网 PDF URL；落盘 Markdown 与 `pages_tree.json`；返回路径与预览 |
+
+健康检查、版本查询、按 token 恢复请使用 CLI（`uniparser health` / `version` / `fetch`）。详见 [mcp_server/README.md](./mcp_server/README.md)。
 
 ### 快速启动
 
 ```bash
 cd mcp_server
-uv sync                          # 安装依赖（与主项目隔离）
-uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
+uv sync
+uv run python -m uniparser_mcp
 ```
-
-运行时必须设置以下环境变量：
 
 | 变量 | 说明 |
 |------|------|
-| `UNIPARSER_BASE_URL` | UniParser 用户服务根 URL，例如 `http://127.0.0.1:40001` |
-| `UNIPARSER_API_KEY` | API 密钥，对应请求头 `X-API-Key` |
-
-默认解析参数和输出格式见 `mcp_server/config.yaml`。
+| `UNIPARSER_API_KEY` | 必填 |
+| `UNIPARSER_BASE_URL` | 可选，默认 `https://uniparser.dp.tech` |
 
 ### 接入 Cursor / Claude Code
-
-在 MCP 配置文件中添加（将路径替换为本机实际路径）：
 
 ```json
 {
@@ -597,7 +590,6 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
         "uniparser_mcp"
       ],
       "env": {
-        "UNIPARSER_BASE_URL": "http://127.0.0.1:40001",
         "UNIPARSER_API_KEY": "your-api-key"
       }
     }
@@ -605,9 +597,9 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
 }
 ```
 
-传输模式默认为 `stdio`，可通过 `UNIPARSER_MCP_TRANSPORT` 环境变量切换为 `sse` 或 `streamable-http`。
+传输模式默认为 `stdio`，可通过 `UNIPARSER_MCP_TRANSPORT` 切换为 `sse` 或 `streamable-http`。
 
-详细文档见 [`mcp_server/README.md`](./mcp_server/README.md)。
+详细文档见 [mcp_server/README.md](./mcp_server/README.md)。
 
 ## 项目结构
 
@@ -623,10 +615,9 @@ uniparser_tools/
 ├── utils/            # 工具函数
 └── order/            # 排序算法
 
-mcp_server/           # MCP 服务（独立子项目）
-├── uniparser_mcp/    # MCP server 实现
-├── config.yaml       # 默认解析参数配置
-└── pyproject.toml    # 独立依赖管理
+mcp_server/           # MCP 服务（独立子项目，仅 uniparser_parse tool）
+├── uniparser_mcp/
+└── pyproject.toml
 
 playground/
 ├── 01.quick_start.ipynb          # 快速开始教程
