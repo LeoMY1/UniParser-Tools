@@ -22,15 +22,46 @@ from PIL import Image
 from uniparser_tools.utils import pdf_render
 
 
+def _build_synthetic_pdf_bytes() -> bytes:
+    """Two-page PDF: page0 200x300 with colored rects, page1 blank 400x200."""
+    objects = [
+        b"1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n",
+        b"2 0 obj<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>endobj\n",
+        (
+            b"3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] "
+            b"/Contents 4 0 R /Resources<< /ProcSet [/PDF] >> >>endobj\n"
+        ),
+    ]
+    stream = b"1 0 0 rg\n20 40 80 120 re f\n0 0 1 rg\n100 150 60 80 re f\n"
+    objects.append(f"4 0 obj<< /Length {len(stream)} >>stream\n".encode() + stream + b"endstream\nendobj\n")
+    objects.append(
+        b"5 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Resources<< /ProcSet [/PDF] >> >>endobj\n"
+    )
+
+    header = b"%PDF-1.4\n"
+    body = b""
+    offsets = [0]
+    pos = len(header)
+    for obj in objects:
+        offsets.append(pos)
+        body += obj
+        pos += len(obj)
+
+    xref = [b"xref\n", f"0 {len(offsets)}\n".encode(), b"0000000000 65535 f \n"]
+    for off in offsets[1:]:
+        xref.append(f"{off:010d} 00000 n \n".encode())
+    trailer = f"trailer<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{pos}\n%%EOF\n".encode()
+    return header + body + b"".join(xref) + trailer
+
+
 @pytest.fixture(scope="module")
 def synthetic_pdf(tmp_path_factory) -> str:
-    """A deterministic 2-page PDF (distinct page sizes) built in-memory, so the
-    geometry tests need no checked-in fixture file."""
-    doc = pdfium.PdfDocument.new()
-    doc.new_page(200, 300)  # page 0: 200 x 300 pt
-    doc.new_page(400, 200)  # page 1: 400 x 200 pt
+    """Deterministic 2-page PDF with distinct sizes + page-0 content.
+
+    Built in-process so CI needs no checked-in ``*.pdf`` (gitignored).
+    """
     path = tmp_path_factory.mktemp("pdf_render") / "synthetic.pdf"
-    doc.save(str(path))
+    path.write_bytes(_build_synthetic_pdf_bytes())
     return str(path)
 
 
@@ -85,11 +116,11 @@ def test_rect_helpers():
 # --- clipped render: the behaviour-preserving property ---------------------
 
 
-def test_clip_matches_full_crop_pixel_identical(demo_pdf_path):
+def test_clip_matches_full_crop_pixel_identical(synthetic_pdf):
     """A clipped pixmap must equal cropping the full-page render at the same
     scale -- proves the coordinate math (offset *and* size) is correct on a
-    content-bearing page."""
-    doc = pdf_render.Document(str(demo_pdf_path))
+    content-bearing page (no checked-in PDF; ``*.pdf`` is gitignored)."""
+    doc = pdf_render.Document(synthetic_pdf)
     rect = doc[0].rect
     dpi = 120
     full_pix = doc[0].get_pixmap(dpi=dpi)
