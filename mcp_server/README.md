@@ -49,7 +49,12 @@ uv sync --extra dev
 uv run pytest tests/ -v
 ```
 
-## Cursor 接入示例
+## Cursor / Claude Code 接入示例
+
+先克隆本仓库并在本目录执行 `uv sync`，再在 MCP 配置中增加如下内容。**必须**将两处占位符改成你的本机值，否则 MCP 无法启动：
+
+1. `"--directory"` 后的路径：把 `/path/to/UniParser-Tools/mcp_server` 替换为克隆到本机后的 `mcp_server` **绝对路径**（例如 macOS：`/Users/<you>/UniParser-Tools/mcp_server`）。
+2. `UNIPARSER_API_KEY`：把 `your-api-key` 替换为你在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 申请的真实 API Key。
 
 ```json
 {
