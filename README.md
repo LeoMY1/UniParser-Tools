@@ -112,7 +112,7 @@ parser = UniParserClient(
 提交解析任务时（`trigger_file` / `trigger_snip` / `trigger_url`），可分别设置 7 类语义元素的处理模式：
 
 | 字段 | 含义 | 枚举类型 |
-|------|------|---------|
+|------|------|------|
 | `textual` | 普通文本（段落、标题等） | `ParseModeTextual` |
 | `equation` | 数学公式 | `ParseMode` |
 | `table` | 表格 | `ParseMode` |
@@ -127,19 +127,19 @@ parser = UniParserClient(
 |------|------|------|
 | `-3` / `-2` | `DumpHosting` / `DumpLocal` | 保留接口，默认关闭 |
 | `-1` | `DumpBase64` | 禁用解析，输出原始图像 Base64 |
-| `0`  | `Disable`   | 禁用解析，不输出 |
-| `1`  | `OCRFast`   | 快速 OCR（默认） |
-| `2`  | `OCRHighQuality` | 高质 OCR |
+| `0` | `Disable` | 禁用解析，不输出 |
+| `1` | `OCRFast` | 快速 OCR（默认） |
+| `2` | `OCRHighQuality` | 高质 OCR |
 
 ### `ParseModeTextual`（仅用于 `textual`）
 
 | 取值 | 名称 | 含义 |
 |------|------|------|
 | `-1` | `DumpBase64` | 输出原始图像 Base64 |
-| `0`  | `Disable`   | 不解析、不输出 |
-| `1`  | `OCRFast`   | 快速 OCR |
-| `2`  | `OCRHighQuality` | 高质 OCR，支持行内公式 |
-| `3`  | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
+| `0` | `Disable` | 不解析、不输出 |
+| `1` | `OCRFast` | 快速 OCR |
+| `2` | `OCRHighQuality` | 高质 OCR，支持行内公式 |
+| `3` | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
 
 ## 快速开始
 
@@ -201,7 +201,7 @@ if result["status"] == "success":
 #### 输出格式（`FormatFlag`，仅作用于 `content` / `objects` 中的文本字段）
 
 | 取值 | 适用场景 |
-|------|----------|
+|------|------|
 | `FormatFlag.Plain` | 纯文本，适合检索 |
 | `FormatFlag.Markup` | 默认标记文本 |
 | `FormatFlag.Markdown` | ⭐ 推荐给 LLM |
@@ -353,7 +353,7 @@ token = result["token"]
 返回体字段约定：
 
 | 字段 | 出现场景 | 说明 |
-|------|----------|------|
+|------|------|------|
 | `status` | 始终存在 | `"success"` / `"error"`（见 `StatusFlag`） |
 | `token` | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯 |
 | `description` | 错误时 | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
@@ -363,23 +363,29 @@ token = result["token"]
 
 ## 面向 AI Agent
 
-本仓库提供 **Agent Skill**（`skills/UniParser-Tools/`），让 Cursor、Claude Code 等助手在对话中自动完成 PDF / 图片 / 公网 PDF 链接 → 结构化 Markdown 与版面 JSON 的解析。用户只需安装 Skill、配置 API Key，并用自然语言或下方触发词发起任务；具体执行步骤由 Skill 内的 `SKILL.md` 指导 Agent，无需手动敲命令。
+本仓库提供 **Agent Skill**（[skills/UniParser-Tools/](./skills/UniParser-Tools/)），让 Cursor、Claude Code 等助手自动完成 PDF / 图片 / 公网 PDF 链接 → Markdown 与版面 JSON 的解析。用户只需要安装 Skill、准备 API Key，然后在对话里提出解析需求；CLI 安装与具体执行步骤由 Agent 按 [SKILL.md](./skills/UniParser-Tools/SKILL.md) 自动完成。
 
 ### 快速使用 Skill
 
-**1. 为 Agent 安装 Skill**
+**1. 安装 Skill**
 
-将本仓库中的 `skills/UniParser-Tools/` 整个目录发送给 Agent，并让 Agent 安装该 Skill。
+使用 `skills` 命令安装：
 
-安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
+```bash
+npx skills add dptech-corp/UniParser-Tools
+```
 
-**2. 配置 API Key**
+也可以手动安装：将 [skills/UniParser-Tools/](./skills/UniParser-Tools/) 整个目录发送给 Agent，并让 Agent 安装该 Skill。安装后重启 Agent，确保 Skill 列表中出现 **uniparser-tools**。
 
-在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key，写入环境变量（Agent 终端需能读到）：
+**2. 准备 API Key**
+
+在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 注册并申请 API Key。你可以让 Agent 按 Skill 指引配置，也可以提前设置环境变量：
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
 ```
+
+不要把 API Key 直接粘贴到公开对话或代码仓库中。
 
 **3. 在 Agent 中使用 Skill**
 
@@ -390,41 +396,20 @@ export UNIPARSER_API_KEY="your-api-key"
 
 支持的输入：**本地 PDF**、**本地图片**（png / jpg 等）、**可公网访问的 PDF URL**。
 
-**4. 使用效果与结果位置**
+**4. 查看输出结果**
 
-解析成功后，Agent 会在回复中给出 **Markdown 文件路径**（以及需要时的 **版面结构文件路径**），并可将正文摘要或全文交付给你。典型效果包括：
-
-- 按阅读顺序输出的 **Markdown 全文**（`{源文件主名}.md`，如 `paper.pdf` → `paper.md`）
-- **表格** 转为 Markdown 表格
-- **公式** 转为 LaTeX
-- **图片 / 图表** 等以 base64 等形式出现在结果中（视文档类型而定）
-- **版面结构树** `pages_tree.json`，便于需要章节、块级布局时使用
-- 面向科技文献的默认识别策略（高质量 OCR 等，由 Skill 配置）
-
-默认将结果写入用户主目录下：
-
-`~/Uni-Parser-Skill/<源文件主名>/`
-
-例如解析 `paper.pdf` 时，默认目录为 `~/Uni-Parser-Skill/paper/`。该目录在**解析成功完成后**才会写入文件，通常包含：
+默认输出到 `~/Uni-Parser-Skill/<源文件主名>/`，通常包含：
 
 | 文件 | 说明 |
 |------|------|
 | `{源文件主名}.md` | 解析得到的完整 Markdown |
 | `pages_tree.json` | 结构化版面树（页面与语义块层次） |
 | `formatted_meta.json` | 元数据（不含全文 `content`） |
+| `trigger_meta.json` | 任务 token 与解析参数（供 `uniparser fetch` 中断恢复） |
 
-若你在对话中指定了输出目录，Agent 也可将结果保存到你提供的路径。若目标目录已存在，Agent 会先征求你是否覆盖后再继续。大文档解析可能耗时数分钟至十余分钟；重复提交同一文件时 Agent 会按 Skill 说明从已有任务恢复，而不会重复上传。
+Agent 会回复 Markdown 路径，并在需要版面结构时提供 `pages_tree.json`。大文档可能耗时数分钟至十余分钟；中断或重复任务可按 Skill 说明用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
 
-Agent 实现细节、错误恢复与 SDK 安装说明见 `skills/UniParser-Tools/SKILL.md`。
-
-### 参考文档
-
-- `skills/UniParser-Tools/references/api-reference.md`
-- `skills/UniParser-Tools/references/patterns.md`
-- `skills/UniParser-Tools/references/data-classes.md`
-- `skills/UniParser-Tools/references/layout-types.md`
-- `skills/UniParser-Tools/references/utilities.md`
-- `skills/UniParser-Tools/references/notes.md`
+Agent 实现细节、CLI 命令与错误恢复见 [SKILL.md](./skills/UniParser-Tools/SKILL.md)。
 
 ## MCP Server
 
@@ -489,11 +474,10 @@ uv run python -m uniparser_mcp   # 启动 MCP 服务（stdio 模式）
 ## 项目结构
 
 ```
-uniparser_tools/cli/  # uniparser 命令行工具（见 uniparser_tools/cli/README.md）
-├── commands/         # auth, parse, fetch, health, version
-└── core/             # 配置、凭证、pipeline、输出
-
 uniparser_tools/
+├── cli/              # uniparser 命令行工具
+│   ├── commands/     # auth, parse, fetch, health, version
+│   └── core/         # 配置、凭证、pipeline、输出
 ├── api/              # API 客户端
 ├── common/           # 通用常量和数据类
 ├── tools/            # 工具模块

@@ -8,14 +8,20 @@
 
 ## 安装
 
-在仓库根目录执行（**必须**用这一条，才会安装 `uniparser` 命令）：
+需要 **Python 3.11+**。在运行 `uniparser` 的同一 Python 环境中执行：
+
+```bash
+pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
+```
+
+> PyPI 尚未发布，请使用上述 git 安装。只运行 `pip install -r requirements.txt` **不会**出现 `uniparser` 命令。
+
+在本仓库内开发时，可在仓库根目录执行：
 
 ```bash
 cd /path/to/UniParser-Tools
 pip install -e .
 ```
-
-> 只运行 `pip install -r requirements.txt` **不会**出现 `uniparser` 命令。
 
 检查是否安装成功：
 
@@ -444,7 +450,7 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 **命令 `uniparser` 找不到**
 
-确认已执行 `pip install -e .`，且与当前终端使用的是同一 Python 环境。
+确认已执行 `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`（或在本仓库内 `pip install -e .`），且与当前终端使用的是同一 Python 环境。
 
 **解析时间较长**
 
@@ -456,7 +462,7 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 ```bash
 # 1. 安装并配置
-pip install -e .
+pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"
 uniparser auth
 
 # 2. 解析
