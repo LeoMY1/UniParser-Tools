@@ -555,9 +555,11 @@ UniParser 提供了基于 [Model Context Protocol](https://modelcontextprotocol.
 
 ### 可用工具
 
-| 工具 | 说明 |
-|------|------|
+
+| 工具                | 说明                                                               |
+| ----------------- | ---------------------------------------------------------------- |
 | `uniparser_parse` | 解析本地 PDF / 图片或公网 PDF URL；落盘 Markdown 与 `pages_tree.json`；返回路径与预览 |
+
 
 健康检查、版本查询、按 token 恢复请使用 CLI（`uniparser health` / `version` / `fetch`）。详见 [mcp_server/README.md](./mcp_server/README.md)。
 
@@ -569,12 +571,21 @@ uv sync
 uv run python -m uniparser_mcp
 ```
 
-| 变量 | 说明 |
-|------|------|
-| `UNIPARSER_API_KEY` | 必填 |
+
+| 变量                   | 说明                                |
+| -------------------- | --------------------------------- |
+| `UNIPARSER_API_KEY`  | 必填                                |
 | `UNIPARSER_BASE_URL` | 可选，默认 `https://uniparser.dp.tech` |
 
+
+
+
 ### 接入 Cursor / Claude Code
+
+先克隆本仓库并在 `mcp_server/` 下执行 `uv sync`，再在 MCP 配置中增加如下内容。**必须**将两处占位符改成你的本机值，否则 MCP 无法启动：
+
+1. `"--directory"` 后的路径：把 `/path/to/UniParser-Tools/mcp_server` 替换为克隆到本机后的 `mcp_server` **绝对路径**（例如 macOS：`/Users/<you>/UniParser-Tools/mcp_server`）。
+2. `UNIPARSER_API_KEY`：把 `your-api-key` 替换为你在 [https://uniparser.dp.tech/](https://uniparser.dp.tech/) 申请的真实 API Key。
 
 ```json
 {
