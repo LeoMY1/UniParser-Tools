@@ -96,8 +96,10 @@ Optional flags:
 ```bash
 uniparser parse "./paper.pdf" -o "./results"
 uniparser parse "./paper.pdf" --async
-uniparser parse "./paper.pdf" --overwrite
+uniparser parse "./paper.pdf" --overwrite   # required when retrying after a failed run
 ```
+
+**Retry after failure:** A failed `parse` (exit 1) may still create the default output directory `~/Uni-Parser-Skill/<source_stem>/` with partial files (e.g. `trigger_error.json`). After fixing the underlying error (`CONFIG_ERROR`, auth, etc.), **always** re-run with `--overwrite` for the same input—otherwise the next run returns `DIR_EXISTS`.
 
 Recovery (existing server job—see **Common issues**):
 
@@ -112,6 +114,8 @@ Token sources: stdout JSON from a prior `uniparser --json parse …`, `trigger_m
 **Default output for** `parse` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/<source_stem>/`
 
 `<source_stem>` = local file stem (`paper.pdf` → `paper`); for URLs, the last path segment with only `.pdf`/image suffix removed (`…/2606.05847` → `2606.05847`, not `2606`).
+
+The output directory may exist **before** a successful run (see **Retry after failure** above).
 
 **Files written on success:**
 
@@ -191,13 +195,12 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 
 | Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
-| `DIR_EXISTS`                                                             | Output directory already exists                                                 | Ask user; re-run with `--overwrite` if they agree                                                                                                             |
+| `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`. After fixing, retry with `uniparser parse INPUT --overwrite`                                                                                  |
+| `DIR_EXISTS`                                                             | Output directory already exists (often from a **prior failed** `parse` on the same input) | Ask user; re-run with `--overwrite` if they agree                                                                                                             |
 | `Token is duplicated`                                                    | Job for this API key + exact input already exists                               | Do **not** re-run `uniparser parse`. Read `token` from stderr JSON or `trigger_meta.json`; run `uniparser fetch --token TOKEN`                                |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
 | `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
-| `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
-
+| `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present. If retrying `parse` after fixing the cause, add `--overwrite` |
 
 **Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests ([Important notes](./references/notes.md)); PDF URLs must be publicly accessible. Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
 
