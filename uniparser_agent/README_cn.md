@@ -3,7 +3,7 @@
 统一 CLI 工具：基于 UniParser 做文档解析，并提供两类功能——
 
 1. **化学建库**（`run` / `ingest` / `show` / `export`）：从科技文献抽取分子与反应，写入本地 SQLite。
-2. **习题 pdf2qa**（`vqa`）：从习题/试卷 PDF 抽取问答对，详见 [pdf2qa/README.md](pdf2qa/README.md)。
+2. **习题 pdf2qa**（`qa`）：从习题/试卷 PDF 抽取问答对，详见 [pdf2qa/README.md](pdf2qa/README.md)。
 
 [English README](README.md)
 

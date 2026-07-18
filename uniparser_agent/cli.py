@@ -12,12 +12,12 @@ from uniparser_agent.chemistry.jobspec import JobSpec, PROFILE_MODULES
 from uniparser_agent.parse.service import parse_document
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
 from uniparser_agent.chemistry.store import ChemistryStore
-from uniparser_agent.pdf2qa.pipeline import run_vqa_pipeline
+from uniparser_agent.pdf2qa.pipeline import run_qa_pipeline
 
 
 app = typer.Typer(
     name="uniparser-agent",
-    help="UniParser agent: chemistry library and exam pdf2qa extraction.",
+    help="UniParser agent: chemistry library and exam QA extraction.",
     no_args_is_help=True,
 )
 
@@ -135,13 +135,13 @@ def show_cmd(
     typer.echo(f"reactions: {stats['reactions']}")
 
 
-@app.command("vqa")
-def vqa_cmd(
+@app.command("qa")
+def qa_cmd(
     input_path: Optional[str] = typer.Argument(
         None,
         help="Local PDF/image path or public PDF URL. Omit when using --pages-tree.",
     ),
-    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="VQA output directory."),
+    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="QA output directory."),
     pages_tree: Optional[str] = typer.Option(
         None,
         "--pages-tree",
@@ -156,7 +156,7 @@ def vqa_cmd(
     if input_path and pages_tree:
         raise typer.BadParameter("Use either INPUT or --pages-tree, not both.")
 
-    result = run_vqa_pipeline(
+    result = run_qa_pipeline(
         input_path=input_path,
         pages_tree_path=pages_tree,
         output_dir=output_dir,

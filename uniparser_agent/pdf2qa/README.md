@@ -1,4 +1,4 @@
-# 习题 VQA 抽取（`uniparser-agent vqa`）
+# 习题 QA 抽取（`uniparser-agent qa`）
 
 从习题 / 试卷类 PDF（或图片、公开 PDF URL）中抽取结构化问答对：题干、短答案、解析，并落盘为 JSONL 与 Markdown，便于抽检与后续加工。
 
@@ -22,7 +22,7 @@
 - Python 3.11+
 - 已安装 `uniparser-agent`（见下方安装）
 - **UniParser API Key**（主路径解析时需要，账户需有可用额度）
-- **LLM API Key**（方舟 `ARK_API_KEY`，或统一用 `VQA_LLM_API_KEY`）
+- **LLM API Key**（方舟 `ARK_API_KEY`，或统一用 `QA_LLM_API_KEY`）
 
 ## 安装
 
@@ -45,7 +45,7 @@ uv pip install -e ".[dev]"
 | 变量 | 何时需要 | 说明 |
 |------|----------|------|
 | `UNIPARSER_API_KEY` | 输入 PDF / 图片 / URL 时 | UniParser 云端解析 |
-| `ARK_API_KEY` 或 `VQA_LLM_API_KEY` | 始终 | 大模型抽取；二者设其一即可（优先 `VQA_LLM_API_KEY`） |
+| `ARK_API_KEY` 或 `QA_LLM_API_KEY` | 始终 | 大模型抽取；二者设其一即可（优先 `QA_LLM_API_KEY`） |
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"
@@ -56,11 +56,13 @@ export ARK_API_KEY="your-ark-key"
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `VQA_LLM_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | OpenAI 兼容接口的 `base_url` |
-| `VQA_LLM_MODEL` | `glm-5-2-260617` | 模型或方舟推理接入点 ID |
+| `QA_LLM_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | OpenAI 兼容接口的 `base_url` |
+| `QA_LLM_MODEL` | `glm-5-2-260617` | 模型或方舟推理接入点 ID |
 | `UNIPARSER_BASE_URL` | `https://uniparser.dp.tech` | UniParser 服务地址 |
 
-更换为其它 OpenAI 兼容服务时，同时设置 `VQA_LLM_BASE_URL`、`VQA_LLM_MODEL`，并用 `VQA_LLM_API_KEY` 提供密钥即可。
+更换为其它 OpenAI 兼容服务时，同时设置 `QA_LLM_BASE_URL`、`QA_LLM_MODEL`，并用 `QA_LLM_API_KEY` 提供密钥即可。
+
+（仍兼容旧环境变量名 `VQA_LLM_*`。）
 
 ## 快速开始
 
@@ -68,7 +70,7 @@ export ARK_API_KEY="your-ark-key"
 
 ```bash
 cd uniparser_agent
-uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
+uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
 ```
 
 成功后终端会打印合并题量，以及 JSONL / Markdown 路径。
@@ -78,9 +80,9 @@ uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
 适合解析已完成、或只想重跑 LLM 抽取时：
 
 ```bash
-uv run uniparser-agent vqa \
+uv run uniparser-agent qa \
   --pages-tree /path/to/pages_tree.json \
-  -o ./vqa_out \
+  -o ./qa_out \
   --overwrite
 ```
 
@@ -89,20 +91,20 @@ uv run uniparser-agent vqa \
 ### 输入图片或公开 PDF URL
 
 ```bash
-uv run uniparser-agent vqa /path/to/page.png -o ./vqa_out --overwrite
-uv run uniparser-agent vqa "https://example.com/paper.pdf" -o ./vqa_out --overwrite
+uv run uniparser-agent qa /path/to/page.png -o ./qa_out --overwrite
+uv run uniparser-agent qa "https://example.com/paper.pdf" -o ./qa_out --overwrite
 ```
 
 ## 命令参数
 
 ```text
-uniparser-agent vqa [OPTIONS] [INPUT_PATH]
+uniparser-agent qa [OPTIONS] [INPUT_PATH]
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `INPUT_PATH` | 本地 PDF/图片路径，或公开 PDF URL；与 `--pages-tree` 二选一 |
-| `-o` / `--output-dir` | 输出目录；默认当前目录下的 `vqa_out` |
+| `-o` / `--output-dir` | 输出目录；默认当前目录下的 `qa_out` |
 | `--pages-tree` | 已有 `pages_tree.json` 路径，跳过 UniParser |
 | `--overwrite` | 若输出目录已存在则清空重建 |
 | `--json` | 向 stdout 打印机器可读的运行摘要 JSON |
@@ -110,7 +112,7 @@ uniparser-agent vqa [OPTIONS] [INPUT_PATH]
 查看帮助：
 
 ```bash
-uv run uniparser-agent vqa --help
+uv run uniparser-agent qa --help
 ```
 
 ## 流水线说明
@@ -136,7 +138,7 @@ PDF / 图片 / URL
 | `parse/*.md` 等 | 主路径下 UniParser 的 Markdown 与元数据（与 `parse` 命令一致） |
 | `llm_content_list.json` | 带全局 `id` 的扁平内容列表，作为 LLM 输入 |
 | `llm_raw_response.txt` | 大模型原始回复（含 `<chapter>` / `<qa_pair>` 与块 id） |
-| `extracted_vqa.jsonl` | 按 id 还原文本后的 QA 片段（合并前） |
+| `extracted_qa.jsonl` | 按 id 还原文本后的 QA 片段（合并前） |
 | `merged_qa_pairs.jsonl` | **主结果**：合并后的问答对，一行一条 JSON |
 | `merged_qa_pairs.md` | 主结果的 Markdown 预览 |
 | `run_meta.json` | 模型、耗时、题量、各文件路径等运行信息 |
@@ -167,7 +169,7 @@ PDF / 图片 / URL
 | 命令 | 用途 |
 |------|------|
 | `uniparser-agent parse` | 只做 UniParser 解析 |
-| `uniparser-agent vqa` | 解析（可选）+ 习题 QA 抽取 |
-| `uniparser-agent run` / `ingest` | 化学分子与反应建库（与 VQA 无关） |
+| `uniparser-agent qa` | 解析（可选）+ 习题 QA 抽取 |
+| `uniparser-agent run` / `ingest` | 化学分子与反应建库（与 QA 抽取无关） |
 
 更完整的化学库用法见包根目录 [README_cn.md](../README_cn.md)。

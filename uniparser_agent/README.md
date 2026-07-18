@@ -3,7 +3,7 @@
 A single CLI around UniParser with two capabilities:
 
 1. **Chemistry library** (`run` / `ingest` / `show` / `export`): extract molecules and reactions into local SQLite.
-2. **Exam pdf2qa** (`vqa`): extract question/answer pairs from exam PDFs — see [pdf2qa/README.md](pdf2qa/README.md).
+2. **Exam pdf2qa** (`qa`): extract question/answer pairs from exam PDFs — see [pdf2qa/README.md](pdf2qa/README.md).
 
 [中文文档](README_cn.md)
 

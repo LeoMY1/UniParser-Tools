@@ -1,4 +1,4 @@
-"""End-to-end VQA pipeline: UniParser parse → adapt → LLM extract → merge."""
+"""End-to-end QA pipeline: UniParser parse → adapt → LLM extract → merge."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2qa.layout_adapter import adapt_pages_tree_file
-from uniparser_agent.pdf2qa.llm_client import VQALLMClient
+from uniparser_agent.pdf2qa.llm_client import QALLMClient
 from uniparser_agent.pdf2qa.output_parser import parse_llm_response, write_qa_jsonl
 from uniparser_agent.pdf2qa.prompts import build_qa_extract_prompt
 from uniparser_agent.pdf2qa.qa_merger import jsonl_to_md, merge_qa_pairs, write_merged_jsonl
@@ -20,7 +20,7 @@ def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
     if output_dir:
         out = Path(output_dir).expanduser().resolve()
     else:
-        out = (Path.cwd() / "vqa_out").resolve()
+        out = (Path.cwd() / "qa_out").resolve()
     if out.exists():
         if not overwrite:
             raise FileExistsError(
@@ -31,7 +31,7 @@ def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
     return out
 
 
-def run_vqa_pipeline(
+def run_qa_pipeline(
     input_path: str | None = None,
     *,
     pages_tree_path: str | None = None,
@@ -39,7 +39,7 @@ def run_vqa_pipeline(
     overwrite: bool = False,
     strict_title_match: bool = False,
 ) -> dict[str, Any]:
-    """Run pdf2vqa MVP.
+    """Run pdf2qa extraction.
 
     Primary path: ``input_path`` (pdf/url/image) → UniParser parse → extract.
     Bypass: ``pages_tree_path`` skips UniParser parse.
@@ -73,13 +73,12 @@ def run_vqa_pipeline(
             "markdown_path": parse_result.get("markdown_path", ""),
         }
 
-    # Ensure envelope is valid.
     load_pages_tree(tree_path)
 
     content_list_path = out / "llm_content_list.json"
     content_list = adapt_pages_tree_file(tree_path, content_list_path)
 
-    llm = VQALLMClient()
+    llm = QALLMClient()
     system_prompt = build_qa_extract_prompt()
     user_content = json.dumps(content_list, ensure_ascii=False)
     llm_started = time.time()
@@ -90,7 +89,7 @@ def run_vqa_pipeline(
     raw_path.write_text(raw_response, encoding="utf-8")
 
     extracted = parse_llm_response(raw_response, content_list)
-    extracted_path = out / "extracted_vqa.jsonl"
+    extracted_path = out / "extracted_qa.jsonl"
     write_qa_jsonl(extracted, extracted_path)
 
     merged = merge_qa_pairs(extracted, strict_title_match=strict_title_match)
@@ -112,7 +111,7 @@ def run_vqa_pipeline(
             "pages_tree": str(tree_path),
             "llm_content_list": str(content_list_path),
             "llm_raw_response": str(raw_path),
-            "extracted_vqa": str(extracted_path),
+            "extracted_qa": str(extracted_path),
             "merged_qa_pairs_jsonl": str(merged_jsonl),
             "merged_qa_pairs_md": str(merged_md),
         },
@@ -121,3 +120,6 @@ def run_vqa_pipeline(
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     meta["paths"]["run_meta"] = str(meta_path)
     return meta
+
+
+run_vqa_pipeline = run_qa_pipeline

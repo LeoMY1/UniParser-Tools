@@ -1,7 +1,7 @@
 [project]
 name = "uniparser-agent"
 version = "0.1.0"
-description = "UniParser agent: chemistry library and exam pdf2qa extraction"
+description = "UniParser agent: chemistry library and exam QA extraction"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
