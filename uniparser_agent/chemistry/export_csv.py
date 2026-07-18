@@ -4,7 +4,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.store import ChemistryStore
+from uniparser_agent.chemistry.store import ChemistryStore
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:

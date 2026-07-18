@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.config import default_db_path
-from uniparser_agent.extract import extract_from_pages_tree
-from uniparser_agent.jobspec import JobSpec
-from uniparser_agent.parse import load_pages_tree, parse_document
-from uniparser_agent.store import ChemistryStore, IngestSummary
+from uniparser_agent.chemistry.config import default_db_path
+from uniparser_agent.chemistry.extract import extract_from_pages_tree
+from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.parse.service import load_pages_tree, parse_document
+from uniparser_agent.chemistry.store import ChemistryStore, IngestSummary
 
 
 def _resolve_doc_id(doc_id: str | None, fallback: str) -> str:

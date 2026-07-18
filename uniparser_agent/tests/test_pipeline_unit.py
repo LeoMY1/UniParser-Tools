@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from uniparser_agent.export_csv import export_doc_csv, export_library_csv
-from uniparser_agent.jobspec import JobSpec
-from uniparser_agent.pipeline import ingest_pages_tree
-from uniparser_agent.store import ChemistryStore
+from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
+from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.chemistry.pipeline import ingest_pages_tree
+from uniparser_agent.chemistry.store import ChemistryStore
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal_pages_tree.json"

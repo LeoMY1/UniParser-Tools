@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.api_client import UniParserApiClient, resolve_input
-from uniparser_agent.config import get_api_key, get_base_url
-from uniparser_agent.parse_storage import (
+from uniparser_agent.parse.api_client import UniParserApiClient, resolve_input
+from uniparser_agent.parse.config import get_api_key, get_base_url
+from uniparser_agent.parse.storage import (
     complete_parse_job,
     resolve_output_dir,
     save_stage_error,

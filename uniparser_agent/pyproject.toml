@@ -1,10 +1,11 @@
 [project]
 name = "uniparser-agent"
 version = "0.1.0"
-description = "Chemistry document library workflow: parse, validate, dedupe, and store molecules and reactions"
+description = "UniParser agent: chemistry library and exam pdf2qa extraction"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "openai>=1.0.0",
     "rdkit>=2023.9.1",
     "requests>=2.32.0",
     "typer>=0.12.0",
@@ -19,11 +20,20 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["uniparser_agent"]
+[tool.setuptools.package-dir]
+"uniparser_agent" = "."
+
+[tool.setuptools]
+packages = [
+    "uniparser_agent",
+    "uniparser_agent.parse",
+    "uniparser_agent.chemistry",
+    "uniparser_agent.pdf2qa",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [".."]

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.api_client import PENDING_STATUSES, UniParserApiClient
+from uniparser_agent.parse.api_client import PENDING_STATUSES, UniParserApiClient
 
 
 POLL_INTERVAL_SEC = 3

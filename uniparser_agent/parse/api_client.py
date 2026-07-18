@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from uniparser_agent.parse_options import SCIENTIFIC_PAPER_TRIGGER
+from uniparser_agent.parse.options import SCIENTIFIC_PAPER_TRIGGER
 
 
 PENDING_STATUSES = frozenset({"undefined", "waiting", "processing"})

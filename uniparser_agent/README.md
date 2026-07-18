@@ -1,6 +1,9 @@
 # UniParser Agent
 
-Build a chemistry document library from scientific papers and patents: parse documents with UniParser, extract molecules and reactions, validate and deduplicate, then store results in a local database and export to CSV.
+A single CLI around UniParser with two capabilities:
+
+1. **Chemistry library** (`run` / `ingest` / `show` / `export`): extract molecules and reactions into local SQLite.
+2. **Exam pdf2qa** (`vqa`): extract question/answer pairs from exam PDFs — see [pdf2qa/README.md](pdf2qa/README.md).
 
 [中文文档](README_cn.md)
 
@@ -9,6 +12,7 @@ Build a chemistry document library from scientific papers and patents: parse doc
 - You have PDFs or images of chemistry literature and want a **structured library** of compounds and reactions.
 - You already parsed a document with UniParser and want to **ingest** the result into a database without parsing again.
 - You need **counts and CSV exports** for downstream analysis or review.
+- You need **Q&A extraction** from exam papers (see pdf2qa docs).
 
 ## Install
 

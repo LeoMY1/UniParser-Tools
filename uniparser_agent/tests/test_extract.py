@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from uniparser_agent.extract import extract_from_pages_tree
-from uniparser_agent.jobspec import JobSpec
-from uniparser_agent.parse import load_pages_tree
-from uniparser_agent.pipeline import ingest_pages_tree
-from uniparser_agent.validate import build_markush_record, validate_smiles
+from uniparser_agent.chemistry.extract import extract_from_pages_tree
+from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.parse.service import load_pages_tree
+from uniparser_agent.chemistry.pipeline import ingest_pages_tree
+from uniparser_agent.chemistry.validate import build_markush_record, validate_smiles
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal_pages_tree.json"

@@ -6,17 +6,18 @@ from typing import Any, Optional
 
 import typer
 
-from uniparser_agent.config import default_db_path
-from uniparser_agent.export_csv import export_doc_csv, export_library_csv
-from uniparser_agent.jobspec import JobSpec, PROFILE_MODULES
-from uniparser_agent.parse import parse_document
-from uniparser_agent.pipeline import ingest_pages_tree, run_full_pipeline
-from uniparser_agent.store import ChemistryStore
+from uniparser_agent.chemistry.config import default_db_path
+from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
+from uniparser_agent.chemistry.jobspec import JobSpec, PROFILE_MODULES
+from uniparser_agent.parse.service import parse_document
+from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
+from uniparser_agent.chemistry.store import ChemistryStore
+from uniparser_agent.pdf2qa.pipeline import run_vqa_pipeline
 
 
 app = typer.Typer(
     name="uniparser-agent",
-    help="Chemistry document library workflow: parse, validate, dedupe, and store.",
+    help="UniParser agent: chemistry library and exam pdf2qa extraction.",
     no_args_is_help=True,
 )
 
@@ -132,6 +133,45 @@ def show_cmd(
     typer.echo(f"invalid: {stats['invalid']}")
     typer.echo(f"markush: {stats['markush']}")
     typer.echo(f"reactions: {stats['reactions']}")
+
+
+@app.command("vqa")
+def vqa_cmd(
+    input_path: Optional[str] = typer.Argument(
+        None,
+        help="Local PDF/image path or public PDF URL. Omit when using --pages-tree.",
+    ),
+    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="VQA output directory."),
+    pages_tree: Optional[str] = typer.Option(
+        None,
+        "--pages-tree",
+        help="Skip UniParser parse and use an existing pages_tree.json.",
+    ),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Replace output directory if it exists."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Parse with UniParser (unless --pages-tree) then extract QA pairs via LLM."""
+    if not input_path and not pages_tree:
+        raise typer.BadParameter("Provide INPUT (pdf/url/image) or --pages-tree.")
+    if input_path and pages_tree:
+        raise typer.BadParameter("Use either INPUT or --pages-tree, not both.")
+
+    result = run_vqa_pipeline(
+        input_path=input_path,
+        pages_tree_path=pages_tree,
+        output_dir=output_dir,
+        overwrite=overwrite,
+    )
+    if json_output:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    paths = result["paths"]
+    typer.echo(f"Pages tree: {paths['pages_tree']}")
+    typer.echo(f"Content list items: {result['n_content_items']}")
+    typer.echo(f"Merged QA pairs: {result['n_merged_qa']}")
+    typer.echo(f"JSONL: {paths['merged_qa_pairs_jsonl']}")
+    typer.echo(f"Markdown: {paths['merged_qa_pairs_md']}")
+    typer.echo(f"Output directory: {paths['output_dir']}")
 
 
 @app.command("export")

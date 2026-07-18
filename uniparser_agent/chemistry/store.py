@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.config import default_db_path
-from uniparser_agent.extract import MoleculeExtraction, ReactionExtraction
-from uniparser_agent.jobspec import IngestModule, JobSpec
-from uniparser_agent.validate import (
+from uniparser_agent.chemistry.config import default_db_path
+from uniparser_agent.chemistry.extract import MoleculeExtraction, ReactionExtraction
+from uniparser_agent.chemistry.jobspec import IngestModule, JobSpec
+from uniparser_agent.chemistry.validate import (
     build_markush_record,
     is_markush_structure,
     validate_smiles,
