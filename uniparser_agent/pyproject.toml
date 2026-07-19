@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.0.0",
+    "pypdf>=4.0.0",
     "rdkit>=2023.9.1",
     "requests>=2.32.0",
     "typer>=0.12.0",

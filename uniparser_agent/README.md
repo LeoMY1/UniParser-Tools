@@ -201,6 +201,31 @@ uv run uniparser-agent show paper1 --db ./data/my-library.db
 
 ---
 
+### `qa` — exam Q&A extraction
+
+Extract question / answer / solution pairs from exam PDFs. Full details: [pdf2qa/README.md](pdf2qa/README.md).
+
+```bash
+# Single booklet
+uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
+
+# Question booklet + answer booklet (local PDFs; merged then parsed once)
+uv run uniparser-agent qa /path/to/questions.pdf \
+  --answer-pdf /path/to/answers.pdf \
+  -o ./qa_out \
+  --overwrite
+```
+
+| Argument / option | Required | Description |
+|-------------------|----------|-------------|
+| `INPUT` | Yes* | Question booklet (or single exam PDF). `*` omit only with `--pages-tree` |
+| `--answer-pdf` | No | Answer booklet PDF (local only; cannot combine with `--pages-tree`) |
+| `--pages-tree` | No | Skip UniParser and reuse an existing `pages_tree.json` |
+| `-o`, `--output-dir` | No | Output directory (default `./qa_out`) |
+| `--overwrite` | No | Replace output directory if it exists |
+
+---
+
 ### `export` — export to CSV
 
 Export one document, or export the **full molecular library** (deduplicated across all documents).

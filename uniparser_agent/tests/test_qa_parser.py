@@ -28,3 +28,44 @@ def test_parse_and_merge_contiguous_qa():
     assert len(merged) == 1
     assert merged[0]["label"] == 1
     assert "1+1=2" in merged[0]["solution"]
+
+
+def test_merge_question_only_and_answer_only_rows():
+    extracted = [
+        {
+            "label": "1",
+            "chapter_title": "1.1",
+            "question": "What is 2+2?",
+            "answer": "",
+            "solution": "",
+        },
+        {
+            "label": "2",
+            "chapter_title": "1.1",
+            "question": "What is 3+3?",
+            "answer": "",
+            "solution": "",
+        },
+        {
+            "label": "1",
+            "chapter_title": "1.1",
+            "question": "",
+            "answer": "4",
+            "solution": "2+2=4",
+        },
+        {
+            "label": "2",
+            "chapter_title": "1.1",
+            "question": "",
+            "answer": "6",
+            "solution": "3+3=6",
+        },
+    ]
+    merged = merge_qa_pairs(extracted)
+    assert len(merged) == 2
+    by_label = {item["label"]: item for item in merged}
+    assert by_label[1]["question"] == "What is 2+2?"
+    assert by_label[1]["answer"] == "4"
+    assert "2+2=4" in by_label[1]["solution"]
+    assert by_label[2]["answer"] == "6"
+    assert "3+3=6" in by_label[2]["solution"]

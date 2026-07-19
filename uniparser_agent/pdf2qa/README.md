@@ -75,6 +75,21 @@ uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
 
 成功后终端会打印合并题量，以及 JSONL / Markdown 路径。
 
+### 题册 + 答案册双 PDF
+
+题册与答案册分开时，先按「题册 → 答案册」合并为一个 PDF，再走一次 UniParser 与一次 LLM 抽取；配对仍由 `merge_qa_pairs` 按题号 / 章节完成。
+
+两侧都必须是**本地 PDF**（不支持 URL/图片与答案册混用；不可与 `--pages-tree` 同用）：
+
+```bash
+uv run uniparser-agent qa /path/to/questions.pdf \
+  --answer-pdf /path/to/answers.pdf \
+  -o ./qa_out \
+  --overwrite
+```
+
+成功后输出目录会包含 `merge/merged.pdf`，`run_meta.json` 中 `parse.mode` 为 `dual_pdf`。
+
 ### 使用已有解析结果（跳过 UniParser）
 
 适合解析已完成、或只想重跑 LLM 抽取时：
@@ -105,6 +120,7 @@ uniparser-agent qa [OPTIONS] [INPUT_PATH]
 |------|------|
 | `INPUT_PATH` | 本地 PDF/图片路径，或公开 PDF URL；与 `--pages-tree` 二选一 |
 | `-o` / `--output-dir` | 输出目录；默认当前目录下的 `qa_out` |
+| `--answer-pdf` | 答案册本地 PDF；与题册合并后再解析（不可与 `--pages-tree` 同用） |
 | `--pages-tree` | 已有 `pages_tree.json` 路径，跳过 UniParser |
 | `--overwrite` | 若输出目录已存在则清空重建 |
 | `--json` | 向 stdout 打印机器可读的运行摘要 JSON |

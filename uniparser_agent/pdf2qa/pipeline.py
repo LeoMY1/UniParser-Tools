@@ -12,6 +12,7 @@ from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2qa.layout_adapter import adapt_pages_tree_file
 from uniparser_agent.pdf2qa.llm_client import QALLMClient
 from uniparser_agent.pdf2qa.output_parser import parse_llm_response, write_qa_jsonl
+from uniparser_agent.pdf2qa.pdf_merger import merge_pdfs
 from uniparser_agent.pdf2qa.prompts import build_qa_extract_prompt
 from uniparser_agent.pdf2qa.qa_merger import jsonl_to_md, merge_qa_pairs, write_merged_jsonl
 
@@ -31,9 +32,19 @@ def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
     return out
 
 
+def _require_local_pdf(path: str | Path, *, label: str) -> Path:
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"{label} not found: {resolved}")
+    if resolved.suffix.lower() != ".pdf":
+        raise ValueError(f"{label} must be a local PDF file: {resolved}")
+    return resolved
+
+
 def run_qa_pipeline(
     input_path: str | None = None,
     *,
+    answer_pdf: str | None = None,
     pages_tree_path: str | None = None,
     output_dir: str | None = None,
     overwrite: bool = False,
@@ -42,8 +53,13 @@ def run_qa_pipeline(
     """Run pdf2qa extraction.
 
     Primary path: ``input_path`` (pdf/url/image) → UniParser parse → extract.
+    Dual PDF: ``input_path`` (question) + ``answer_pdf`` → merge → parse → extract.
     Bypass: ``pages_tree_path`` skips UniParser parse.
     """
+    if answer_pdf and pages_tree_path:
+        raise ValueError("Use either answer_pdf or pages_tree_path, not both.")
+    if answer_pdf and not input_path:
+        raise ValueError("answer_pdf requires input_path (question booklet PDF).")
     if not input_path and not pages_tree_path:
         raise ValueError("Provide input_path (pdf/url/image) or pages_tree_path.")
 
@@ -51,6 +67,7 @@ def run_qa_pipeline(
     out = _resolve_output_dir(output_dir, overwrite=overwrite)
     parse_dir = out / "parse"
     parse_meta: dict[str, Any] = {}
+    merged_pdf_path: Path | None = None
 
     if pages_tree_path:
         src_tree = Path(pages_tree_path).expanduser().resolve()
@@ -63,15 +80,41 @@ def run_qa_pipeline(
         parse_meta = {"mode": "pages_tree", "pages_tree_path": str(tree_path)}
     else:
         assert input_path is not None
-        parse_result = parse_document(input_path, output_dir=str(parse_dir), overwrite=True)
+        parse_source = input_path
+        question_pdf: Path | None = None
+        answer_path: Path | None = None
+        if answer_pdf:
+            question_pdf = _require_local_pdf(input_path, label="question PDF")
+            answer_path = _require_local_pdf(answer_pdf, label="answer PDF")
+            merge_dir = out / "merge"
+            merge_dir.mkdir(parents=True, exist_ok=True)
+            merged_pdf_path = merge_pdfs(
+                [question_pdf, answer_path],
+                merge_dir / "merged.pdf",
+            )
+            parse_source = str(merged_pdf_path)
+
+        parse_result = parse_document(parse_source, output_dir=str(parse_dir), overwrite=True)
         tree_path = Path(parse_result["pages_tree_path"])
-        parse_meta = {
-            "mode": "parse",
-            "source": input_path,
-            "token": parse_result.get("token", ""),
-            "pages_tree_path": parse_result["pages_tree_path"],
-            "markdown_path": parse_result.get("markdown_path", ""),
-        }
+        if answer_pdf:
+            assert question_pdf is not None and answer_path is not None and merged_pdf_path is not None
+            parse_meta = {
+                "mode": "dual_pdf",
+                "question_pdf": str(question_pdf),
+                "answer_pdf": str(answer_path),
+                "merged_pdf": str(merged_pdf_path),
+                "token": parse_result.get("token", ""),
+                "pages_tree_path": parse_result["pages_tree_path"],
+                "markdown_path": parse_result.get("markdown_path", ""),
+            }
+        else:
+            parse_meta = {
+                "mode": "parse",
+                "source": input_path,
+                "token": parse_result.get("token", ""),
+                "pages_tree_path": parse_result["pages_tree_path"],
+                "markdown_path": parse_result.get("markdown_path", ""),
+            }
 
     load_pages_tree(tree_path)
 
@@ -98,6 +141,18 @@ def run_qa_pipeline(
     write_merged_jsonl(merged, merged_jsonl)
     jsonl_to_md(merged_jsonl, merged_md)
 
+    paths: dict[str, str] = {
+        "output_dir": str(out),
+        "pages_tree": str(tree_path),
+        "llm_content_list": str(content_list_path),
+        "llm_raw_response": str(raw_path),
+        "extracted_qa": str(extracted_path),
+        "merged_qa_pairs_jsonl": str(merged_jsonl),
+        "merged_qa_pairs_md": str(merged_md),
+    }
+    if merged_pdf_path is not None:
+        paths["merged_pdf"] = str(merged_pdf_path)
+
     meta = {
         "parse": parse_meta,
         "llm": llm.meta(),
@@ -106,15 +161,7 @@ def run_qa_pipeline(
         "n_merged_qa": len(merged),
         "llm_elapsed_sec": round(llm_elapsed, 2),
         "total_elapsed_sec": round(time.time() - started, 2),
-        "paths": {
-            "output_dir": str(out),
-            "pages_tree": str(tree_path),
-            "llm_content_list": str(content_list_path),
-            "llm_raw_response": str(raw_path),
-            "extracted_qa": str(extracted_path),
-            "merged_qa_pairs_jsonl": str(merged_jsonl),
-            "merged_qa_pairs_md": str(merged_md),
-        },
+        "paths": paths,
     }
     meta_path = out / "run_meta.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

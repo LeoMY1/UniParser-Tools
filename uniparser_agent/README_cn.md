@@ -201,6 +201,31 @@ uv run uniparser-agent show paper1 --db ./data/my-library.db
 
 ---
 
+### `qa` — 习题 QA 抽取
+
+从习题/试卷 PDF 抽取题干、答案与解析。完整说明见 [pdf2qa/README.md](pdf2qa/README.md)。
+
+```bash
+# 单册
+uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
+
+# 题册 + 答案册（均为本地 PDF；先合并再一次解析）
+uv run uniparser-agent qa /path/to/questions.pdf \
+  --answer-pdf /path/to/answers.pdf \
+  -o ./qa_out \
+  --overwrite
+```
+
+| 参数 / 选项 | 必填 | 说明 |
+|-------------|------|------|
+| `INPUT` | 是* | 题册（或整卷 PDF）；仅在使用 `--pages-tree` 时可省略 |
+| `--answer-pdf` | 否 | 答案册本地 PDF（不可与 `--pages-tree` 同用） |
+| `--pages-tree` | 否 | 跳过 UniParser，复用已有 `pages_tree.json` |
+| `-o`, `--output-dir` | 否 | 输出目录，默认 `./qa_out` |
+| `--overwrite` | 否 | 输出目录已存在时先删除 |
+
+---
+
 ### `export` — 导出 CSV
 
 导出单篇文档，或导出**完整分子库**（跨所有文档去重汇总）。

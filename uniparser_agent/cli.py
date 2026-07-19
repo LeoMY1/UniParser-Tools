@@ -142,6 +142,11 @@ def qa_cmd(
         help="Local PDF/image path or public PDF URL. Omit when using --pages-tree.",
     ),
     output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="QA output directory."),
+    answer_pdf: Optional[str] = typer.Option(
+        None,
+        "--answer-pdf",
+        help="Answer booklet PDF. Merged after the question booklet (local PDFs only).",
+    ),
     pages_tree: Optional[str] = typer.Option(
         None,
         "--pages-tree",
@@ -151,6 +156,10 @@ def qa_cmd(
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Parse with UniParser (unless --pages-tree) then extract QA pairs via LLM."""
+    if answer_pdf and pages_tree:
+        raise typer.BadParameter("Use either --answer-pdf or --pages-tree, not both.")
+    if answer_pdf and not input_path:
+        raise typer.BadParameter("--answer-pdf requires the question booklet as INPUT.")
     if not input_path and not pages_tree:
         raise typer.BadParameter("Provide INPUT (pdf/url/image) or --pages-tree.")
     if input_path and pages_tree:
@@ -158,6 +167,7 @@ def qa_cmd(
 
     result = run_qa_pipeline(
         input_path=input_path,
+        answer_pdf=answer_pdf,
         pages_tree_path=pages_tree,
         output_dir=output_dir,
         overwrite=overwrite,
@@ -166,6 +176,8 @@ def qa_cmd(
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
         return
     paths = result["paths"]
+    if paths.get("merged_pdf"):
+        typer.echo(f"Merged PDF: {paths['merged_pdf']}")
     typer.echo(f"Pages tree: {paths['pages_tree']}")
     typer.echo(f"Content list items: {result['n_content_items']}")
     typer.echo(f"Merged QA pairs: {result['n_merged_qa']}")
