@@ -1,9 +1,10 @@
 # UniParser Agent
 
-统一 CLI 工具：基于 UniParser 做文档解析，并提供两类功能——
+统一 CLI 工具：基于 UniParser 做文档解析，并提供三类功能——
 
 1. **化学建库**（`run` / `ingest` / `show` / `export`）：从科技文献抽取分子与反应，写入本地 SQLite。
 2. **习题 pdf2qa**（`qa`）：从习题/试卷 PDF 抽取问答对，详见 [pdf2qa/README.md](pdf2qa/README.md)。
+3. **PDF 原位翻译**（`translate`）：基于 UniParser 版面块做视觉原位翻译，详见 [pdf2translate/README.md](pdf2translate/README.md)。
 
 [English README](README.md)
 
@@ -13,6 +14,7 @@
 - 文档已经用 UniParser 解析过，想**直接入库**，不必再调解析接口。
 - 需要查看**抽取统计**，或导出 **CSV** 做后续分析、人工核对。
 - 需要从习题卷抽取 **题干 / 答案 / 解析**（见 pdf2qa 说明）。
+- 需要把 PDF **按原版面位置翻译成中文**（`zh-CN`；见 pdf2translate 说明）。
 
 ## 安装
 
@@ -23,7 +25,7 @@ uv sync
 
 需要 Python 3.11+。
 
-解析前请设置 UniParser API Key：
+解析前请设置 UniParser API Key（**不要把 key 写进代码**）：
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
@@ -33,9 +35,12 @@ export UNIPARSER_API_KEY="your-api-key"
 
 | 变量 | 作用 | 默认值 |
 |------|------|--------|
-| `UNIPARSER_API_KEY` | `parse`、`run` 调用解析接口时使用 | 解析时必填 |
+| `UNIPARSER_API_KEY` | `parse`、`run`、`translate` 调用解析接口时使用 | 解析时必填 |
 | `UNIPARSER_BASE_URL` | UniParser API 地址 | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | 默认 SQLite 数据库路径 | `~/.uniparser-agent/chemistry.db` |
+| `PDF_TRANSLATE_API_KEY` | `translate` 使用的 LLM Key（可回退 `QA_LLM_API_KEY` / `ARK_API_KEY`） | 翻译时必填 |
+| `PDF_TRANSLATE_BASE_URL` | 翻译 LLM 地址 | Ark 默认 |
+| `PDF_TRANSLATE_MODEL` | 翻译 LLM 模型 | Ark 默认 |
 
 ## 快速开始
 
@@ -197,6 +202,45 @@ reactions: 0
 uv run uniparser-agent show patent1
 
 uv run uniparser-agent show paper1 --db ./data/my-library.db
+```
+
+---
+
+### `translate` — PDF 原位视觉翻译
+
+基于 UniParser 版面块，把可翻译文本遮盖后重绘到原 bbox。目标语言固定为 `zh-CN`。完整说明见 [pdf2translate/README.md](pdf2translate/README.md)。
+
+```bash
+uv run uniparser-agent translate INPUT.pdf -o ./translate_out --overwrite
+```
+
+| 参数 / 选项 | 必填 | 说明 |
+|-------------|------|------|
+| `INPUT.pdf` | 是 | 本地 PDF 路径 |
+| `--source-lang` | 否 | 源语言提示，默认自动 |
+| `--pages-tree` | 否 | 复用已有 `pages_tree.json`，跳过 UniParser 解析 |
+| `-o`, `--output-dir` | 否 | 输出目录，默认 `./translate_out` |
+| `--font` | 否 | 译文 TTF/OTF 字体文件 |
+| `--glossary` | 否 | 手动术语表 CSV（`source,target[,tgt_lng]`） |
+| `--auto-glossary` / `--no-auto-glossary` | 否 | 自动抽取术语表（默认开启） |
+| `--overwrite` | 否 | 输出目录已存在时先删除 |
+| `--debug-layout` | 否 | 额外输出 `layout_debug.pdf` |
+| `--json` | 否 | JSON 输出运行摘要 |
+
+**示例：**
+
+```bash
+export UNIPARSER_API_KEY="your-api-key"
+export PDF_TRANSLATE_API_KEY="your-llm-key"
+
+uv run uniparser-agent translate ./paper.pdf -o ./translate_out --overwrite
+
+uv run uniparser-agent translate ./paper.pdf \
+  --pages-tree ./parse/pages_tree.json \
+  -o ./translate_out \
+  --glossary ./terms.csv \
+  --debug-layout \
+  --overwrite
 ```
 
 ---

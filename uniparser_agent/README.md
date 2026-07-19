@@ -1,9 +1,10 @@
 # UniParser Agent
 
-A single CLI around UniParser with two capabilities:
+A single CLI around UniParser with three capabilities:
 
 1. **Chemistry library** (`run` / `ingest` / `show` / `export`): extract molecules and reactions into local SQLite.
 2. **Exam pdf2qa** (`qa`): extract question/answer pairs from exam PDFs — see [pdf2qa/README.md](pdf2qa/README.md).
+3. **PDF translation** (`translate`): UniParser layout-block overlay translation — see [pdf2translate/README.md](pdf2translate/README.md).
 
 [中文文档](README_cn.md)
 
@@ -13,6 +14,7 @@ A single CLI around UniParser with two capabilities:
 - You already parsed a document with UniParser and want to **ingest** the result into a database without parsing again.
 - You need **counts and CSV exports** for downstream analysis or review.
 - You need **Q&A extraction** from exam papers (see pdf2qa docs).
+- You need **layout-preserving PDF translation** into Chinese (`zh-CN`; see pdf2translate docs).
 
 ## Install
 
@@ -23,7 +25,7 @@ uv sync
 
 Requires Python 3.11+.
 
-Set your UniParser API key before parsing:
+Set your UniParser API key before parsing (**never hardcode keys in source**):
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
@@ -33,9 +35,12 @@ Optional environment variables:
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `UNIPARSER_API_KEY` | API key for `parse` and `run` | *(required for parsing)* |
+| `UNIPARSER_API_KEY` | API key for `parse`, `run`, and `translate` parsing | *(required for parsing)* |
 | `UNIPARSER_BASE_URL` | UniParser API base URL | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | Default SQLite database path | `~/.uniparser-agent/chemistry.db` |
+| `PDF_TRANSLATE_API_KEY` | LLM key for `translate` (falls back to `QA_LLM_API_KEY` / `ARK_API_KEY`) | *(required for translation)* |
+| `PDF_TRANSLATE_BASE_URL` | Translation LLM base URL | Ark default |
+| `PDF_TRANSLATE_MODEL` | Translation LLM model | Ark default |
 
 ## Quick start
 
@@ -197,6 +202,45 @@ reactions: 0
 uv run uniparser-agent show patent1
 
 uv run uniparser-agent show paper1 --db ./data/my-library.db
+```
+
+---
+
+### `translate` — in-place visual PDF translation
+
+Uses UniParser layout blocks, covers original text, and redraws Chinese translations in the original bbox. Target language is fixed to `zh-CN`. See [pdf2translate/README.md](pdf2translate/README.md).
+
+```bash
+uv run uniparser-agent translate INPUT.pdf -o ./translate_out --overwrite
+```
+
+| Argument / option | Required | Description |
+|-------------------|----------|-------------|
+| `INPUT.pdf` | Yes | Local PDF path |
+| `--source-lang` | No | Optional source-language hint |
+| `--pages-tree` | No | Reuse an existing `pages_tree.json` and skip UniParser parse |
+| `-o`, `--output-dir` | No | Output directory (default `./translate_out`) |
+| `--font` | No | Optional TTF/OTF font file for translated text |
+| `--glossary` | No | Manual glossary CSV (`source,target[,tgt_lng]`) |
+| `--auto-glossary` / `--no-auto-glossary` | No | Auto-extract glossary (default: on) |
+| `--overwrite` | No | Replace output directory if it exists |
+| `--debug-layout` | No | Also write `layout_debug.pdf` |
+| `--json` | No | Print machine-readable JSON summary |
+
+**Examples:**
+
+```bash
+export UNIPARSER_API_KEY="your-api-key"
+export PDF_TRANSLATE_API_KEY="your-llm-key"
+
+uv run uniparser-agent translate ./paper.pdf -o ./translate_out --overwrite
+
+uv run uniparser-agent translate ./paper.pdf \
+  --pages-tree ./parse/pages_tree.json \
+  -o ./translate_out \
+  --glossary ./terms.csv \
+  --debug-layout \
+  --overwrite
 ```
 
 ---

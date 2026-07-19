@@ -13,11 +13,12 @@ from uniparser_agent.parse.service import parse_document
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
 from uniparser_agent.chemistry.store import ChemistryStore
 from uniparser_agent.pdf2qa.pipeline import run_qa_pipeline
+from uniparser_agent.pdf2translate.pipeline import run_translate_pipeline
 
 
 app = typer.Typer(
     name="uniparser-agent",
-    help="UniParser agent: chemistry library and exam QA extraction.",
+    help="UniParser agent: chemistry library, exam QA, and PDF translation.",
     no_args_is_help=True,
 )
 
@@ -172,6 +173,84 @@ def qa_cmd(
     typer.echo(f"JSONL: {paths['merged_qa_pairs_jsonl']}")
     typer.echo(f"Markdown: {paths['merged_qa_pairs_md']}")
     typer.echo(f"Output directory: {paths['output_dir']}")
+
+
+@app.command("translate")
+def translate_cmd(
+    pdf_path: str = typer.Argument(..., help="Local PDF path to translate in place."),
+    source_lang: Optional[str] = typer.Option(
+        None,
+        "--source-lang",
+        help="Optional source language hint (default: auto).",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Translation output directory.",
+    ),
+    pages_tree: Optional[str] = typer.Option(
+        None,
+        "--pages-tree",
+        help="Skip UniParser parse and use an existing pages_tree.json.",
+    ),
+    font: Optional[str] = typer.Option(
+        None,
+        "--font",
+        help="Optional TTF/OTF font file for translated text.",
+    ),
+    glossary: Optional[str] = typer.Option(
+        None,
+        "--glossary",
+        help="Optional glossary CSV (columns: source,target[,tgt_lng]).",
+    ),
+    auto_glossary: bool = typer.Option(
+        True,
+        "--auto-glossary/--no-auto-glossary",
+        help="Auto-extract glossary terms before translation (default: on).",
+    ),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        help="Replace output directory if it exists.",
+    ),
+    debug_layout: bool = typer.Option(
+        False,
+        "--debug-layout",
+        help="Also write layout_debug.pdf with unit bounding boxes.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Translate a PDF in place to zh-CN using UniParser layout + overlay rendering."""
+    result = run_translate_pipeline(
+        pdf_path,
+        source_lang=source_lang,
+        pages_tree_path=pages_tree,
+        output_dir=output_dir,
+        overwrite=overwrite,
+        font=font,
+        debug_layout=debug_layout,
+        glossary_path=glossary,
+        auto_glossary=auto_glossary,
+    )
+    if json_output:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    paths = result["paths"]
+    counts = result["counts"]
+    typer.echo(f"Translated PDF: {paths['translated_pdf']}")
+    typer.echo(f"Pages tree: {paths['pages_tree']}")
+    typer.echo(f"Units: {paths['translate_units']}")
+    typer.echo(
+        "Counts: "
+        f"translated={counts.get('translated', 0)} "
+        f"skipped={counts.get('skipped', 0)} "
+        f"failed={counts.get('failed', 0)} "
+        f"overflow={counts.get('overflow', 0)}"
+    )
+    typer.echo(f"Output directory: {paths['output_dir']}")
+    if paths.get("layout_debug_pdf"):
+        typer.echo(f"Layout debug: {paths['layout_debug_pdf']}")
 
 
 @app.command("export")
