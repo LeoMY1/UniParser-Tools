@@ -1,11 +1,12 @@
 [project]
 name = "uniparser-agent"
 version = "0.1.0"
-description = "UniParser agent: chemistry library and exam QA extraction"
+description = "UniParser agent: chemistry library, exam QA, and PDF translation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.0.0",
+    "pymupdf>=1.24.0",
     "pypdf>=4.0.0",
     "rdkit>=2023.9.1",
     "requests>=2.32.0",
@@ -33,6 +34,7 @@ packages = [
     "uniparser_agent.parse",
     "uniparser_agent.chemistry",
     "uniparser_agent.pdf2qa",
+    "uniparser_agent.pdf2translate",
 ]
 
 [tool.pytest.ini_options]
