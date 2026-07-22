@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-def _id_to_text(input_ids: str, content_list: list[dict[str, Any]], image_prefix: str = "images") -> str:
+def _id_to_text(input_ids: str, content_list: list[dict[str, Any]], image_prefix: str = "vqa_images") -> str:
     texts: list[str] = []
     for raw_id in input_ids.replace(" ", "").split(","):
         if not raw_id:
@@ -39,7 +39,7 @@ def parse_llm_response(
     response: str,
     content_list: list[dict[str, Any]],
     *,
-    image_prefix: str = "images",
+    image_prefix: str = "vqa_images",
 ) -> list[dict[str, Any]]:
     if "<empty>" in response and "</empty>" in response and "<qa_pair>" not in response:
         return []

@@ -15,6 +15,7 @@ from uniparser_agent.pdf2qa.output_parser import parse_llm_response, write_qa_js
 from uniparser_agent.pdf2qa.pdf_merger import merge_pdfs
 from uniparser_agent.pdf2qa.prompts import build_qa_extract_prompt
 from uniparser_agent.pdf2qa.qa_merger import jsonl_to_md, merge_qa_pairs, write_merged_jsonl
+from uniparser_agent.pdf2qa.vqa_formatter import write_sharegpt
 
 
 def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
@@ -118,8 +119,14 @@ def run_qa_pipeline(
 
     load_pages_tree(tree_path)
 
+    images_dir = out / "vqa_images"
     content_list_path = out / "llm_content_list.json"
-    content_list = adapt_pages_tree_file(tree_path, content_list_path)
+    content_list = adapt_pages_tree_file(
+        tree_path,
+        content_list_path,
+        images_dir=images_dir,
+    )
+    n_images = len(list(images_dir.glob("*"))) if images_dir.is_dir() else 0
 
     llm = QALLMClient()
     system_prompt = build_qa_extract_prompt()
@@ -131,7 +138,7 @@ def run_qa_pipeline(
     raw_path = out / "llm_raw_response.txt"
     raw_path.write_text(raw_response, encoding="utf-8")
 
-    extracted = parse_llm_response(raw_response, content_list)
+    extracted = parse_llm_response(raw_response, content_list, image_prefix="vqa_images")
     extracted_path = out / "extracted_qa.jsonl"
     write_qa_jsonl(extracted, extracted_path)
 
@@ -141,6 +148,9 @@ def run_qa_pipeline(
     write_merged_jsonl(merged, merged_jsonl)
     jsonl_to_md(merged_jsonl, merged_md)
 
+    sharegpt_path = out / "qa_sharegpt.json"
+    write_sharegpt(merged, images_dir, sharegpt_path, base_dir=out)
+
     paths: dict[str, str] = {
         "output_dir": str(out),
         "pages_tree": str(tree_path),
@@ -149,6 +159,8 @@ def run_qa_pipeline(
         "extracted_qa": str(extracted_path),
         "merged_qa_pairs_jsonl": str(merged_jsonl),
         "merged_qa_pairs_md": str(merged_md),
+        "vqa_images": str(images_dir),
+        "qa_sharegpt": str(sharegpt_path),
     }
     if merged_pdf_path is not None:
         paths["merged_pdf"] = str(merged_pdf_path)
@@ -157,6 +169,7 @@ def run_qa_pipeline(
         "parse": parse_meta,
         "llm": llm.meta(),
         "n_content_items": len(content_list),
+        "n_vqa_images": n_images,
         "n_extracted": len(extracted),
         "n_merged_qa": len(merged),
         "llm_elapsed_sec": round(llm_elapsed, 2),

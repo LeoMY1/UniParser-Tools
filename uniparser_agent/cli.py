@@ -180,9 +180,12 @@ def qa_cmd(
         typer.echo(f"Merged PDF: {paths['merged_pdf']}")
     typer.echo(f"Pages tree: {paths['pages_tree']}")
     typer.echo(f"Content list items: {result['n_content_items']}")
+    typer.echo(f"VQA images: {result.get('n_vqa_images', 0)} -> {paths.get('vqa_images', '')}")
     typer.echo(f"Merged QA pairs: {result['n_merged_qa']}")
     typer.echo(f"JSONL: {paths['merged_qa_pairs_jsonl']}")
     typer.echo(f"Markdown: {paths['merged_qa_pairs_md']}")
+    if paths.get("qa_sharegpt"):
+        typer.echo(f"ShareGPT: {paths['qa_sharegpt']}")
     typer.echo(f"Output directory: {paths['output_dir']}")
 
 

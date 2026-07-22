@@ -1,19 +1,21 @@
 # 习题 QA 抽取（`uniparser-agent qa`）
 
-从习题 / 试卷类 PDF（或图片、公开 PDF URL）中抽取结构化问答对：题干、短答案、解析，并落盘为 JSONL 与 Markdown，便于抽检与后续加工。
+从习题 / 试卷类 PDF（或图片、公开 PDF URL）中抽取结构化问答对：题干、短答案、解析；若版面块带图片 `source`，会落盘并构成 **VQA** 训练样本（Markdown 图引用 + ShareGPT）。
 
-解析使用 [UniParser](https://uniparser.dp.tech/)，问答抽取默认使用火山引擎方舟（Ark）兼容的 Chat Completions 接口。
+解析使用 [UniParser](https://uniparser.dp.tech/)（默认 `SCIENTIFIC_PAPER_TRIGGER`，不单独改 figure 开关），问答抽取默认使用火山引擎方舟（Ark）兼容的 Chat Completions 接口。
 
 ## 能做什么
 
 - 输入本地 **PDF / 图片**，或公开 **PDF URL**
 - 先调用 UniParser 得到版面树 `pages_tree.json`
-- 将版面块整理为带 `id` 的内容列表，交给大模型按题号切分 QA
+- 将版面块整理为带 `id` 的内容列表（含可导出的配图），交给大模型按题号切分 QA
 - 合并题干与答案/解析，输出：
-  - `merged_qa_pairs.jsonl`（结构化主结果）
+  - `merged_qa_pairs.jsonl`（结构化主结果，题干/解析可含 `![](vqa_images/...)`）
   - `merged_qa_pairs.md`（人工阅读）
+  - `vqa_images/`（从块 `source` 解码/拷贝的图片）
+  - `qa_sharegpt.json`（LLaMA-Factory 风格 `messages` + `images`）
 
-已有 UniParser 解析结果时，可用 `--pages-tree` 跳过解析，只跑抽取。
+已有 UniParser 解析结果时，可用 `--pages-tree` 跳过解析，只跑抽取（仍会从 tree 导出图片）。
 
 本功能与化学分子/反应入库（`run` / `ingest`）相互独立，不写化学 SQLite 库。
 
@@ -152,12 +154,20 @@ PDF / 图片 / URL
 |------|------|
 | `parse/pages_tree.json` | UniParser 版面树（主路径由解析生成；`--pages-tree` 时为拷贝） |
 | `parse/*.md` 等 | 主路径下 UniParser 的 Markdown 与元数据（与 `parse` 命令一致） |
-| `llm_content_list.json` | 带全局 `id` 的扁平内容列表，作为 LLM 输入 |
+| `llm_content_list.json` | 带全局 `id` 的扁平内容列表，作为 LLM 输入（可含 `type:image`） |
 | `llm_raw_response.txt` | 大模型原始回复（含 `<chapter>` / `<qa_pair>` 与块 id） |
 | `extracted_qa.jsonl` | 按 id 还原文本后的 QA 片段（合并前） |
 | `merged_qa_pairs.jsonl` | **主结果**：合并后的问答对，一行一条 JSON |
 | `merged_qa_pairs.md` | 主结果的 Markdown 预览 |
-| `run_meta.json` | 模型、耗时、题量、各文件路径等运行信息 |
+| `vqa_images/` | 从 pages_tree 块 `source` 导出的配图文件 |
+| `qa_sharegpt.json` | ShareGPT 多模态样本：`messages` + `images`（绝对路径） |
+| `run_meta.json` | 模型、耗时、题量、图片数、各文件路径等运行信息 |
+
+### VQA / ShareGPT
+
+- 默认 parse 模板下 `figure`/`chart` 可能关闭，**只有 tree 里实际带 `source` 的块才会进 `vqa_images/`**（如 molecule、部分 figure 子块等）。
+- ShareGPT 中 user 消息对每张图前置一个 `<image>` 占位符，与 `images` 数组长度一致；assistant 为短答案 + 去图后的解析。
+- 无图时 `images` 为空列表，退化为纯文本 QA，仍合法。
 
 ### `merged_qa_pairs.jsonl` 字段
 
