@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from uniparser_agent.chemistry.config import default_db_path
-from uniparser_agent.chemistry.extract import extract_from_pages_tree
+from uniparser_agent.chemistry.enrich import enrich_compounds
+from uniparser_agent.chemistry.join import build_logical_compounds
 from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.llm import LLMConfig
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.chemistry.store import ChemistryStore, IngestSummary
 
@@ -24,17 +26,26 @@ def ingest_pages_tree(
     output_dir: str | None = None,
     token: str = "",
     db_path: Path | None = None,
+    skip_enrich: bool = False,
+    llm_config: LLMConfig | None = None,
 ) -> IngestSummary:
     path = Path(pages_tree_path).expanduser().resolve()
     pages_tree_doc = load_pages_tree(path)
-    molecules, reactions = extract_from_pages_tree(pages_tree_doc)
     resolved_doc_id = _resolve_doc_id(doc_id, path.parent.name)
     jobspec.doc_id = resolved_doc_id
     jobspec.source = source or str(path)
     jobspec.db_path = db_path or jobspec.db_path or default_db_path()
 
+    compounds = build_logical_compounds(pages_tree_doc, resolved_doc_id)
+    compounds = enrich_compounds(
+        resolved_doc_id,
+        compounds,
+        llm_config=llm_config,
+        skip_enrich=skip_enrich,
+    )
+
     with ChemistryStore(jobspec.db_path) as store:
-        return store.ingest(
+        return store.ingest_compounds(
             doc_id=resolved_doc_id,
             source=jobspec.source,
             pages_tree_path=str(path),
@@ -42,8 +53,7 @@ def ingest_pages_tree(
             output_dir=output_dir,
             token=token,
             jobspec=jobspec,
-            molecules=molecules,
-            reactions=reactions,
+            compounds=compounds,
         )
 
 
@@ -55,6 +65,8 @@ def run_full_pipeline(
     output_dir: str | None = None,
     overwrite: bool = False,
     db_path: Path | None = None,
+    skip_enrich: bool = False,
+    llm_config: LLMConfig | None = None,
 ) -> dict[str, Any]:
     parse_result = parse_document(input_path, output_dir=output_dir, overwrite=overwrite)
     resolved_doc_id = _resolve_doc_id(doc_id, parse_result["source_stem"])
@@ -72,6 +84,8 @@ def run_full_pipeline(
         output_dir=parse_result.get("output_dir"),
         token=parse_result.get("token", ""),
         db_path=jobspec.db_path,
+        skip_enrich=skip_enrich,
+        llm_config=llm_config,
     )
     return {
         "parse": parse_result,

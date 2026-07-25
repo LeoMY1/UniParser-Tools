@@ -24,6 +24,23 @@ app = typer.Typer(
 )
 
 
+def _missing_doc_message(doc_id: str, db_path: Path, store: ChemistryStore) -> str:
+    known = store.list_doc_ids()
+    lines = [
+        f"Document not found: {doc_id}",
+        f"Database used: {db_path}",
+        "If you passed --db when running ingest/run, pass the same --db to show/export "
+        "(or set UNIPARSER_AGENT_DB).",
+    ]
+    if known:
+        preview = ", ".join(known[:20])
+        extra = f" … (+{len(known) - 20} more)" if len(known) > 20 else ""
+        lines.append(f"Documents in this database: {preview}{extra}")
+    else:
+        lines.append("This database has no documents yet.")
+    return "\n".join(lines)
+
+
 @app.command("parse")
 def parse_cmd(
     input_path: str = typer.Argument(..., help="Local PDF/image path or public PDF URL."),
@@ -46,28 +63,57 @@ def parse_cmd(
 def ingest_cmd(
     pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
     doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
-    profile: str = typer.Option("scientific-paper", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
+    profile: str = typer.Option("molecules_only", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
     db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
     source: Optional[str] = typer.Option(None, "--source", help="Original source path or URL."),
+    skip_enrich: bool = typer.Option(
+        False,
+        "--skip-enrich",
+        help="Skip Strategy A LLM enrichment; store rule-joined fields only.",
+    ),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="LLM API key (overrides OPENAI_API_KEY).", envvar=[]),
+    base_url: Optional[str] = typer.Option(None, "--base-url", help="LLM base URL (overrides OPENAI_BASE_URL)."),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name (overrides OPENAI_MODEL)."),
+    enable_thinking: bool = typer.Option(
+        False,
+        "--enable-thinking/--no-enable-thinking",
+        help="Pass chat_template_kwargs.enable_thinking for Qwen-compatible servers.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """Ingest molecules and reactions from an existing pages_tree.json."""
+    """Ingest molecule library from an existing pages_tree.json (Strategy A enrich)."""
     jobspec = JobSpec.from_profile(profile, db_path=Path(db) if db else default_db_path())
+    llm_config = None
+    if not skip_enrich:
+        try:
+            llm_config = resolve_llm_config(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                enable_thinking=enable_thinking,
+            )
+        except ValueError:
+            # Missing OPENAI_* → rule-only ingest (same as --skip-enrich)
+            skip_enrich = True
     summary = ingest_pages_tree(
         pages_tree_path,
         jobspec=jobspec,
         doc_id=doc_id,
         source=source,
         db_path=jobspec.db_path,
+        skip_enrich=skip_enrich,
+        llm_config=llm_config,
     )
     payload = {
         "doc_id": summary.doc_id,
         "db_path": str(jobspec.db_path),
-        "n_extractions": summary.n_extractions,
+        "n_compounds": summary.n_compounds,
         "n_unique_compounds": summary.n_unique_compounds,
         "n_markush": summary.n_markush,
         "n_invalid": summary.n_invalid,
-        "n_reactions": summary.n_reactions,
+        "n_with_activities": summary.n_with_activities,
+        "n_enriched": summary.n_enriched,
+        "skip_enrich": skip_enrich,
     }
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -79,14 +125,38 @@ def ingest_cmd(
 def run_cmd(
     input_path: str = typer.Argument(..., help="Local PDF/image path or public PDF URL."),
     doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
-    profile: str = typer.Option("scientific-paper", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
+    profile: str = typer.Option("molecules_only", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
     output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="Parse output directory."),
     db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
     overwrite: bool = typer.Option(False, "--overwrite", help="Replace parse output directory if it exists."),
+    skip_enrich: bool = typer.Option(
+        False,
+        "--skip-enrich",
+        help="Skip Strategy A LLM enrichment; store rule-joined fields only.",
+    ),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="LLM API key (overrides OPENAI_API_KEY).", envvar=[]),
+    base_url: Optional[str] = typer.Option(None, "--base-url", help="LLM base URL (overrides OPENAI_BASE_URL)."),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name (overrides OPENAI_MODEL)."),
+    enable_thinking: bool = typer.Option(
+        False,
+        "--enable-thinking/--no-enable-thinking",
+        help="Pass chat_template_kwargs.enable_thinking for Qwen-compatible servers.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """Parse a document and ingest into the chemistry library."""
+    """Parse a document and ingest into the molecule library."""
     jobspec = JobSpec.from_profile(profile, db_path=Path(db) if db else default_db_path())
+    llm_config = None
+    if not skip_enrich:
+        try:
+            llm_config = resolve_llm_config(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                enable_thinking=enable_thinking,
+            )
+        except ValueError:
+            skip_enrich = True
     result = run_full_pipeline(
         input_path,
         jobspec=jobspec,
@@ -94,6 +164,8 @@ def run_cmd(
         output_dir=output_dir,
         overwrite=overwrite,
         db_path=jobspec.db_path,
+        skip_enrich=skip_enrich,
+        llm_config=llm_config,
     )
     summary = result["ingest"]
     payload = {
@@ -101,11 +173,13 @@ def run_cmd(
         "db_path": result["db_path"],
         "pages_tree_path": result["parse"]["pages_tree_path"],
         "markdown_path": result["parse"]["markdown_path"],
-        "n_extractions": summary.n_extractions,
+        "n_compounds": summary.n_compounds,
         "n_unique_compounds": summary.n_unique_compounds,
         "n_markush": summary.n_markush,
         "n_invalid": summary.n_invalid,
-        "n_reactions": summary.n_reactions,
+        "n_with_activities": summary.n_with_activities,
+        "n_enriched": summary.n_enriched,
+        "skip_enrich": skip_enrich,
     }
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -118,23 +192,34 @@ def run_cmd(
 @app.command("show")
 def show_cmd(
     doc_id: str = typer.Argument(..., help="Document identifier."),
-    db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
+    db: Optional[str] = typer.Option(
+        None,
+        "--db",
+        help="SQLite database path (must match the --db used by run/ingest).",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Show ingest statistics for a document."""
-    with ChemistryStore(Path(db) if db else default_db_path()) as store:
-        stats = store.get_document_stats(doc_id)
+    db_path = Path(db).expanduser().resolve() if db else default_db_path()
+    with ChemistryStore(db_path) as store:
+        try:
+            stats = store.get_document_stats(doc_id)
+        except KeyError:
+            typer.secho(_missing_doc_message(doc_id, db_path, store), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
     if json_output:
         typer.echo(json.dumps(stats, ensure_ascii=False, indent=2))
         return
+    typer.echo(f"Database: {db_path}")
     typer.echo(f"doc_id: {stats['doc_id']}")
     typer.echo(f"source: {stats['source']}")
     typer.echo(f"parsed_at: {stats['parsed_at']}")
-    typer.echo(f"extractions: {stats['extractions']}")
+    typer.echo(f"compounds: {stats['compounds']}")
     typer.echo(f"unique_compounds: {stats['unique_compounds']}")
     typer.echo(f"invalid: {stats['invalid']}")
     typer.echo(f"markush: {stats['markush']}")
-    typer.echo(f"reactions: {stats['reactions']}")
+    typer.echo(f"with_activities: {stats['with_activities']}")
+    typer.echo(f"enriched: {stats['enriched']}")
 
 
 @app.command("vqa")
@@ -329,7 +414,11 @@ def translate_cmd(
 def export_cmd(
     doc_id: Optional[str] = typer.Argument(None, help="Document identifier. Omit when using --all."),
     out: Optional[str] = typer.Option(None, "--out", help="Export directory."),
-    db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
+    db: Optional[str] = typer.Option(
+        None,
+        "--db",
+        help="SQLite database path (must match the --db used by run/ingest).",
+    ),
     all_docs: bool = typer.Option(False, "--all", help="Export the full library across all documents."),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
@@ -339,7 +428,7 @@ def export_cmd(
     if not all_docs and not doc_id:
         raise typer.BadParameter("Provide DOC_ID or pass --all to export the full library.")
 
-    db_path = Path(db) if db else default_db_path()
+    db_path = Path(db).expanduser().resolve() if db else default_db_path()
     with ChemistryStore(db_path) as store:
         if all_docs:
             out_dir = Path(out).expanduser().resolve() if out else Path.cwd() / "exports" / "library"
@@ -353,6 +442,9 @@ def export_cmd(
             }
         else:
             assert doc_id is not None
+            if doc_id not in store.list_doc_ids():
+                typer.secho(_missing_doc_message(doc_id, db_path, store), fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=1)
             out_dir = Path(out).expanduser().resolve() if out else Path.cwd() / "exports" / doc_id
             paths = export_doc_csv(store, doc_id, out_dir)
             payload = {
@@ -372,9 +464,8 @@ def export_cmd(
         typer.echo(f"Database: {payload['db_path']}")
         typer.echo(f"documents: {stats['documents']}")
         typer.echo(f"compounds: {stats['compounds']}")
-        typer.echo(f"markush_scaffolds: {stats['markush_scaffolds']}")
-        typer.echo(f"extractions: {stats['extractions']}")
-        typer.echo(f"reactions: {stats['reactions']}")
+    else:
+        typer.echo(f"Database: {payload['db_path']}")
     for name, path in paths.items():
         typer.echo(f"{name}: {path}")
 
@@ -399,11 +490,16 @@ def _build_llm_config(
 
 def _print_summary(payload: dict) -> None:
     typer.echo(f"doc_id: {payload['doc_id']}")
-    typer.echo(f"extractions: {payload['n_extractions']}")
+    typer.echo(f"compounds: {payload.get('n_compounds', payload.get('n_extractions', 0))}")
     typer.echo(f"unique_compounds: {payload['n_unique_compounds']}")
     typer.echo(f"markush: {payload['n_markush']}")
     typer.echo(f"invalid: {payload['n_invalid']}")
-    typer.echo(f"reactions: {payload['n_reactions']}")
+    if "n_with_activities" in payload:
+        typer.echo(f"with_activities: {payload['n_with_activities']}")
+    if "n_enriched" in payload:
+        typer.echo(f"enriched: {payload['n_enriched']}")
+    if "skip_enrich" in payload:
+        typer.echo(f"skip_enrich: {payload['skip_enrich']}")
 
 
 def main() -> None:

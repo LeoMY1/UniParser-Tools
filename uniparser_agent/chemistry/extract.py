@@ -14,6 +14,7 @@ class MoleculeExtraction:
     bbox: dict[str, Any] | None
     score: float | None = None
     token: str = ""
+    compound_label: str = ""
 
 
 @dataclass
@@ -63,7 +64,14 @@ def _join_components(components: Any) -> str:
     return ", ".join(_component_texts(components))
 
 
-def extract_from_pages_tree(pages_tree_doc: dict[str, Any]) -> tuple[list[MoleculeExtraction], list[ReactionExtraction]]:
+def extract_from_pages_tree(
+    pages_tree_doc: dict[str, Any],
+) -> tuple[list[MoleculeExtraction], list[ReactionExtraction]]:
+    """Legacy walker: molecules (+ optional moleculeid) and reactions.
+
+    Prefer :func:`uniparser_agent.chemistry.join.build_logical_compounds` for
+    Strategy A molecule-library ingest.
+    """
     molecules: list[MoleculeExtraction] = []
     reactions: list[ReactionExtraction] = []
 
@@ -73,7 +81,35 @@ def extract_from_pages_tree(pages_tree_doc: dict[str, Any]) -> tuple[list[Molecu
             continue
         for block in _walk_blocks(page_items):
             block_type = block.get("type")
-            if block_type == "molecule" or "markush" in block:
+            if block_type == "moleculegroup":
+                label = ""
+                mol_block: dict[str, Any] | None = None
+                for nb in _walk_blocks(block.get("items") or []):
+                    if nb.get("type") == "moleculeid":
+                        label = (nb.get("text") or "").strip()
+                    if nb.get("type") == "molecule" or nb.get("smi"):
+                        mol_block = nb
+                if mol_block is None:
+                    continue
+                smi = (mol_block.get("smi") or "").strip()
+                caption = (mol_block.get("caption") or "").strip()
+                markush = bool(mol_block.get("markush")) or "*" in smi or "*" in caption
+                if not smi and not caption:
+                    continue
+                molecules.append(
+                    MoleculeExtraction(
+                        smi=smi,
+                        caption=caption,
+                        markush=markush,
+                        page=int(mol_block.get("page", block.get("page", 0))),
+                        block=int(mol_block.get("block", block.get("block", 0))),
+                        bbox=_bbox_from_block(mol_block),
+                        score=float(mol_block["conf"]) if mol_block.get("conf") is not None else None,
+                        token=str(mol_block.get("token") or ""),
+                        compound_label=label,
+                    )
+                )
+            elif block_type == "molecule" or "markush" in block:
                 smi = (block.get("smi") or "").strip()
                 caption = (block.get("caption") or "").strip()
                 markush = bool(block.get("markush")) or "*" in smi or "*" in caption

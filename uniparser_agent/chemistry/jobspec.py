@@ -29,7 +29,7 @@ PROFILE_MODULES: dict[str, tuple[IngestModule, ...]] = {
 class JobSpec:
     parse_preset: Literal["scientific-paper"] = "scientific-paper"
     modules: tuple[IngestModule, ...] = field(
-        default_factory=lambda: PROFILE_MODULES["scientific-paper"]
+        default_factory=lambda: PROFILE_MODULES["molecules_only"]
     )
     validate: ValidateMode = ValidateMode.STRICT
     doc_id: str = ""

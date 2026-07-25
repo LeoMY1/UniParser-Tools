@@ -8,13 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from uniparser_agent.chemistry.config import default_db_path
-from uniparser_agent.chemistry.extract import MoleculeExtraction, ReactionExtraction
-from uniparser_agent.chemistry.jobspec import IngestModule, JobSpec
-from uniparser_agent.chemistry.validate import (
-    build_markush_record,
-    is_markush_structure,
-    validate_smiles,
-)
+from uniparser_agent.chemistry.join import LogicalCompound
+from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.chemistry.validate import is_markush_structure, validate_smiles
 
 
 SCHEMA_SQL = """
@@ -31,59 +27,43 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE TABLE IF NOT EXISTS compounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    canonical_smiles TEXT NOT NULL,
-    inchikey TEXT NOT NULL UNIQUE,
-    validation_status TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS markush_scaffolds (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    scaffold_smi TEXT NOT NULL,
-    caption TEXT NOT NULL,
-    content_hash TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS extraction_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
     doc_id TEXT NOT NULL,
     smi TEXT,
-    caption TEXT,
-    markush INTEGER NOT NULL,
-    page INTEGER,
-    block INTEGER,
-    bbox_json TEXT,
-    score REAL,
+    canonical_smiles TEXT,
+    inchikey TEXT,
     validation_status TEXT NOT NULL,
-    compound_id INTEGER,
-    markush_id INTEGER,
-    FOREIGN KEY (doc_id) REFERENCES documents(doc_id),
-    FOREIGN KEY (compound_id) REFERENCES compounds(id),
-    FOREIGN KEY (markush_id) REFERENCES markush_scaffolds(id)
-);
-
-CREATE TABLE IF NOT EXISTS reactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    doc_id TEXT NOT NULL,
+    markush INTEGER NOT NULL DEFAULT 0,
+    compound_label TEXT,
+    name TEXT,
+    example_no TEXT,
+    role TEXT,
+    caption TEXT,
     page INTEGER,
     block INTEGER,
-    bbox_json TEXT,
-    reactants TEXT NOT NULL,
-    products TEXT NOT NULL,
-    conditions TEXT NOT NULL,
-    reactant_compound_ids_json TEXT,
-    product_compound_ids_json TEXT,
+    score REAL,
+    source_type TEXT,
+    semantic_summary TEXT,
+    activities_json TEXT NOT NULL DEFAULT '[]',
+    enrich_json TEXT,
     FOREIGN KEY (doc_id) REFERENCES documents(doc_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_compounds_doc_id ON compounds(doc_id);
+CREATE INDEX IF NOT EXISTS idx_compounds_label ON compounds(doc_id, compound_label);
 """
 
 
 @dataclass
 class IngestSummary:
     doc_id: str
-    n_extractions: int = 0
+    n_compounds: int = 0
     n_unique_compounds: int = 0
     n_markush: int = 0
     n_invalid: int = 0
+    n_with_activities: int = 0
+    n_enriched: int = 0
+    # Backward-compatible aliases used by older CLI/tests
+    n_extractions: int = 0
     n_reactions: int = 0
 
 
@@ -143,48 +123,11 @@ class ChemistryStore:
         )
         self._conn.commit()
 
-    def _get_compound_id(self, inchikey: str) -> int:
-        row = self._conn.execute(
-            "SELECT id FROM compounds WHERE inchikey = ?",
-            (inchikey,),
-        ).fetchone()
-        if row:
-            return int(row["id"])
-        raise KeyError(inchikey)
-
-    def _upsert_compound(self, canonical_smiles: str, inchikey: str, validation_status: str) -> int:
-        self._conn.execute(
-            """
-            INSERT INTO compounds (canonical_smiles, inchikey, validation_status)
-            VALUES (?, ?, ?)
-            ON CONFLICT(inchikey) DO UPDATE SET
-                canonical_smiles=excluded.canonical_smiles,
-                validation_status=excluded.validation_status
-            """,
-            (canonical_smiles, inchikey, validation_status),
-        )
+    def delete_compounds_for_doc(self, doc_id: str) -> None:
+        self._conn.execute("DELETE FROM compounds WHERE doc_id = ?", (doc_id,))
         self._conn.commit()
-        return self._get_compound_id(inchikey)
 
-    def _upsert_markush(self, scaffold_smi: str, caption: str, content_hash: str) -> int:
-        self._conn.execute(
-            """
-            INSERT INTO markush_scaffolds (scaffold_smi, caption, content_hash)
-            VALUES (?, ?, ?)
-            ON CONFLICT(content_hash) DO UPDATE SET
-                scaffold_smi=excluded.scaffold_smi,
-                caption=excluded.caption
-            """,
-            (scaffold_smi, caption, content_hash),
-        )
-        self._conn.commit()
-        row = self._conn.execute(
-            "SELECT id FROM markush_scaffolds WHERE content_hash = ?",
-            (content_hash,),
-        ).fetchone()
-        return int(row["id"])
-
-    def ingest(
+    def ingest_compounds(
         self,
         *,
         doc_id: str,
@@ -194,8 +137,7 @@ class ChemistryStore:
         output_dir: str | None,
         token: str,
         jobspec: JobSpec,
-        molecules: list[MoleculeExtraction],
-        reactions: list[ReactionExtraction],
+        compounds: list[LogicalCompound],
     ) -> IngestSummary:
         self.upsert_document(
             doc_id=doc_id,
@@ -206,174 +148,119 @@ class ChemistryStore:
             token=token,
             jobspec=jobspec,
         )
+        self.delete_compounds_for_doc(doc_id)
 
         summary = IngestSummary(doc_id=doc_id)
-        inchikey_cache: dict[str, int] = {}
-
-        def compound_id_for_text(text: str) -> int | None:
-            record = validate_smiles(text)
-            if not record:
-                return None
-            key = record.inchikey
-            if key in inchikey_cache:
-                return inchikey_cache[key]
-            row = self._conn.execute(
-                "SELECT id FROM compounds WHERE inchikey = ?",
-                (key,),
-            ).fetchone()
-            if row:
-                cid = int(row["id"])
-                inchikey_cache[key] = cid
-                return cid
-            if jobspec.has_module(IngestModule.COMPOUNDS):
-                cid = self._upsert_compound(
-                    record.canonical_smiles,
-                    record.inchikey,
-                    record.validation_status,
-                )
-                inchikey_cache[key] = cid
-                return cid
-            return None
-
-        for mol in molecules:
-            summary.n_extractions += 1
+        for c in compounds:
+            markush = bool(c.markush) or is_markush_structure(c.smi, c.caption, c.markush)
+            canonical = None
+            inchikey = None
             validation_status = "invalid"
-            compound_id = None
-            markush_id = None
-
-            if is_markush_structure(mol.smi, mol.caption, mol.markush):
+            if markush:
                 validation_status = "markush"
-                if jobspec.has_module(IngestModule.MARKUSH):
-                    record = build_markush_record(mol.smi, mol.caption)
-                    markush_id = self._upsert_markush(
-                        record.scaffold_smi,
-                        record.caption,
-                        record.content_hash,
-                    )
-                    summary.n_markush += 1
+                summary.n_markush += 1
             else:
-                record = validate_smiles(mol.smi)
+                record = validate_smiles(c.smi)
                 if record:
                     validation_status = "valid"
-                    if jobspec.has_module(IngestModule.COMPOUNDS):
-                        compound_id = self._upsert_compound(
-                            record.canonical_smiles,
-                            record.inchikey,
-                            record.validation_status,
-                        )
-                        inchikey_cache[record.inchikey] = compound_id
+                    canonical = record.canonical_smiles
+                    inchikey = record.inchikey
                 else:
                     summary.n_invalid += 1
 
-            if jobspec.has_module(IngestModule.COMPOUNDS) or jobspec.has_module(IngestModule.MARKUSH):
-                self._conn.execute(
-                    """
-                    INSERT INTO extraction_records (
-                        doc_id, smi, caption, markush, page, block, bbox_json, score,
-                        validation_status, compound_id, markush_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        doc_id,
-                        mol.smi,
-                        mol.caption,
-                        int(mol.markush),
-                        mol.page,
-                        mol.block,
-                        json.dumps(mol.bbox) if mol.bbox else None,
-                        mol.score,
-                        validation_status,
-                        compound_id,
-                        markush_id,
-                    ),
-                )
+            activities = c.activities_json or []
+            if activities:
+                summary.n_with_activities += 1
+            if c.semantic_summary:
+                summary.n_enriched += 1
 
-        if jobspec.has_module(IngestModule.REACTIONS):
-            for rxn in reactions:
-                reactant_ids = [cid for t in rxn.reactant_texts if (cid := compound_id_for_text(t))]
-                product_ids = [cid for t in rxn.product_texts if (cid := compound_id_for_text(t))]
-                self._conn.execute(
-                    """
-                    INSERT INTO reactions (
-                        doc_id, page, block, bbox_json, reactants, products, conditions,
-                        reactant_compound_ids_json, product_compound_ids_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        doc_id,
-                        rxn.page,
-                        rxn.block,
-                        json.dumps(rxn.bbox) if rxn.bbox else None,
-                        rxn.reactants,
-                        rxn.products,
-                        rxn.conditions,
-                        json.dumps(reactant_ids),
-                        json.dumps(product_ids),
-                    ),
-                )
-                summary.n_reactions += 1
-
-        self._conn.commit()
-        summary.n_unique_compounds = int(
+            page = c.pages[0] if c.pages else None
             self._conn.execute(
                 """
-                SELECT COUNT(DISTINCT compound_id) FROM extraction_records
-                WHERE doc_id = ? AND compound_id IS NOT NULL
+                INSERT INTO compounds (
+                    doc_id, smi, canonical_smiles, inchikey, validation_status, markush,
+                    compound_label, name, example_no, role, caption, page, block, score,
+                    source_type, semantic_summary, activities_json, enrich_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (doc_id,),
-            ).fetchone()[0]
-        )
+                (
+                    doc_id,
+                    c.smi or None,
+                    canonical,
+                    inchikey,
+                    validation_status,
+                    int(markush),
+                    c.label or c.compound_label or None,
+                    c.name or None,
+                    c.example_no or None,
+                    c.role or None,
+                    c.caption or None,
+                    page,
+                    c.block,
+                    c.score,
+                    c.source_type or None,
+                    c.semantic_summary or None,
+                    json.dumps(activities, ensure_ascii=False),
+                    json.dumps(c.enrich_json, ensure_ascii=False) if c.enrich_json else None,
+                ),
+            )
+            summary.n_compounds += 1
+
+        self._conn.commit()
+        summary.n_unique_compounds = summary.n_compounds
+        summary.n_extractions = summary.n_compounds
         return summary
+
+    # Compatibility shim for older call sites during transition
+    def ingest(self, **kwargs: Any) -> IngestSummary:
+        if "compounds" in kwargs:
+            return self.ingest_compounds(**kwargs)
+        raise TypeError("ChemistryStore.ingest now requires compounds=list[LogicalCompound]")
 
     def get_document_stats(self, doc_id: str) -> dict[str, Any]:
         doc = self._conn.execute("SELECT * FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
         if not doc:
             raise KeyError(f"Document not found: {doc_id}")
+        n_compounds = self._conn.execute(
+            "SELECT COUNT(*) FROM compounds WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone()[0]
         return {
             "doc_id": doc_id,
             "source": doc["source"],
             "parsed_at": doc["parsed_at"],
             "pages_tree_path": doc["pages_tree_path"],
-            "extractions": self._conn.execute(
-                "SELECT COUNT(*) FROM extraction_records WHERE doc_id = ?",
-                (doc_id,),
-            ).fetchone()[0],
-            "unique_compounds": self._conn.execute(
-                """
-                SELECT COUNT(DISTINCT compound_id) FROM extraction_records
-                WHERE doc_id = ? AND compound_id IS NOT NULL
-                """,
-                (doc_id,),
-            ).fetchone()[0],
+            "compounds": n_compounds,
+            "extractions": n_compounds,
+            "unique_compounds": n_compounds,
             "invalid": self._conn.execute(
-                """
-                SELECT COUNT(*) FROM extraction_records
-                WHERE doc_id = ? AND validation_status = 'invalid'
-                """,
+                "SELECT COUNT(*) FROM compounds WHERE doc_id = ? AND validation_status = 'invalid'",
                 (doc_id,),
             ).fetchone()[0],
             "markush": self._conn.execute(
+                "SELECT COUNT(*) FROM compounds WHERE doc_id = ? AND validation_status = 'markush'",
+                (doc_id,),
+            ).fetchone()[0],
+            "with_activities": self._conn.execute(
                 """
-                SELECT COUNT(*) FROM extraction_records
-                WHERE doc_id = ? AND validation_status = 'markush'
+                SELECT COUNT(*) FROM compounds
+                WHERE doc_id = ? AND activities_json IS NOT NULL AND activities_json != '[]'
                 """,
                 (doc_id,),
             ).fetchone()[0],
-            "reactions": self._conn.execute(
-                "SELECT COUNT(*) FROM reactions WHERE doc_id = ?",
+            "enriched": self._conn.execute(
+                """
+                SELECT COUNT(*) FROM compounds
+                WHERE doc_id = ? AND semantic_summary IS NOT NULL AND semantic_summary != ''
+                """,
                 (doc_id,),
             ).fetchone()[0],
+            "reactions": 0,
         }
 
     def fetch_compounds_for_doc(self, doc_id: str) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            """
-            SELECT DISTINCT c.*
-            FROM compounds c
-            JOIN extraction_records e ON e.compound_id = c.id
-            WHERE e.doc_id = ?
-            ORDER BY c.id
-            """,
+            "SELECT * FROM compounds WHERE doc_id = ? ORDER BY id",
             (doc_id,),
         ).fetchall()
         return [dict(row) for row in rows]
@@ -386,60 +273,34 @@ class ChemistryStore:
         return {
             "documents": self._conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0],
             "compounds": self._conn.execute("SELECT COUNT(*) FROM compounds").fetchone()[0],
-            "markush_scaffolds": self._conn.execute("SELECT COUNT(*) FROM markush_scaffolds").fetchone()[0],
-            "extractions": self._conn.execute("SELECT COUNT(*) FROM extraction_records").fetchone()[0],
-            "reactions": self._conn.execute("SELECT COUNT(*) FROM reactions").fetchone()[0],
         }
 
     def fetch_library_compounds(self) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             """
             SELECT
-                c.id,
-                c.canonical_smiles,
-                c.inchikey,
-                c.validation_status,
-                COUNT(DISTINCT e.doc_id) AS doc_count,
-                GROUP_CONCAT(DISTINCT e.doc_id) AS doc_ids
-            FROM compounds c
-            LEFT JOIN extraction_records e ON e.compound_id = c.id
-            GROUP BY c.id
-            ORDER BY c.id
-            """
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-    def fetch_library_markush(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            """
-            SELECT
-                m.id,
-                m.scaffold_smi,
-                m.caption,
-                m.content_hash,
-                COUNT(DISTINCT e.doc_id) AS doc_count,
-                GROUP_CONCAT(DISTINCT e.doc_id) AS doc_ids
-            FROM markush_scaffolds m
-            LEFT JOIN extraction_records e ON e.markush_id = m.id
-            GROUP BY m.id
-            ORDER BY m.id
+                COALESCE(inchikey, compound_label, smi, CAST(id AS TEXT)) AS dedupe_key,
+                MIN(id) AS id,
+                MAX(canonical_smiles) AS canonical_smiles,
+                MAX(inchikey) AS inchikey,
+                MAX(smi) AS smi,
+                MAX(compound_label) AS compound_label,
+                MAX(name) AS name,
+                MAX(validation_status) AS validation_status,
+                COUNT(DISTINCT doc_id) AS doc_count,
+                GROUP_CONCAT(DISTINCT doc_id) AS doc_ids
+            FROM compounds
+            GROUP BY COALESCE(inchikey, compound_label, smi, CAST(id AS TEXT))
+            ORDER BY id
             """
         ).fetchall()
         return [dict(row) for row in rows]
 
     def fetch_table(self, table: str, doc_id: str | None = None) -> list[dict[str, Any]]:
-        allowed = {
-            "compounds",
-            "markush_scaffolds",
-            "extraction_records",
-            "reactions",
-            "documents",
-        }
+        allowed = {"compounds", "documents"}
         if table not in allowed:
-            raise ValueError(f"Unknown table: {table}")
-        if doc_id and table in {"extraction_records", "reactions"}:
-            rows = self._conn.execute(f"SELECT * FROM {table} WHERE doc_id = ?", (doc_id,)).fetchall()
-        elif doc_id and table == "documents":
+            raise ValueError(f"Unknown table: {table}. Allowed: {sorted(allowed)}")
+        if doc_id:
             rows = self._conn.execute(f"SELECT * FROM {table} WHERE doc_id = ?", (doc_id,)).fetchall()
         else:
             rows = self._conn.execute(f"SELECT * FROM {table}").fetchall()
