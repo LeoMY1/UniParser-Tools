@@ -18,7 +18,9 @@ Target language is fixed to **zh-CN**.
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"   # needed unless --pages-tree
-export PDF_TRANSLATE_API_KEY="your-llm-key"     # or VQA_LLM_API_KEY / ARK_API_KEY
+export OPENAI_API_KEY="your-llm-key"
+export OPENAI_BASE_URL="http://192.168.198.191:8009/v1"   # or any OpenAI-compatible endpoint
+export OPENAI_MODEL="Qwen3.5-397B-A17B-FP8"
 ```
 
 Optional:
@@ -28,12 +30,14 @@ Optional:
 | ------------------------ | ----------------------- | ---------------------------------------------- |
 | `UNIPARSER_API_KEY`      | UniParser parse API key | required for live parse                        |
 | `UNIPARSER_BASE_URL`     | UniParser endpoint      | `https://uniparser.dp.tech`                    |
-| `PDF_TRANSLATE_API_KEY`  | LLM API key             | falls back to `VQA_LLM_API_KEY` / `ARK_API_KEY` |
-| `PDF_TRANSLATE_BASE_URL` | LLM base URL            | Ark default                                    |
-| `PDF_TRANSLATE_MODEL`    | LLM model               | Ark default                                    |
+| `OPENAI_API_KEY`         | LLM API key             | required for translation                       |
+| `OPENAI_BASE_URL`        | LLM base URL            | required (no built-in default)                 |
+| `OPENAI_MODEL`           | LLM model               | required (no built-in default)                 |
 | `PDF_TRANSLATE_BATCH_SIZE` | Units per LLM request | `12`                                           |
 | `PDF_TRANSLATE_MAX_WORKERS` | Parallel LLM batches | `4`                                            |
 
+
+CLI overrides: `--api-key` / `--base-url` / `--model`.
 
 Do **not** hardcode API keys in source files.
 

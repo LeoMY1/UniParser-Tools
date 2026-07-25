@@ -35,6 +35,7 @@ packages = [
     "uniparser_agent.chemistry",
     "uniparser_agent.pdf2vqa",
     "uniparser_agent.pdf2translate",
+    "uniparser_agent.llm",
 ]
 
 [tool.pytest.ini_options]

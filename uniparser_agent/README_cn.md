@@ -38,12 +38,11 @@ export UNIPARSER_API_KEY="your-api-key"
 | `UNIPARSER_API_KEY` | `parse`、`run`、`vqa`、`translate` 调用解析接口时使用 | 解析时必填 |
 | `UNIPARSER_BASE_URL` | UniParser API 地址 | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | 默认 SQLite 数据库路径 | `~/.uniparser-agent/chemistry.db` |
-| `VQA_LLM_API_KEY` | `vqa` 使用的 LLM Key（可回退 `ARK_API_KEY`） | VQA 时必填 |
-| `VQA_LLM_BASE_URL` | VQA LLM 地址 | Ark 默认 |
-| `VQA_LLM_MODEL` | VQA LLM 模型 | Ark 默认 |
-| `PDF_TRANSLATE_API_KEY` | `translate` 使用的 LLM Key（可回退 `VQA_LLM_API_KEY` / `ARK_API_KEY`） | 翻译时必填 |
-| `PDF_TRANSLATE_BASE_URL` | 翻译 LLM 地址（可回退 `VQA_LLM_BASE_URL`） | Ark 默认 |
-| `PDF_TRANSLATE_MODEL` | 翻译 LLM 模型（可回退 `VQA_LLM_MODEL`） | Ark 默认 |
+| `OPENAI_API_KEY` | `vqa` / `translate` 使用的 LLM Key | 使用 LLM 时必填 |
+| `OPENAI_BASE_URL` | OpenAI 兼容 LLM 的 `base_url` | 使用 LLM 时必填（无内置默认） |
+| `OPENAI_MODEL` | LLM 模型名 | 使用 LLM 时必填（无内置默认） |
+
+`vqa` / `translate` 也可通过 CLI 传入 `--api-key` / `--base-url` / `--model`（优先于环境变量）。
 
 ## 快速开始
 
@@ -259,7 +258,9 @@ uv run uniparser-agent translate INPUT.pdf -o ./translate_out --overwrite
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
-export PDF_TRANSLATE_API_KEY="your-llm-key"
+export OPENAI_API_KEY="your-llm-key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+export OPENAI_MODEL="gpt-4o-mini"
 
 uv run uniparser-agent translate ./paper.pdf -o ./translate_out --overwrite
 

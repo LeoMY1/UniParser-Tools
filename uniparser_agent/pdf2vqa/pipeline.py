@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from uniparser_agent.parse.service import load_pages_tree, parse_document
+from uniparser_agent.llm import LLMConfig
 from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file
 from uniparser_agent.pdf2vqa.llm_client import VQALLMClient
 from uniparser_agent.pdf2vqa.output_parser import parse_llm_response, write_vqa_jsonl
@@ -50,6 +51,8 @@ def run_vqa_pipeline(
     output_dir: str | None = None,
     overwrite: bool = False,
     strict_title_match: bool = False,
+    llm_config: LLMConfig | None = None,
+    llm_client: VQALLMClient | None = None,
 ) -> dict[str, Any]:
     """Run pdf2vqa extraction.
 
@@ -128,7 +131,7 @@ def run_vqa_pipeline(
     )
     n_images = len(list(images_dir.glob("*"))) if images_dir.is_dir() else 0
 
-    llm = VQALLMClient()
+    llm = llm_client or VQALLMClient(config=llm_config)
     system_prompt = build_vqa_extract_prompt()
     user_content = json.dumps(content_list, ensure_ascii=False)
     llm_started = time.time()

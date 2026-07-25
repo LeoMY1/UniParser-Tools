@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from uniparser_agent.llm import LLMConfig
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2translate.layout_adapter import adapt_pages_tree_file
 from uniparser_agent.pdf2translate.prompts import DEFAULT_TARGET_LANG
@@ -68,6 +69,7 @@ def run_translate_pipeline(
     glossary_path: str | None = None,
     auto_glossary: bool = True,
     translator_client: TranslateLLMClient | None = None,
+    llm_config: LLMConfig | None = None,
 ) -> dict[str, Any]:
     """Run PDF in-place visual translation.
 
@@ -119,7 +121,7 @@ def run_translate_pipeline(
     units_path = out / "translate_units.jsonl"
     units = adapt_pages_tree_file(tree_path, units_path, page_rect_map=page_rect_map)
 
-    llm = translator_client or TranslateLLMClient()
+    llm = translator_client or TranslateLLMClient(config=llm_config)
     translate_stats = TranslateStats()
     translate_started = time.time()
     translate_units(

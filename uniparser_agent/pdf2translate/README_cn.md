@@ -18,7 +18,9 @@
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"   # 使用 --pages-tree 时可省略
-export PDF_TRANSLATE_API_KEY="your-llm-key"     # 或 VQA_LLM_API_KEY / ARK_API_KEY
+export OPENAI_API_KEY="your-llm-key"
+export OPENAI_BASE_URL="http://192.168.198.191:8009/v1"   # 或其它 OpenAI 兼容地址
+export OPENAI_MODEL="Qwen3.5-397B-A17B-FP8"
 ```
 
 可选环境变量：
@@ -28,12 +30,14 @@ export PDF_TRANSLATE_API_KEY="your-llm-key"     # 或 VQA_LLM_API_KEY / ARK_API_
 |------|------|--------|
 | `UNIPARSER_API_KEY` | UniParser 解析 API Key | 在线解析时必填 |
 | `UNIPARSER_BASE_URL` | UniParser 服务地址 | `https://uniparser.dp.tech` |
-| `PDF_TRANSLATE_API_KEY` | 翻译用 LLM Key | 可回退 `VQA_LLM_API_KEY` / `ARK_API_KEY` |
-| `PDF_TRANSLATE_BASE_URL` | LLM Base URL | Ark 默认 |
-| `PDF_TRANSLATE_MODEL` | LLM 模型名 | Ark 默认 |
+| `OPENAI_API_KEY` | LLM API Key | 翻译时必填 |
+| `OPENAI_BASE_URL` | LLM Base URL | 翻译时必填（无内置默认） |
+| `OPENAI_MODEL` | LLM 模型名 | 翻译时必填（无内置默认） |
 | `PDF_TRANSLATE_BATCH_SIZE` | 每批翻译单元数 | `12` |
 | `PDF_TRANSLATE_MAX_WORKERS` | 并行翻译批次数 | `4` |
 
+
+也可在命令行传入 `--api-key` / `--base-url` / `--model`。
 
 **不要**把 API Key 写进源码或提交进仓库。
 

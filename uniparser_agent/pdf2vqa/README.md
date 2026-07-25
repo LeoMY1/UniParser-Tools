@@ -2,7 +2,7 @@
 
 从习题 / 试卷类 PDF（或图片、公开 PDF URL）中抽取结构化 VQA 问答对：题干、短答案、解析；若版面块带图片 `source`，会落盘并构成 **VQA** 训练样本（Markdown 图引用 + ShareGPT）。
 
-解析使用 [UniParser](https://uniparser.dp.tech/)（默认 `SCIENTIFIC_PAPER_TRIGGER`，不单独改 figure 开关），问答抽取默认使用火山引擎方舟（Ark）兼容的 Chat Completions 接口。
+解析使用 [UniParser](https://uniparser.dp.tech/)（默认 `SCIENTIFIC_PAPER_TRIGGER`，不单独改 figure 开关），问答抽取使用任意 **OpenAI 兼容** Chat Completions 接口（通过 `OPENAI_*` 配置）。
 
 ## 能做什么
 
@@ -24,7 +24,7 @@
 - Python 3.11+
 - 已安装 `uniparser-agent`（见下方安装）
 - **UniParser API Key**（主路径解析时需要，账户需有可用额度）
-- **LLM API Key**（方舟 `ARK_API_KEY`，或统一用 `VQA_LLM_API_KEY`）
+- **LLM 配置**：`OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`（无内置默认）
 
 ## 安装
 
@@ -47,23 +47,31 @@ uv pip install -e ".[dev]"
 | 变量 | 何时需要 | 说明 |
 |------|----------|------|
 | `UNIPARSER_API_KEY` | 输入 PDF / 图片 / URL 时 | UniParser 云端解析 |
-| `ARK_API_KEY` 或 `VQA_LLM_API_KEY` | 始终 | 大模型抽取；二者设其一即可（优先 `VQA_LLM_API_KEY`） |
+| `OPENAI_API_KEY` | 始终 | LLM API Key |
+| `OPENAI_BASE_URL` | 始终 | OpenAI 兼容接口根地址（如 `.../v1`） |
+| `OPENAI_MODEL` | 始终 | 模型名 |
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"
-export ARK_API_KEY="your-ark-key"
+export OPENAI_API_KEY="your-llm-key"
+export OPENAI_BASE_URL="http://192.168.198.191:8009/v1"   # 或其它兼容服务
+export OPENAI_MODEL="Qwen3.5-397B-A17B-FP8"
 ```
 
-### 可选（LLM）
+也可在命令行覆盖：
+
+```bash
+uv run uniparser-agent vqa exam.pdf -o ./vqa_out \
+  --api-key "$OPENAI_API_KEY" \
+  --base-url "$OPENAI_BASE_URL" \
+  --model "$OPENAI_MODEL"
+```
+
+### 可选
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `VQA_LLM_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | OpenAI 兼容接口的 `base_url` |
-| `VQA_LLM_MODEL` | `glm-5-2-260617` | 模型或方舟推理接入点 ID |
 | `UNIPARSER_BASE_URL` | `https://uniparser.dp.tech` | UniParser 服务地址 |
-
-更换为其它 OpenAI 兼容服务时，同时设置 `VQA_LLM_BASE_URL`、`VQA_LLM_MODEL`，并用 `VQA_LLM_API_KEY` 提供密钥即可。
-
 
 ## 快速开始
 
@@ -102,7 +110,7 @@ uv run uniparser-agent vqa \
   --overwrite
 ```
 
-此时不需要 `UNIPARSER_API_KEY`，仍需要 LLM 密钥。
+此时不需要 `UNIPARSER_API_KEY`，仍需要 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`。
 
 ### 输入图片或公开 PDF URL
 

@@ -12,8 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from openai import OpenAI
-
+from uniparser_agent.llm import LLMConfig, OpenAICompatLLM
 from uniparser_agent.pdf2translate.glossary import (
     GlossaryEntry,
     extract_glossary_with_llm,
@@ -30,10 +29,6 @@ from uniparser_agent.pdf2translate.prompts import (
     build_translate_user_content,
 )
 
-DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-DEFAULT_MODEL = "glm-5-2-260617"
-DEFAULT_TIMEOUT = 600.0
-DEFAULT_MAX_TOKENS = 4096
 DEFAULT_BATCH_SIZE = 12
 DEFAULT_MAX_WORKERS = 4
 
@@ -64,34 +59,7 @@ class TranslateStats:
             self.schema_failures += schema_failures
 
 
-def get_translate_api_key() -> str:
-    key = (
-        os.environ.get("PDF_TRANSLATE_API_KEY")
-        or os.environ.get("VQA_LLM_API_KEY")
-        or os.environ.get("ARK_API_KEY")
-        or ""
-    ).strip()
-    if not key:
-        raise ValueError(
-            "PDF_TRANSLATE_API_KEY (or VQA_LLM_API_KEY / ARK_API_KEY) is not set."
-        )
-    return key
 
-
-def get_translate_base_url() -> str:
-    return (
-        os.environ.get("PDF_TRANSLATE_BASE_URL")
-        or os.environ.get("VQA_LLM_BASE_URL")
-        or DEFAULT_BASE_URL
-    ).strip().rstrip("/")
-
-
-def get_translate_model() -> str:
-    return (
-        os.environ.get("PDF_TRANSLATE_MODEL")
-        or os.environ.get("VQA_LLM_MODEL")
-        or DEFAULT_MODEL
-    ).strip()
 
 
 def get_translate_batch_size() -> int:
@@ -224,49 +192,88 @@ class TranslateLLMClient:
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
-        timeout: float = DEFAULT_TIMEOUT,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: float | None = None,
+        max_tokens: int | None = None,
         batch_size: int | None = None,
         max_workers: int | None = None,
+        enable_thinking: bool = False,
+        extra_body: dict[str, Any] | None = None,
+        config: LLMConfig | None = None,
         chat_fn: Callable[..., str] | None = None,
     ) -> None:
-        self.api_key = api_key if api_key is not None else get_translate_api_key()
-        self.base_url = (base_url or get_translate_base_url()).rstrip("/")
-        self.model = model or get_translate_model()
-        self.timeout = timeout
-        self.max_tokens = max_tokens
         self.batch_size = max(1, batch_size or get_translate_batch_size())
         self.max_workers = max(1, max_workers or get_translate_max_workers())
         self._chat_fn = chat_fn
-        self._client = None if chat_fn else OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=timeout,
-        )
+        self._llm: OpenAICompatLLM | None = None
+        if chat_fn is None:
+            self._llm = OpenAICompatLLM(
+                config=config,
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                timeout=timeout,
+                max_tokens=max_tokens,
+                enable_thinking=enable_thinking,
+                extra_body=extra_body,
+            )
+
+    @property
+    def api_key(self) -> str:
+        if self._llm is None:
+            return ""
+        return self._llm.api_key
+
+    @property
+    def base_url(self) -> str:
+        if self._llm is None:
+            return ""
+        return self._llm.base_url
+
+    @property
+    def model(self) -> str:
+        if self._llm is None:
+            return ""
+        return self._llm.model
+
+    @property
+    def timeout(self) -> float:
+        if self._llm is None:
+            return 3600.0
+        return self._llm.timeout
+
+    @property
+    def max_tokens(self) -> int:
+        if self._llm is None:
+            return 81920
+        return self._llm.max_tokens
+
+    @property
+    def enable_thinking(self) -> bool:
+        if self._llm is None:
+            return False
+        return self._llm.enable_thinking
 
     def chat(self, *, system_prompt: str, user_content: str) -> str:
         if self._chat_fn is not None:
             return self._chat_fn(system_prompt=system_prompt, user_content=user_content)
-        assert self._client is not None
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-            max_tokens=self.max_tokens,
-        )
-        content = response.choices[0].message.content
-        if content is None:
-            raise RuntimeError("LLM returned empty content")
-        return content
+        assert self._llm is not None
+        return self._llm.chat(system_prompt=system_prompt, user_content=user_content)
 
     def meta(self) -> dict[str, Any]:
+        base = (
+            self._llm.meta()
+            if self._llm is not None
+            else {
+                "base_url": "",
+                "model": "",
+                "timeout": 3600.0,
+                "max_tokens": 81920,
+                "enable_thinking": False,
+                "extra_body": None,
+            }
+        )
         return {
-            "base_url": self.base_url,
-            "model": self.model,
-            "timeout": self.timeout,
-            "max_tokens": self.max_tokens,
+            **base,
             "batch_size": self.batch_size,
             "max_workers": self.max_workers,
         }

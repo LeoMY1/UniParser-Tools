@@ -38,12 +38,11 @@ Optional environment variables:
 | `UNIPARSER_API_KEY` | API key for `parse`, `run`, `vqa`, and `translate` parsing | *(required for parsing)* |
 | `UNIPARSER_BASE_URL` | UniParser API base URL | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | Default SQLite database path | `~/.uniparser-agent/chemistry.db` |
-| `VQA_LLM_API_KEY` | LLM key for `vqa` (falls back to `ARK_API_KEY`) | *(required for vqa)* |
-| `VQA_LLM_BASE_URL` | VQA LLM base URL | Ark default |
-| `VQA_LLM_MODEL` | VQA LLM model | Ark default |
-| `PDF_TRANSLATE_API_KEY` | LLM key for `translate` (falls back to `VQA_LLM_API_KEY` / `ARK_API_KEY`) | *(required for translation)* |
-| `PDF_TRANSLATE_BASE_URL` | Translation LLM base URL (falls back to `VQA_LLM_BASE_URL`) | Ark default |
-| `PDF_TRANSLATE_MODEL` | Translation LLM model (falls back to `VQA_LLM_MODEL`) | Ark default |
+| `OPENAI_API_KEY` | LLM key for `vqa` / `translate` | *(required when using LLM)* |
+| `OPENAI_BASE_URL` | OpenAI-compatible LLM `base_url` | *(required; no built-in default)* |
+| `OPENAI_MODEL` | LLM model name | *(required; no built-in default)* |
+
+For `vqa` / `translate`, you can also pass `--api-key` / `--base-url` / `--model` (CLI overrides env).
 
 ## Quick start
 
@@ -259,7 +258,9 @@ uv run uniparser-agent translate INPUT.pdf -o ./translate_out --overwrite
 
 ```bash
 export UNIPARSER_API_KEY="your-api-key"
-export PDF_TRANSLATE_API_KEY="your-llm-key"
+export OPENAI_API_KEY="your-llm-key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+export OPENAI_MODEL="gpt-4o-mini"
 
 uv run uniparser-agent translate ./paper.pdf -o ./translate_out --overwrite
 

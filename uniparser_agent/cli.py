@@ -9,6 +9,7 @@ import typer
 from uniparser_agent.chemistry.config import default_db_path
 from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
 from uniparser_agent.chemistry.jobspec import JobSpec, PROFILE_MODULES
+from uniparser_agent.llm import LLMConfig, resolve_llm_config
 from uniparser_agent.parse.service import parse_document
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
 from uniparser_agent.chemistry.store import ChemistryStore
@@ -154,6 +155,27 @@ def vqa_cmd(
         help="Skip UniParser parse and use an existing pages_tree.json.",
     ),
     overwrite: bool = typer.Option(False, "--overwrite", help="Replace output directory if it exists."),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+        help="LLM API key (overrides OPENAI_API_KEY).",
+        envvar=[],
+    ),
+    base_url: Optional[str] = typer.Option(
+        None,
+        "--base-url",
+        help="LLM base URL (overrides OPENAI_BASE_URL).",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="LLM model name (overrides OPENAI_MODEL).",
+    ),
+    enable_thinking: bool = typer.Option(
+        False,
+        "--enable-thinking/--no-enable-thinking",
+        help="Pass chat_template_kwargs.enable_thinking for Qwen-compatible servers.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Parse with UniParser (unless --pages-tree) then extract VQA pairs via LLM."""
@@ -166,12 +188,19 @@ def vqa_cmd(
     if input_path and pages_tree:
         raise typer.BadParameter("Use either INPUT or --pages-tree, not both.")
 
+    llm_config = _build_llm_config(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        enable_thinking=enable_thinking,
+    )
     result = run_vqa_pipeline(
         input_path=input_path,
         answer_pdf=answer_pdf,
         pages_tree_path=pages_tree,
         output_dir=output_dir,
         overwrite=overwrite,
+        llm_config=llm_config,
     )
     if json_output:
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
@@ -234,9 +263,36 @@ def translate_cmd(
         "--debug-layout",
         help="Also write layout_debug.pdf with unit bounding boxes.",
     ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+        help="LLM API key (overrides OPENAI_API_KEY).",
+        envvar=[],
+    ),
+    base_url: Optional[str] = typer.Option(
+        None,
+        "--base-url",
+        help="LLM base URL (overrides OPENAI_BASE_URL).",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="LLM model name (overrides OPENAI_MODEL).",
+    ),
+    enable_thinking: bool = typer.Option(
+        False,
+        "--enable-thinking/--no-enable-thinking",
+        help="Pass chat_template_kwargs.enable_thinking for Qwen-compatible servers.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Translate a PDF in place to zh-CN using UniParser layout + overlay rendering."""
+    llm_config = _build_llm_config(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        enable_thinking=enable_thinking,
+    )
     result = run_translate_pipeline(
         pdf_path,
         source_lang=source_lang,
@@ -247,6 +303,7 @@ def translate_cmd(
         debug_layout=debug_layout,
         glossary_path=glossary,
         auto_glossary=auto_glossary,
+        llm_config=llm_config,
     )
     if json_output:
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
@@ -320,6 +377,24 @@ def export_cmd(
         typer.echo(f"reactions: {stats['reactions']}")
     for name, path in paths.items():
         typer.echo(f"{name}: {path}")
+
+
+def _build_llm_config(
+    *,
+    api_key: Optional[str],
+    base_url: Optional[str],
+    model: Optional[str],
+    enable_thinking: bool,
+) -> LLMConfig:
+    try:
+        return resolve_llm_config(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            enable_thinking=enable_thinking,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def _print_summary(payload: dict) -> None:
