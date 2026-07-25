@@ -1,4 +1,4 @@
-"""Parse LLM id-based QA responses back into text QA items."""
+"""Parse LLM id-based VQA responses back into text VQA items."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def parse_llm_response(
     *,
     image_prefix: str = "vqa_images",
 ) -> list[dict[str, Any]]:
-    if "<empty>" in response and "</empty>" in response and "<qa_pair>" not in response:
+    if "<empty>" in response and "</empty>" in response and "<vqa_pair>" not in response:
         return []
 
     qa_list: list[dict[str, Any]] = []
@@ -52,7 +52,7 @@ def parse_llm_response(
             if title_match
             else ""
         )
-        for pair in re.findall(r"<qa_pair>(.*?)</qa_pair>", chapter_block, flags=re.DOTALL):
+        for pair in re.findall(r"<vqa_pair>(.*?)</vqa_pair>", chapter_block, flags=re.DOTALL):
             q_match = re.search(r"<question>(.*?)</question>", pair, flags=re.DOTALL)
             a_match = re.search(r"<answer>(.*?)</answer>", pair, flags=re.DOTALL)
             s_match = re.search(r"<solution>(.*?)</solution>", pair, flags=re.DOTALL)
@@ -81,7 +81,7 @@ def parse_llm_response(
     return qa_list
 
 
-def write_qa_jsonl(qa_list: list[dict[str, Any]], output_path: str | Path) -> Path:
+def write_vqa_jsonl(qa_list: list[dict[str, Any]], output_path: str | Path) -> Path:
     out = Path(output_path).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as fh:

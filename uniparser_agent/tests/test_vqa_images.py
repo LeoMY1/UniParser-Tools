@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from uniparser_agent.pdf2qa.image_export import export_images_from_pages_tree
-from uniparser_agent.pdf2qa.layout_adapter import adapt_pages_tree_file, pages_tree_to_content_list
-from uniparser_agent.pdf2qa.output_parser import parse_llm_response
-from uniparser_agent.pdf2qa.vqa_formatter import convert_qa_pair_to_sharegpt, write_sharegpt
+from uniparser_agent.pdf2vqa.image_export import export_images_from_pages_tree
+from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file, pages_tree_to_content_list
+from uniparser_agent.pdf2vqa.output_parser import parse_llm_response
+from uniparser_agent.pdf2vqa.vqa_formatter import convert_vqa_pair_to_sharegpt, write_sharegpt
 
 # Minimal valid 1x1 PNG (preferred — magic bytes detect format)
 _PNG_1X1_B64 = (
@@ -159,8 +159,8 @@ def test_parser_and_sharegpt_image_placeholders(tmp_path: Path):
     ]
     response = (
         "<chapter><title></title>"
-        "<qa_pair><label>1</label><question>0,1</question>"
-        "<answer>A</answer><solution>2</solution></qa_pair>"
+        "<vqa_pair><label>1</label><question>0,1</question>"
+        "<answer>A</answer><solution>2</solution></vqa_pair>"
         "</chapter>"
     )
     extracted = parse_llm_response(response, content)
@@ -177,7 +177,7 @@ def test_parser_and_sharegpt_image_placeholders(tmp_path: Path):
             "answer_chapter_title": "",
         }
     ]
-    out = write_sharegpt(merged, images_dir, tmp_path / "qa_sharegpt.json", base_dir=tmp_path)
+    out = write_sharegpt(merged, images_dir, tmp_path / "vqa_sharegpt.json", base_dir=tmp_path)
     records = json.loads(out.read_text(encoding="utf-8"))
     assert len(records) == 1
     user = records[0]["messages"][0]["content"]
@@ -189,7 +189,7 @@ def test_parser_and_sharegpt_image_placeholders(tmp_path: Path):
 
 
 def test_sharegpt_no_images_ok():
-    item = convert_qa_pair_to_sharegpt(
+    item = convert_vqa_pair_to_sharegpt(
         {"question": "2+2?", "answer": "4", "solution": ""},
         image_index={},
         base_dir=Path("."),

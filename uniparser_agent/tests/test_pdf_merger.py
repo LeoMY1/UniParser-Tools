@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pypdf import PdfReader, PdfWriter
 
-from uniparser_agent.pdf2qa.pdf_merger import merge_pdfs
+from uniparser_agent.pdf2vqa.pdf_merger import merge_pdfs
 
 
 def _write_blank_pdf(path: Path, n_pages: int) -> Path:

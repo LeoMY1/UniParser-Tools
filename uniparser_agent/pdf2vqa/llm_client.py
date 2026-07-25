@@ -1,4 +1,4 @@
-"""OpenAI-compatible LLM client for QA extraction (Volcengine Ark by default)."""
+"""OpenAI-compatible LLM client for VQA extraction (Volcengine Ark by default)."""
 
 from __future__ import annotations
 
@@ -16,52 +16,41 @@ DEFAULT_MAX_TOKENS = 81920
 
 def get_llm_api_key() -> str:
     key = (
-        os.environ.get("QA_LLM_API_KEY")
-        or os.environ.get("VQA_LLM_API_KEY")  # backward compatible
+        os.environ.get("VQA_LLM_API_KEY")
         or os.environ.get("ARK_API_KEY")
         or ""
     ).strip()
     if not key:
-        raise ValueError("QA_LLM_API_KEY or ARK_API_KEY is not set.")
+        raise ValueError("VQA_LLM_API_KEY or ARK_API_KEY is not set.")
     return key
 
 
 def get_llm_base_url() -> str:
     return (
-        os.environ.get("QA_LLM_BASE_URL")
-        or os.environ.get("VQA_LLM_BASE_URL")
+        os.environ.get("VQA_LLM_BASE_URL")
         or DEFAULT_BASE_URL
     ).strip().rstrip("/")
 
 
 def get_llm_model() -> str:
     return (
-        os.environ.get("QA_LLM_MODEL")
-        or os.environ.get("VQA_LLM_MODEL")
+        os.environ.get("VQA_LLM_MODEL")
         or DEFAULT_MODEL
     ).strip()
 
 
 def _use_qwen_thinking_kwargs(base_url: str) -> bool:
     """Only send Qwen chat_template_kwargs for non-Ark / explicitly enabled setups."""
-    flag = (
-        os.environ.get("QA_LLM_ENABLE_THINKING_KWARGS")
-        or os.environ.get("VQA_LLM_ENABLE_THINKING_KWARGS")
-        or ""
-    ).strip().lower()
+    flag = (os.environ.get("VQA_LLM_ENABLE_THINKING_KWARGS") or "").strip().lower()
     if flag in {"1", "true", "yes"}:
         return True
     if flag in {"0", "false", "no"}:
         return False
-    model = (
-        os.environ.get("QA_LLM_MODEL")
-        or os.environ.get("VQA_LLM_MODEL")
-        or ""
-    ).lower()
+    model = (os.environ.get("VQA_LLM_MODEL") or "").lower()
     return "192.168." in base_url or "qwen" in model
 
 
-class QALLMClient:
+class VQALLMClient:
     def __init__(
         self,
         *,
@@ -108,7 +97,3 @@ class QALLMClient:
             "max_tokens": self.max_tokens,
             "enable_thinking": self.enable_thinking,
         }
-
-
-# Backward-compatible alias
-VQALLMClient = QALLMClient

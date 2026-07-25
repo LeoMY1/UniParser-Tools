@@ -3,7 +3,7 @@
 A single CLI around UniParser with three capabilities:
 
 1. **Chemistry library** (`run` / `ingest` / `show` / `export`): extract molecules and reactions into local SQLite.
-2. **Exam pdf2qa** (`qa`): extract question/answer pairs from exam PDFs — see [pdf2qa/README.md](pdf2qa/README.md).
+2. **Exam pdf2vqa** (`vqa`): extract multimodal question/answer pairs from exam PDFs — see [pdf2vqa/README.md](pdf2vqa/README.md).
 3. **PDF translation** (`translate`): UniParser layout-block overlay translation — see [pdf2translate/README.md](pdf2translate/README.md).
 
 [中文文档](README_cn.md)
@@ -13,7 +13,7 @@ A single CLI around UniParser with three capabilities:
 - You have PDFs or images of chemistry literature and want a **structured library** of compounds and reactions.
 - You already parsed a document with UniParser and want to **ingest** the result into a database without parsing again.
 - You need **counts and CSV exports** for downstream analysis or review.
-- You need **Q&A extraction** from exam papers (see pdf2qa docs).
+- You need **VQA extraction** from exam papers (see pdf2vqa docs).
 - You need **layout-preserving PDF translation** into Chinese (`zh-CN`; see pdf2translate docs).
 
 ## Install
@@ -35,12 +35,15 @@ Optional environment variables:
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `UNIPARSER_API_KEY` | API key for `parse`, `run`, and `translate` parsing | *(required for parsing)* |
+| `UNIPARSER_API_KEY` | API key for `parse`, `run`, `vqa`, and `translate` parsing | *(required for parsing)* |
 | `UNIPARSER_BASE_URL` | UniParser API base URL | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | Default SQLite database path | `~/.uniparser-agent/chemistry.db` |
-| `PDF_TRANSLATE_API_KEY` | LLM key for `translate` (falls back to `QA_LLM_API_KEY` / `ARK_API_KEY`) | *(required for translation)* |
-| `PDF_TRANSLATE_BASE_URL` | Translation LLM base URL | Ark default |
-| `PDF_TRANSLATE_MODEL` | Translation LLM model | Ark default |
+| `VQA_LLM_API_KEY` | LLM key for `vqa` (falls back to `ARK_API_KEY`) | *(required for vqa)* |
+| `VQA_LLM_BASE_URL` | VQA LLM base URL | Ark default |
+| `VQA_LLM_MODEL` | VQA LLM model | Ark default |
+| `PDF_TRANSLATE_API_KEY` | LLM key for `translate` (falls back to `VQA_LLM_API_KEY` / `ARK_API_KEY`) | *(required for translation)* |
+| `PDF_TRANSLATE_BASE_URL` | Translation LLM base URL (falls back to `VQA_LLM_BASE_URL`) | Ark default |
+| `PDF_TRANSLATE_MODEL` | Translation LLM model (falls back to `VQA_LLM_MODEL`) | Ark default |
 
 ## Quick start
 
@@ -206,18 +209,18 @@ uv run uniparser-agent show paper1 --db ./data/my-library.db
 
 ---
 
-### `qa` — exam Q&A extraction
+### `vqa` — exam VQA extraction
 
-Extract question / answer / solution pairs from exam PDFs. Full details: [pdf2qa/README.md](pdf2qa/README.md).
+Extract question / answer / solution pairs (with figures when present) from exam PDFs. Outputs include `merged_vqa_pairs.*`, `vqa_images/`, and `vqa_sharegpt.json`. Full details: [pdf2vqa/README.md](pdf2vqa/README.md).
 
 ```bash
 # Single booklet
-uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
+uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
 
 # Question booklet + answer booklet (local PDFs; merged then parsed once)
-uv run uniparser-agent qa /path/to/questions.pdf \
+uv run uniparser-agent vqa /path/to/questions.pdf \
   --answer-pdf /path/to/answers.pdf \
-  -o ./qa_out \
+  -o ./vqa_out \
   --overwrite
 ```
 
@@ -226,7 +229,7 @@ uv run uniparser-agent qa /path/to/questions.pdf \
 | `INPUT` | Yes* | Question booklet (or single exam PDF). `*` omit only with `--pages-tree` |
 | `--answer-pdf` | No | Answer booklet PDF (local only; cannot combine with `--pages-tree`) |
 | `--pages-tree` | No | Skip UniParser and reuse an existing `pages_tree.json` |
-| `-o`, `--output-dir` | No | Output directory (default `./qa_out`) |
+| `-o`, `--output-dir` | No | Output directory (default `./vqa_out`) |
 | `--overwrite` | No | Replace output directory if it exists |
 
 ---

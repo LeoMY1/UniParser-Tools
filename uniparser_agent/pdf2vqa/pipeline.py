@@ -1,4 +1,4 @@
-"""End-to-end QA pipeline: UniParser parse → adapt → LLM extract → merge."""
+"""End-to-end VQA pipeline: UniParser parse → adapt → LLM extract → merge."""
 
 from __future__ import annotations
 
@@ -9,20 +9,20 @@ from pathlib import Path
 from typing import Any
 
 from uniparser_agent.parse.service import load_pages_tree, parse_document
-from uniparser_agent.pdf2qa.layout_adapter import adapt_pages_tree_file
-from uniparser_agent.pdf2qa.llm_client import QALLMClient
-from uniparser_agent.pdf2qa.output_parser import parse_llm_response, write_qa_jsonl
-from uniparser_agent.pdf2qa.pdf_merger import merge_pdfs
-from uniparser_agent.pdf2qa.prompts import build_qa_extract_prompt
-from uniparser_agent.pdf2qa.qa_merger import jsonl_to_md, merge_qa_pairs, write_merged_jsonl
-from uniparser_agent.pdf2qa.vqa_formatter import write_sharegpt
+from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file
+from uniparser_agent.pdf2vqa.llm_client import VQALLMClient
+from uniparser_agent.pdf2vqa.output_parser import parse_llm_response, write_vqa_jsonl
+from uniparser_agent.pdf2vqa.pdf_merger import merge_pdfs
+from uniparser_agent.pdf2vqa.prompts import build_vqa_extract_prompt
+from uniparser_agent.pdf2vqa.vqa_merger import jsonl_to_md, merge_vqa_pairs, write_merged_jsonl
+from uniparser_agent.pdf2vqa.vqa_formatter import write_sharegpt
 
 
 def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
     if output_dir:
         out = Path(output_dir).expanduser().resolve()
     else:
-        out = (Path.cwd() / "qa_out").resolve()
+        out = (Path.cwd() / "vqa_out").resolve()
     if out.exists():
         if not overwrite:
             raise FileExistsError(
@@ -42,7 +42,7 @@ def _require_local_pdf(path: str | Path, *, label: str) -> Path:
     return resolved
 
 
-def run_qa_pipeline(
+def run_vqa_pipeline(
     input_path: str | None = None,
     *,
     answer_pdf: str | None = None,
@@ -51,7 +51,7 @@ def run_qa_pipeline(
     overwrite: bool = False,
     strict_title_match: bool = False,
 ) -> dict[str, Any]:
-    """Run pdf2qa extraction.
+    """Run pdf2vqa extraction.
 
     Primary path: ``input_path`` (pdf/url/image) → UniParser parse → extract.
     Dual PDF: ``input_path`` (question) + ``answer_pdf`` → merge → parse → extract.
@@ -128,8 +128,8 @@ def run_qa_pipeline(
     )
     n_images = len(list(images_dir.glob("*"))) if images_dir.is_dir() else 0
 
-    llm = QALLMClient()
-    system_prompt = build_qa_extract_prompt()
+    llm = VQALLMClient()
+    system_prompt = build_vqa_extract_prompt()
     user_content = json.dumps(content_list, ensure_ascii=False)
     llm_started = time.time()
     raw_response = llm.chat(system_prompt=system_prompt, user_content=user_content)
@@ -139,16 +139,16 @@ def run_qa_pipeline(
     raw_path.write_text(raw_response, encoding="utf-8")
 
     extracted = parse_llm_response(raw_response, content_list, image_prefix="vqa_images")
-    extracted_path = out / "extracted_qa.jsonl"
-    write_qa_jsonl(extracted, extracted_path)
+    extracted_path = out / "extracted_vqa.jsonl"
+    write_vqa_jsonl(extracted, extracted_path)
 
-    merged = merge_qa_pairs(extracted, strict_title_match=strict_title_match)
-    merged_jsonl = out / "merged_qa_pairs.jsonl"
-    merged_md = out / "merged_qa_pairs.md"
+    merged = merge_vqa_pairs(extracted, strict_title_match=strict_title_match)
+    merged_jsonl = out / "merged_vqa_pairs.jsonl"
+    merged_md = out / "merged_vqa_pairs.md"
     write_merged_jsonl(merged, merged_jsonl)
     jsonl_to_md(merged_jsonl, merged_md)
 
-    sharegpt_path = out / "qa_sharegpt.json"
+    sharegpt_path = out / "vqa_sharegpt.json"
     write_sharegpt(merged, images_dir, sharegpt_path, base_dir=out)
 
     paths: dict[str, str] = {
@@ -156,11 +156,11 @@ def run_qa_pipeline(
         "pages_tree": str(tree_path),
         "llm_content_list": str(content_list_path),
         "llm_raw_response": str(raw_path),
-        "extracted_qa": str(extracted_path),
-        "merged_qa_pairs_jsonl": str(merged_jsonl),
-        "merged_qa_pairs_md": str(merged_md),
+        "extracted_vqa": str(extracted_path),
+        "merged_vqa_pairs_jsonl": str(merged_jsonl),
+        "merged_vqa_pairs_md": str(merged_md),
         "vqa_images": str(images_dir),
-        "qa_sharegpt": str(sharegpt_path),
+        "vqa_sharegpt": str(sharegpt_path),
     }
     if merged_pdf_path is not None:
         paths["merged_pdf"] = str(merged_pdf_path)
@@ -171,7 +171,7 @@ def run_qa_pipeline(
         "n_content_items": len(content_list),
         "n_vqa_images": n_images,
         "n_extracted": len(extracted),
-        "n_merged_qa": len(merged),
+        "n_merged_vqa": len(merged),
         "llm_elapsed_sec": round(llm_elapsed, 2),
         "total_elapsed_sec": round(time.time() - started, 2),
         "paths": paths,
@@ -182,4 +182,3 @@ def run_qa_pipeline(
     return meta
 
 
-run_vqa_pipeline = run_qa_pipeline

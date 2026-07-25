@@ -12,13 +12,13 @@ from uniparser_agent.chemistry.jobspec import JobSpec, PROFILE_MODULES
 from uniparser_agent.parse.service import parse_document
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
 from uniparser_agent.chemistry.store import ChemistryStore
-from uniparser_agent.pdf2qa.pipeline import run_qa_pipeline
+from uniparser_agent.pdf2vqa.pipeline import run_vqa_pipeline
 from uniparser_agent.pdf2translate.pipeline import run_translate_pipeline
 
 
 app = typer.Typer(
     name="uniparser-agent",
-    help="UniParser agent: chemistry library, exam QA, and PDF translation.",
+    help="UniParser agent: chemistry library, exam VQA, and PDF translation.",
     no_args_is_help=True,
 )
 
@@ -136,13 +136,13 @@ def show_cmd(
     typer.echo(f"reactions: {stats['reactions']}")
 
 
-@app.command("qa")
-def qa_cmd(
+@app.command("vqa")
+def vqa_cmd(
     input_path: Optional[str] = typer.Argument(
         None,
         help="Local PDF/image path or public PDF URL. Omit when using --pages-tree.",
     ),
-    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="QA output directory."),
+    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="VQA output directory."),
     answer_pdf: Optional[str] = typer.Option(
         None,
         "--answer-pdf",
@@ -156,7 +156,7 @@ def qa_cmd(
     overwrite: bool = typer.Option(False, "--overwrite", help="Replace output directory if it exists."),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """Parse with UniParser (unless --pages-tree) then extract QA pairs via LLM."""
+    """Parse with UniParser (unless --pages-tree) then extract VQA pairs via LLM."""
     if answer_pdf and pages_tree:
         raise typer.BadParameter("Use either --answer-pdf or --pages-tree, not both.")
     if answer_pdf and not input_path:
@@ -166,7 +166,7 @@ def qa_cmd(
     if input_path and pages_tree:
         raise typer.BadParameter("Use either INPUT or --pages-tree, not both.")
 
-    result = run_qa_pipeline(
+    result = run_vqa_pipeline(
         input_path=input_path,
         answer_pdf=answer_pdf,
         pages_tree_path=pages_tree,
@@ -182,11 +182,11 @@ def qa_cmd(
     typer.echo(f"Pages tree: {paths['pages_tree']}")
     typer.echo(f"Content list items: {result['n_content_items']}")
     typer.echo(f"VQA images: {result.get('n_vqa_images', 0)} -> {paths.get('vqa_images', '')}")
-    typer.echo(f"Merged QA pairs: {result['n_merged_qa']}")
-    typer.echo(f"JSONL: {paths['merged_qa_pairs_jsonl']}")
-    typer.echo(f"Markdown: {paths['merged_qa_pairs_md']}")
-    if paths.get("qa_sharegpt"):
-        typer.echo(f"ShareGPT: {paths['qa_sharegpt']}")
+    typer.echo(f"Merged VQA pairs: {result['n_merged_vqa']}")
+    typer.echo(f"JSONL: {paths['merged_vqa_pairs_jsonl']}")
+    typer.echo(f"Markdown: {paths['merged_vqa_pairs_md']}")
+    if paths.get("vqa_sharegpt"):
+        typer.echo(f"ShareGPT: {paths['vqa_sharegpt']}")
     typer.echo(f"Output directory: {paths['output_dir']}")
 
 

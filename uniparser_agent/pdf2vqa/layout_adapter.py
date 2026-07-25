@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.pdf2qa.image_export import (
+from uniparser_agent.pdf2vqa.image_export import (
     IMAGE_SOURCE_TYPES,
     export_images_from_pages_tree,
     iter_all_blocks,

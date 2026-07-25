@@ -3,7 +3,7 @@
 统一 CLI 工具：基于 UniParser 做文档解析，并提供三类功能——
 
 1. **化学建库**（`run` / `ingest` / `show` / `export`）：从科技文献抽取分子与反应，写入本地 SQLite。
-2. **习题 pdf2qa**（`qa`）：从习题/试卷 PDF 抽取问答对，详见 [pdf2qa/README.md](pdf2qa/README.md)。
+2. **习题 pdf2vqa**（`vqa`）：从习题/试卷 PDF 抽取多模态问答对，详见 [pdf2vqa/README.md](pdf2vqa/README.md)。
 3. **PDF 原位翻译**（`translate`）：基于 UniParser 版面块做视觉原位翻译，详见 [pdf2translate/README.md](pdf2translate/README.md)。
 
 [English README](README.md)
@@ -13,7 +13,7 @@
 - 手上有化学文献 PDF/图片，想整理成**可查询的分子与反应库**。
 - 文档已经用 UniParser 解析过，想**直接入库**，不必再调解析接口。
 - 需要查看**抽取统计**，或导出 **CSV** 做后续分析、人工核对。
-- 需要从习题卷抽取 **题干 / 答案 / 解析**（见 pdf2qa 说明）。
+- 需要从习题卷抽取 **题干 / 答案 / 解析（含配图 VQA）**（见 pdf2vqa 说明）。
 - 需要把 PDF **按原版面位置翻译成中文**（`zh-CN`；见 pdf2translate 说明）。
 
 ## 安装
@@ -35,12 +35,15 @@ export UNIPARSER_API_KEY="your-api-key"
 
 | 变量 | 作用 | 默认值 |
 |------|------|--------|
-| `UNIPARSER_API_KEY` | `parse`、`run`、`translate` 调用解析接口时使用 | 解析时必填 |
+| `UNIPARSER_API_KEY` | `parse`、`run`、`vqa`、`translate` 调用解析接口时使用 | 解析时必填 |
 | `UNIPARSER_BASE_URL` | UniParser API 地址 | `https://uniparser.dp.tech` |
 | `UNIPARSER_AGENT_DB` | 默认 SQLite 数据库路径 | `~/.uniparser-agent/chemistry.db` |
-| `PDF_TRANSLATE_API_KEY` | `translate` 使用的 LLM Key（可回退 `QA_LLM_API_KEY` / `ARK_API_KEY`） | 翻译时必填 |
-| `PDF_TRANSLATE_BASE_URL` | 翻译 LLM 地址 | Ark 默认 |
-| `PDF_TRANSLATE_MODEL` | 翻译 LLM 模型 | Ark 默认 |
+| `VQA_LLM_API_KEY` | `vqa` 使用的 LLM Key（可回退 `ARK_API_KEY`） | VQA 时必填 |
+| `VQA_LLM_BASE_URL` | VQA LLM 地址 | Ark 默认 |
+| `VQA_LLM_MODEL` | VQA LLM 模型 | Ark 默认 |
+| `PDF_TRANSLATE_API_KEY` | `translate` 使用的 LLM Key（可回退 `VQA_LLM_API_KEY` / `ARK_API_KEY`） | 翻译时必填 |
+| `PDF_TRANSLATE_BASE_URL` | 翻译 LLM 地址（可回退 `VQA_LLM_BASE_URL`） | Ark 默认 |
+| `PDF_TRANSLATE_MODEL` | 翻译 LLM 模型（可回退 `VQA_LLM_MODEL`） | Ark 默认 |
 
 ## 快速开始
 
@@ -206,18 +209,18 @@ uv run uniparser-agent show paper1 --db ./data/my-library.db
 
 ---
 
-### `qa` — 习题 QA 抽取
+### `vqa` — 习题 VQA 抽取
 
-从习题/试卷 PDF 抽取题干、答案与解析。完整说明见 [pdf2qa/README.md](pdf2qa/README.md)。
+从习题/试卷 PDF 抽取题干、答案与解析（含配图时输出 VQA）。产物含 `merged_vqa_pairs.*`、`vqa_images/`、`vqa_sharegpt.json`。完整说明见 [pdf2vqa/README.md](pdf2vqa/README.md)。
 
 ```bash
 # 单册
-uv run uniparser-agent qa /path/to/exam.pdf -o ./qa_out --overwrite
+uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
 
 # 题册 + 答案册（均为本地 PDF；先合并再一次解析）
-uv run uniparser-agent qa /path/to/questions.pdf \
+uv run uniparser-agent vqa /path/to/questions.pdf \
   --answer-pdf /path/to/answers.pdf \
-  -o ./qa_out \
+  -o ./vqa_out \
   --overwrite
 ```
 
@@ -226,7 +229,7 @@ uv run uniparser-agent qa /path/to/questions.pdf \
 | `INPUT` | 是* | 题册（或整卷 PDF）；仅在使用 `--pages-tree` 时可省略 |
 | `--answer-pdf` | 否 | 答案册本地 PDF（不可与 `--pages-tree` 同用） |
 | `--pages-tree` | 否 | 跳过 UniParser，复用已有 `pages_tree.json` |
-| `-o`, `--output-dir` | 否 | 输出目录，默认 `./qa_out` |
+| `-o`, `--output-dir` | 否 | 输出目录，默认 `./vqa_out` |
 | `--overwrite` | 否 | 输出目录已存在时先删除 |
 
 ---

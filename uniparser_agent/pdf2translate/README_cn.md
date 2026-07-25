@@ -18,7 +18,7 @@
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"   # 使用 --pages-tree 时可省略
-export PDF_TRANSLATE_API_KEY="your-llm-key"     # 或 QA_LLM_API_KEY / ARK_API_KEY
+export PDF_TRANSLATE_API_KEY="your-llm-key"     # 或 VQA_LLM_API_KEY / ARK_API_KEY
 ```
 
 可选环境变量：
@@ -28,7 +28,7 @@ export PDF_TRANSLATE_API_KEY="your-llm-key"     # 或 QA_LLM_API_KEY / ARK_API_K
 |------|------|--------|
 | `UNIPARSER_API_KEY` | UniParser 解析 API Key | 在线解析时必填 |
 | `UNIPARSER_BASE_URL` | UniParser 服务地址 | `https://uniparser.dp.tech` |
-| `PDF_TRANSLATE_API_KEY` | 翻译用 LLM Key | 可回退 `QA_LLM_API_KEY` / `ARK_API_KEY` |
+| `PDF_TRANSLATE_API_KEY` | 翻译用 LLM Key | 可回退 `VQA_LLM_API_KEY` / `ARK_API_KEY` |
 | `PDF_TRANSLATE_BASE_URL` | LLM Base URL | Ark 默认 |
 | `PDF_TRANSLATE_MODEL` | LLM 模型名 | Ark 默认 |
 | `PDF_TRANSLATE_BATCH_SIZE` | 每批翻译单元数 | `12` |

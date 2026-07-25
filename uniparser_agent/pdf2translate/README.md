@@ -18,7 +18,7 @@ Target language is fixed to **zh-CN**.
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"   # needed unless --pages-tree
-export PDF_TRANSLATE_API_KEY="your-llm-key"     # or QA_LLM_API_KEY / ARK_API_KEY
+export PDF_TRANSLATE_API_KEY="your-llm-key"     # or VQA_LLM_API_KEY / ARK_API_KEY
 ```
 
 Optional:
@@ -28,7 +28,7 @@ Optional:
 | ------------------------ | ----------------------- | ---------------------------------------------- |
 | `UNIPARSER_API_KEY`      | UniParser parse API key | required for live parse                        |
 | `UNIPARSER_BASE_URL`     | UniParser endpoint      | `https://uniparser.dp.tech`                    |
-| `PDF_TRANSLATE_API_KEY`  | LLM API key             | falls back to `QA_LLM_API_KEY` / `ARK_API_KEY` |
+| `PDF_TRANSLATE_API_KEY`  | LLM API key             | falls back to `VQA_LLM_API_KEY` / `ARK_API_KEY` |
 | `PDF_TRANSLATE_BASE_URL` | LLM base URL            | Ark default                                    |
 | `PDF_TRANSLATE_MODEL`    | LLM model               | Ark default                                    |
 | `PDF_TRANSLATE_BATCH_SIZE` | Units per LLM request | `12`                                           |

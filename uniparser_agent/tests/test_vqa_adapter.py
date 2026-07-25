@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from uniparser_agent.pdf2qa.layout_adapter import pages_tree_to_content_list
+from uniparser_agent.pdf2vqa.layout_adapter import pages_tree_to_content_list
 
 KIRA_TREE = Path("/Users/jiangyutong/Desktop/DP/test_pdf/kira/pages_tree.json")
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal_pages_tree.json"

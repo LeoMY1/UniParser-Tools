@@ -1,4 +1,4 @@
-"""Convert merged QA pairs with Markdown image refs into ShareGPT VQA format."""
+"""Convert merged VQA pairs with Markdown image refs into ShareGPT VQA format."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _index_images(images_dir: Path) -> dict[str, Path]:
     return index
 
 
-def convert_qa_pair_to_sharegpt(
+def convert_vqa_pair_to_sharegpt(
     qa: dict[str, Any],
     *,
     image_index: dict[str, Path],
@@ -97,7 +97,7 @@ def write_sharegpt(
 
     records: list[dict[str, Any]] = []
     for qa in merged_pairs:
-        item = convert_qa_pair_to_sharegpt(qa, image_index=index, base_dir=root)
+        item = convert_vqa_pair_to_sharegpt(qa, image_index=index, base_dir=root)
         if item is not None:
             records.append(item)
 

@@ -1,4 +1,4 @@
-"""Merge extracted question/answer fragments into final QA pairs."""
+"""Merge extracted question/answer fragments into final VQA pairs."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def refine_title(title: str, strict_title_match: bool = False) -> str:
             return title
 
 
-def merge_qa_pairs(
+def merge_vqa_pairs(
     extracted: list[dict[str, Any]],
     *,
     strict_title_match: bool = False,

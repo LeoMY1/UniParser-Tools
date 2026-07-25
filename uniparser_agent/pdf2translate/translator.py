@@ -67,13 +67,13 @@ class TranslateStats:
 def get_translate_api_key() -> str:
     key = (
         os.environ.get("PDF_TRANSLATE_API_KEY")
-        or os.environ.get("QA_LLM_API_KEY")
+        or os.environ.get("VQA_LLM_API_KEY")
         or os.environ.get("ARK_API_KEY")
         or ""
     ).strip()
     if not key:
         raise ValueError(
-            "PDF_TRANSLATE_API_KEY (or QA_LLM_API_KEY / ARK_API_KEY) is not set."
+            "PDF_TRANSLATE_API_KEY (or VQA_LLM_API_KEY / ARK_API_KEY) is not set."
         )
     return key
 
@@ -81,7 +81,7 @@ def get_translate_api_key() -> str:
 def get_translate_base_url() -> str:
     return (
         os.environ.get("PDF_TRANSLATE_BASE_URL")
-        or os.environ.get("QA_LLM_BASE_URL")
+        or os.environ.get("VQA_LLM_BASE_URL")
         or DEFAULT_BASE_URL
     ).strip().rstrip("/")
 
@@ -89,7 +89,7 @@ def get_translate_base_url() -> str:
 def get_translate_model() -> str:
     return (
         os.environ.get("PDF_TRANSLATE_MODEL")
-        or os.environ.get("QA_LLM_MODEL")
+        or os.environ.get("VQA_LLM_MODEL")
         or DEFAULT_MODEL
     ).strip()
 
