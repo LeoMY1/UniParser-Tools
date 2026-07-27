@@ -38,12 +38,12 @@ LIBRARY_EXPORTS: dict[str, str] = {
 
 
 def export_library_csv(store: ChemistryStore, out_dir: Path) -> dict[str, str]:
-    """Export documents and compounds across all documents."""
+    """Export complete document and compound rows without deduplication."""
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, str] = {}
     datasets = {
         "documents": store.fetch_table("documents"),
-        "compounds": store.fetch_library_compounds(),
+        "compounds": store.fetch_table("compounds"),
     }
     for name, filename in LIBRARY_EXPORTS.items():
         path = out_dir / filename

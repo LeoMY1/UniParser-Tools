@@ -70,6 +70,7 @@ def test_export_library_csv(db_path: Path, tmp_path: Path) -> None:
     with ChemistryStore(db_path) as store:
         stats = store.get_library_stats()
         assert stats["documents"] == 2
+        expected_compounds = stats["compounds"]
         paths = export_library_csv(store, tmp_path / "library")
 
     assert Path(paths["documents"]).exists()
@@ -80,8 +81,9 @@ def test_export_library_csv(db_path: Path, tmp_path: Path) -> None:
 
     with (tmp_path / "library" / "compounds.csv").open(encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
-    assert len(rows) >= 2
-    # I-1 / CCO should appear once in library dedupe with doc_count 2
+    assert len(rows) == expected_compounds
+    assert {"doc_id", "role", "semantic_summary", "activities_json", "enrich_json"} <= set(rows[0])
+    # Full-library export preserves the document-level row from each document.
     ethanol = [r for r in rows if r.get("canonical_smiles") == "CCO" or r.get("smi") == "CCO"]
-    assert ethanol
-    assert int(ethanol[0]["doc_count"]) == 2
+    assert len(ethanol) == 2
+    assert {r["doc_id"] for r in ethanol} == {"doc-a", "doc-b"}

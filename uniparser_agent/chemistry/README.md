@@ -100,7 +100,7 @@ uv run uniparser-agent export CN115974847A --db /path/to/chemistry.db
 - `<DOC_ID>_documents.csv` — 文档信息
 - `<DOC_ID>_compounds.csv` — 化合物列表
 
-全库导出对应为 `documents.csv`、`compounds.csv`。
+全库导出对应为 `documents.csv`、`compounds.csv`。`--all` 会逐行完整导出数据库中的文档级化合物记录，不做跨文档去重，并保留 `doc_id`、`role`、`semantic_summary`、`activities_json`、`enrich_json` 等字段。
 
 ## 如何读导出结果
 
