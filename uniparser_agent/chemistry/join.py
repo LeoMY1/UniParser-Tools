@@ -9,9 +9,7 @@ from typing import Any
 from uniparser_agent.chemistry.tables import (
     ActivityRow,
     CatalogRow,
-    extract_activity_tables,
     extract_catalog_tables,
-    extract_paragraphs,
     normalize_label,
     walk_blocks,
 )
@@ -52,12 +50,18 @@ class LogicalCompound:
 
 
 def truncate_nmr(text: str, max_len: int = 500) -> str:
-    text = re.sub(
-        r"(NMR|HRMS|ESI|δ\s*=)[\s\S]{40,}",
-        r"\1 [...truncated...]",
-        text,
-        flags=re.IGNORECASE,
-    )
+    """Legacy helper: compact spectral peaks line-by-line, never across units."""
+    compacted: list[str] = []
+    spectral = re.compile(r"(NMR|HRMS|ESI|δ\s*=|核磁|质谱)", re.IGNORECASE)
+    for line in text.splitlines():
+        match = spectral.search(line)
+        if match and len(line) - match.start() > 100:
+            prefix = line[: match.start()].rstrip()
+            marker = f"{match.group(1)} [spectral peaks omitted]"
+            compacted.append(" ".join(part for part in (prefix, marker) if part))
+        else:
+            compacted.append(line)
+    text = "\n".join(compacted)
     if len(text) > max_len:
         return text[: max_len - 15] + " [...truncated]"
     return text
@@ -144,9 +148,9 @@ def join_compounds(
     molecules: list[MoleculeHit],
     catalog: list[CatalogRow],
     activities: list[ActivityRow],
-    paragraphs: dict[int, list[str]],
 ) -> list[LogicalCompound]:
     compounds: dict[str, LogicalCompound] = {}
+    del doc_id  # reserved for future doc-specific policy
 
     def upsert(key: str, **kwargs: Any) -> LogicalCompound:
         if key not in compounds:
@@ -185,9 +189,29 @@ def join_compounds(
             source_type="catalog_table",
         )
 
-    for mol in molecules:
+    # Insert labeled structures first so exact unlabeled duplicates can be
+    # folded into their stable label instead of becoming separate ``smi:`` cards.
+    ordered_molecules = [m for m in molecules if m.label] + [
+        m for m in molecules if not m.label
+    ]
+    smi_to_labeled: dict[str, str] = {}
+    for key, compound in compounds.items():
+        if not compound.smi or not compound.label or compound.markush:
+            continue
+        existing = smi_to_labeled.get(compound.smi)
+        smi_to_labeled[compound.smi] = (
+            key if not existing or existing == key else ""
+        )
+    for mol in ordered_molecules:
         label = mol.label
-        if not label and mol.smi:
+        merged_label = (
+            smi_to_labeled.get(mol.smi)
+            if not label and mol.smi
+            else None
+        )
+        if merged_label:
+            key = merged_label
+        elif not label and mol.smi:
             key = f"smi:{mol.smi}"
         elif label:
             key = label
@@ -210,6 +234,9 @@ def join_compounds(
             caption=mol.caption,
             source_type="molecule_node" if key not in compounds or not compounds[key].catalog_rows else "merged",
         )
+        if label and mol.smi and not mol.markush:
+            existing = smi_to_labeled.get(mol.smi)
+            smi_to_labeled[mol.smi] = key if not existing or existing == key else ""
 
     for act in activities:
         targets: list[str] = []
@@ -234,23 +261,9 @@ def join_compounds(
             if re.match(r"^I-(\d+)$", t):
                 compounds[t].example_no = compounds[t].example_no or t.split("-", 1)[1]
 
-    for key, c in compounds.items():
-        snippets: list[str] = []
-        needles = [c.label, key]
-        m = re.match(r"^I-(\d+)$", key)
-        if m:
-            needles.append(f"实施例{m.group(1)}")
-            needles.append(f"实施例 {m.group(1)}")
-        anchor = c.pages[0] if c.pages else 0
-        for page in sorted(set(c.pages) | {p for p in paragraphs if abs(p - anchor) <= 1}):
-            for para in paragraphs.get(page, []):
-                if any(n and n in para for n in needles):
-                    snippets.append(truncate_nmr(para))
-                if len(snippets) >= 3:
-                    break
-            if len(snippets) >= 3:
-                break
-        c.local_context = "\n".join(snippets)
+    # local_context is filled by Phase 2a LLM linking (enrich), not tag-truncated snippets.
+    for _key, c in compounds.items():
+        c.local_context = ""
         if c.catalog_rows and c.activity_rows:
             c.source_type = "merged"
         elif c.catalog_rows:
@@ -293,7 +306,6 @@ def build_logical_compounds(pages_tree_doc: dict[str, Any], doc_id: str) -> list
     pages = pages_tree_doc.get("pages_tree") or []
     molecules = extract_molecules(pages)
     catalog = extract_catalog_tables(pages)
-    activities = extract_activity_tables(pages)
-    paragraphs = extract_paragraphs(pages)
-    compounds = join_compounds(doc_id, molecules, catalog, activities, paragraphs)
+    # Bioactivity is extracted later by the dedicated LLM table stage.
+    compounds = join_compounds(doc_id, molecules, catalog, [])
     return select_library_compounds(doc_id, compounds)

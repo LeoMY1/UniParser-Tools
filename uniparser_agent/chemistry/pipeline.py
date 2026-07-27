@@ -40,6 +40,7 @@ def ingest_pages_tree(
     compounds = enrich_compounds(
         resolved_doc_id,
         compounds,
+        pages_tree_doc=pages_tree_doc,
         llm_config=llm_config,
         skip_enrich=skip_enrich,
     )
