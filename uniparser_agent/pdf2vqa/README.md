@@ -1,209 +1,335 @@
 # 习题 VQA 抽取（`uniparser-agent vqa`）
 
-从习题 / 试卷类 PDF（或图片、公开 PDF URL）中抽取结构化 VQA 问答对：题干、短答案、解析；若版面块带图片 `source`，会落盘并构成 **VQA** 训练样本（Markdown 图引用 + ShareGPT）。
+从习题、试卷、题册或答案册中提取结构化问答数据，包括题号、题干、短答案和详细解析，并生成适合题库整理、人工检查或模型训练的 JSONL、Markdown 和 ShareGPT 数据。
 
-解析使用 [UniParser](https://uniparser.dp.tech/)（默认 `SCIENTIFIC_PAPER_TRIGGER`，不单独改 figure 开关），问答抽取使用任意 **OpenAI 兼容** Chat Completions 接口（通过 `OPENAI_*` 配置）。
+支持本地 PDF、图片和公开 PDF URL；题册与答案册分开时，也可以同时输入两个本地 PDF 自动配对。
 
-## 能做什么
+## 核心能力
 
-- 输入本地 **PDF / 图片**，或公开 **PDF URL**
-- 先调用 UniParser 得到版面树 `pages_tree.json`
-- 将版面块整理为带 `id` 的内容列表（含可导出的配图），交给大模型按题号切分 QA
-- 合并题干与答案/解析，输出：
-  - `merged_vqa_pairs.jsonl`（结构化主结果，题干/解析可含 `![](vqa_images/...)`）
-  - `merged_vqa_pairs.md`（人工阅读）
-  - `vqa_images/`（从块 `source` 解码/拷贝的图片）
-  - `vqa_sharegpt.json`（LLaMA-Factory 风格 `messages` + `images`）
-
-已有 UniParser 解析结果时，可用 `--pages-tree` 跳过解析，只跑抽取（仍会从 tree 导出图片）。
-
-本功能与化学分子/反应入库（`run` / `ingest`）相互独立，不写化学 SQLite 库。
-
-## 环境要求
-
-- Python 3.11+
-- 已安装 `uniparser-agent`（见下方安装）
-- **UniParser API Key**（主路径解析时需要，账户需有可用额度）
-- **LLM 配置**：`OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`（无内置默认）
+- 从习题或试卷中提取题号、题干、答案和解析
+- 支持题目与答案位于同一文档
+- 支持“题册 + 答案册”两个独立 PDF，并自动配对相同题号
+- 保留题干和解析中的公式
+- 导出题目相关图片，生成图文结合的 VQA 样本
+- 输出 JSONL 和 Markdown，方便数据处理与人工检查
+- 输出 ShareGPT 格式，可用于多模态或纯文本模型训练
+- 支持复用已有 `pages_tree.json`，方便更换模型后重新抽取
 
 ## 安装
+
+运行要求：
+
+- Python 3.11+
+- 已安装 `uniparser-agent`
+- 输入原始文档时，需要 UniParser API Key
+- OpenAI 兼容的 LLM 服务
+
+安装项目依赖：
 
 ```bash
 cd uniparser_agent
 uv sync
 ```
 
-或在已有虚拟环境中：
+或在已有虚拟环境中安装：
 
 ```bash
 cd uniparser_agent
 uv pip install -e ".[dev]"
 ```
 
+
+
 ## 配置
 
-### 必填（按使用路径）
-
-| 变量 | 何时需要 | 说明 |
-|------|----------|------|
-| `UNIPARSER_API_KEY` | 输入 PDF / 图片 / URL 时 | UniParser 云端解析 |
-| `OPENAI_API_KEY` | 始终 | LLM API Key |
-| `OPENAI_BASE_URL` | 始终 | OpenAI 兼容接口根地址（如 `.../v1`） |
-| `OPENAI_MODEL` | 始终 | 模型名 |
+设置 UniParser 和 LLM 环境变量：
 
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"
 export OPENAI_API_KEY="your-llm-key"
-export OPENAI_BASE_URL="http://192.168.198.191:8009/v1"   # 或其它兼容服务
-export OPENAI_MODEL="Qwen3.5-397B-A17B-FP8"
+export OPENAI_BASE_URL="https://example.com/v1"
+export OPENAI_MODEL="your-model"
 ```
 
-也可在命令行覆盖：
 
-```bash
-uv run uniparser-agent vqa exam.pdf -o ./vqa_out \
-  --api-key "$OPENAI_API_KEY" \
-  --base-url "$OPENAI_BASE_URL" \
-  --model "$OPENAI_MODEL"
-```
+| 变量                   | 是否必填               | 用途                 |
+| -------------------- | ------------------ | ------------------ |
+| `UNIPARSER_API_KEY`  | 输入 PDF、图片或 URL 时必填 | 解析原始文档             |
+| `OPENAI_API_KEY`     | 必填                 | 调用问答抽取模型           |
+| `OPENAI_BASE_URL`    | 必填                 | OpenAI 兼容服务地址      |
+| `OPENAI_MODEL`       | 必填                 | 问答抽取模型名称           |
+| `UNIPARSER_BASE_URL` | 可选                 | 自定义 UniParser 服务地址 |
 
-### 可选
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `UNIPARSER_BASE_URL` | `https://uniparser.dp.tech` | UniParser 服务地址 |
+使用已有 `pages_tree.json` 时不需要 `UNIPARSER_API_KEY`。
+
+也可以通过 `--api-key`、`--base-url` 和 `--model` 在命令行中覆盖 LLM 配置。
+
+不要把真实 API Key 写入源码或提交到仓库。
 
 ## 快速开始
 
-### 从 PDF 一键抽取
+
+
+### 从一个 PDF 中抽取
+
+适用于题目、答案和解析位于同一文档：
 
 ```bash
-cd uniparser_agent
-uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
+uv run uniparser-agent vqa /path/to/exam.pdf \
+  -o ./vqa_out
 ```
 
-成功后终端会打印合并题量，以及 JSONL / Markdown 路径。
+完成后主要查看：
 
-### 题册 + 答案册双 PDF
+```text
+vqa_out/merged_vqa_pairs.jsonl
+vqa_out/merged_vqa_pairs.md
+```
 
-题册与答案册分开时，先按「题册 → 答案册」合并为一个 PDF，再走一次 UniParser 与一次 LLM 抽取；配对仍由 `merge_vqa_pairs` 按题号 / 章节完成。
 
-两侧都必须是**本地 PDF**（不支持 URL/图片与答案册混用；不可与 `--pages-tree` 同用）：
+
+## 使用指南
+
+
+
+### 题册与答案册分别存放
+
+题册和答案册都必须是本地 PDF：
 
 ```bash
 uv run uniparser-agent vqa /path/to/questions.pdf \
   --answer-pdf /path/to/answers.pdf \
-  -o ./vqa_out \
-  --overwrite
+  -o ./vqa_out
 ```
 
-成功后输出目录会包含 `merge/merged.pdf`，`run_meta.json` 中 `parse.mode` 为 `dual_pdf`。
+程序会按“题册在前、答案册在后”的顺序处理，并根据章节和题号配对题干、答案与解析。
 
-### 使用已有解析结果（跳过 UniParser）
+`--answer-pdf` 不能与图片、URL 或 `--pages-tree` 同时使用。
 
-适合解析已完成、或只想重跑 LLM 抽取时：
+### 输入图片
+
+```bash
+uv run uniparser-agent vqa /path/to/page.png \
+  -o ./vqa_out
+```
+
+适合单页试题、截图或扫描图片。
+
+### 输入公开 PDF URL
+
+```bash
+uv run uniparser-agent vqa "https://example.com/exam.pdf" \
+  -o ./vqa_out
+```
+
+URL 必须能够公开访问，并直接返回 PDF。
+
+### 使用已有解析结果
+
+如果文档已完成 UniParser 解析：
 
 ```bash
 uv run uniparser-agent vqa \
   --pages-tree /path/to/pages_tree.json \
-  -o ./vqa_out \
-  --overwrite
+  -o ./vqa_out
 ```
 
-此时不需要 `UNIPARSER_API_KEY`，仍需要 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`。
+该方式适合更换模型或重新抽取，不会再次消耗 UniParser 解析额度。
 
-### 输入图片或公开 PDF URL
-
-```bash
-uv run uniparser-agent vqa /path/to/page.png -o ./vqa_out --overwrite
-uv run uniparser-agent vqa "https://example.com/paper.pdf" -o ./vqa_out --overwrite
-```
-
-## 命令参数
+## 常用参数
 
 ```text
 uniparser-agent vqa [OPTIONS] [INPUT_PATH]
 ```
 
-| 参数 | 说明 |
-|------|------|
-| `INPUT_PATH` | 本地 PDF/图片路径，或公开 PDF URL；与 `--pages-tree` 二选一 |
-| `-o` / `--output-dir` | 输出目录；默认当前目录下的 `vqa_out` |
-| `--answer-pdf` | 答案册本地 PDF；与题册合并后再解析（不可与 `--pages-tree` 同用） |
-| `--pages-tree` | 已有 `pages_tree.json` 路径，跳过 UniParser |
-| `--overwrite` | 若输出目录已存在则清空重建 |
-| `--json` | 向 stdout 打印机器可读的运行摘要 JSON |
 
-查看帮助：
+| 参数                    | 用途                     |
+| --------------------- | ---------------------- |
+| `INPUT_PATH`          | 本地 PDF、图片或公开 PDF URL   |
+| `-o` / `--output-dir` | 输出目录；默认 `./vqa_out`    |
+| `--answer-pdf`        | 输入独立答案册 PDF            |
+| `--pages-tree`        | 复用已有 `pages_tree.json` |
+| `--overwrite`         | 删除并重建已存在的输出目录          |
+| `--json`              | 在终端输出机器可读的运行摘要         |
+
+
+输入规则：
+
+- `INPUT_PATH` 与 `--pages-tree` 二选一
+- `--answer-pdf` 必须与题册 PDF 一起使用
+- `--answer-pdf` 与 `--pages-tree` 不能同时使用
+
+查看全部参数：
 
 ```bash
 uv run uniparser-agent vqa --help
 ```
 
-## 流水线说明
+
+
+## 输出结果
+
+默认输出目录如下：
 
 ```text
-PDF / 图片 / URL
-    → UniParser 解析（或 --pages-tree）
-    → pages_tree.json
-    → 版面适配（去掉页眉页脚等噪声，公式块取 LaTeX；导出配图）
-    → llm_content_list.json + vqa_images/
-    → 大模型按块 id 切分 VQA
-    → 解析并合并题干 / 答案 / 解析
-    → merged_vqa_pairs.jsonl + .md
-    → vqa_sharegpt.json
+vqa_out/
+├── merged_vqa_pairs.jsonl
+├── merged_vqa_pairs.md
+├── vqa_sharegpt.json
+├── vqa_images/
+├── run_meta.json
+├── parse/
+│   └── pages_tree.json
+├── merge/
+│   └── merged.pdf
+├── extracted_vqa.jsonl
+├── llm_content_list.json
+└── llm_raw_response.txt
 ```
 
-## 输出文件
+`merge/merged.pdf` 只在使用“题册 + 答案册”模式时生成。`vqa_images/` 中是否有图片取决于原始解析结果。
 
-默认写在 `-o` 指定目录下：
+### 主要结果
 
-| 路径 | 含义 |
-|------|------|
-| `parse/pages_tree.json` | UniParser 版面树（主路径由解析生成；`--pages-tree` 时为拷贝） |
-| `parse/*.md` 等 | 主路径下 UniParser 的 Markdown 与元数据（与 `parse` 命令一致） |
-| `llm_content_list.json` | 带全局 `id` 的扁平内容列表，作为 LLM 输入（可含 `type:image`） |
-| `llm_raw_response.txt` | 大模型原始回复（含 `<chapter>` / `<vqa_pair>` 与块 id） |
-| `extracted_vqa.jsonl` | 按 id 还原文本后的 QA 片段（合并前） |
-| `merged_vqa_pairs.jsonl` | **主结果**：合并后的问答对，一行一条 JSON |
-| `merged_vqa_pairs.md` | 主结果的 Markdown 预览 |
-| `vqa_images/` | 从 pages_tree 块 `source` 导出的配图文件 |
-| `vqa_sharegpt.json` | ShareGPT 多模态样本：`messages` + `images`（绝对路径） |
-| `run_meta.json` | 模型、耗时、题量、图片数、各文件路径等运行信息 |
 
-### VQA / ShareGPT
+| 文件                       | 用途                     |
+| ------------------------ | ---------------------- |
+| `merged_vqa_pairs.jsonl` | **结构化主结果**，每行一条完整问答对   |
+| `merged_vqa_pairs.md`    | 便于人工阅读和检查的 Markdown 版本 |
+| `vqa_sharegpt.json`      | ShareGPT 格式的模型训练数据     |
+| `vqa_images/`            | 与题目或解析相关的图片            |
+| `run_meta.json`          | 本次运行的模型、题量、图片数、耗时和文件路径 |
 
-- 默认 parse 模板下 `figure`/`chart` 可能关闭，**只有 tree 里实际带 `source` 的块才会进 `vqa_images/`**（如 molecule、部分 figure 子块等）。
-- ShareGPT 中 user 消息对每张图前置一个 `<image>` 占位符，与 `images` 数组长度一致；assistant 为短答案 + 去图后的解析。
-- 无图时 `images` 为空列表，退化为纯文本问答（无图），仍合法。
 
-### `merged_vqa_pairs.jsonl` 字段
 
-每行一个对象，常见字段：
 
-| 字段 | 说明 |
-|------|------|
-| `label` | 题号（整数） |
-| `question` | 题干（可含 LaTeX） |
-| `answer` | 短答案（如选项字母、填空结果） |
-| `solution` | 思路 / 解析等正文 |
-| `question_chapter_title` / `answer_chapter_title` | 章节或栏目标题（若能抽到） |
+### 辅助结果
 
-日常使用优先查看 **`merged_vqa_pairs.jsonl`** 与 **`merged_vqa_pairs.md`**。
 
-## 使用注意
+| 文件                      | 用途                     |
+| ----------------------- | ---------------------- |
+| `parse/pages_tree.json` | UniParser 解析结果，可用于重新抽取 |
+| `merge/merged.pdf`      | 合并后的题册与答案册，仅双 PDF 模式生成 |
+| `extracted_vqa.jsonl`   | 合并前的题目、答案和解析片段         |
+| `llm_content_list.json` | 送入问答抽取阶段的文档内容          |
+| `llm_raw_response.txt`  | 模型原始返回，主要用于问题排查        |
 
-- UniParser 账户需有足够额度，否则解析会失败；可先用 `uniparser-agent parse` 验证，或改用 `--pages-tree`。
-- 大模型调用可能较久（试卷越长、公式越多越慢）；超时默认较长，适合批量离线跑。
-- 输出目录已存在时必须加 `--overwrite`，否则会报错退出，避免误覆盖。
-- 抽取质量依赖版面解析与模型；复杂公式粘连、跨页题目偶发切分不准时，可用 `llm_content_list.json` 与 `llm_raw_response.txt` 对照排查。
 
-## 与其它命令的关系
 
-| 命令 | 用途 |
-|------|------|
-| `uniparser-agent parse` | 只做 UniParser 解析 |
-| `uniparser-agent vqa` | 解析（可选）+ 习题 VQA 抽取 |
-| `uniparser-agent run` / `ingest` | 化学分子与反应建库（与 VQA 抽取无关） |
 
-更完整的化学库用法见包根目录 [README_cn.md](../README_cn.md)。
+### JSONL 数据格式
+
+`merged_vqa_pairs.jsonl` 每行是一道题：
+
+```json
+{
+  "question_chapter_title": "第一章",
+  "answer_chapter_title": "第一章答案",
+  "label": 1,
+  "question": "题干内容",
+  "answer": "A",
+  "solution": "详细解析"
+}
+```
+
+字段说明：
+
+
+| 字段                       | 含义                |
+| ------------------------ | ----------------- |
+| `question_chapter_title` | 题目所在章节或栏目         |
+| `answer_chapter_title`   | 答案所在章节或栏目         |
+| `label`                  | 题号                |
+| `question`               | 题干，可包含公式和图片引用     |
+| `answer`                 | 短答案，如选项字母、数值或填空结果 |
+| `solution`               | 解题过程或详细解析         |
+
+
+题目没有章节标题时，对应字段可能为空。
+
+### ShareGPT 数据格式
+
+`vqa_sharegpt.json` 是 JSON 数组，每条数据包含：
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "<image>题干内容"
+    },
+    {
+      "role": "assistant",
+      "content": "答案\n\n详细解析"
+    }
+  ],
+  "images": [
+    "/absolute/path/to/vqa_images/question_1.png"
+  ]
+}
+```
+
+- 有图片时，user 内容包含对应数量的 `<image>` 标记
+- `images` 保存相关图片路径
+- 无图片时，`images` 为空数组，可作为纯文本问答使用
+- 没有题干或没有答案/解析的数据不会进入 ShareGPT 主结果
+
+
+
+## 结果检查
+
+1. 打开 `merged_vqa_pairs.md`，快速检查题目、答案和解析是否配对。
+2. 使用 `merged_vqa_pairs.jsonl` 进行数据处理或导入题库。
+3. 训练模型前检查 `vqa_sharegpt.json` 中的图片路径是否在目标环境可访问。
+4. 如果题目数量明显偏少，查看 `extracted_vqa.jsonl` 判断是抽取不足还是配对失败。
+5. 如果公式、图片或章节识别不正确，结合 `parse/pages_tree.json` 检查原始解析质量。
+
+
+
+## 常见问题
+
+
+
+### 为什么最终题目数量比原文少？
+
+主结果只保留能够识别题号并完成题目与答案配对的数据。题号不清晰、章节不一致、答案缺失或模型未正确识别都可能导致数量减少。
+
+### 为什么题目图片没有导出？
+
+只有原始解析结果中实际包含图片数据的内容才能写入 `vqa_images/`。PDF 中看得到图片不代表解析结果一定包含可导出的图片。
+
+### 题册和答案册可以使用 URL 吗？
+
+不可以。双文档模式要求题册和答案册都是本地 PDF。单文档模式支持公开 PDF URL。
+
+### 为什么输出目录已存在时报错？
+
+程序默认避免覆盖已有结果。确认可以删除旧目录后，添加 `--overwrite`。
+
+```bash
+uv run uniparser-agent vqa /path/to/exam.pdf \
+  -o ./vqa_out \
+  --overwrite
+```
+
+
+
+### 如何更换模型后重新抽取？
+
+保留首次运行生成的 `parse/pages_tree.json`，然后使用 `--pages-tree` 重新运行。
+
+### ShareGPT 中为什么使用绝对图片路径？
+
+结果会记录当前运行环境中的图片绝对路径。将数据迁移到其他机器或训练环境后，需要同步图片并按需要更新路径。
+
+## 当前限制
+
+- 双 PDF 模式只支持本地 PDF
+- 题号需要能够识别为正整数
+- 题目和答案主要依靠章节与题号配对
+- 跨页题目、复杂多栏版式或严重粘连内容可能配对不准确
+- 图片导出取决于 UniParser 是否提供可用图片数据
+- 公式和题目结构的准确性依赖原始文档解析质量
+- 抽取结果适合批量整理，但正式训练或入库前仍建议抽样检查
+

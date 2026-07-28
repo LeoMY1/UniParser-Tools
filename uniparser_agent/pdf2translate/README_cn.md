@@ -19,8 +19,8 @@
 ```bash
 export UNIPARSER_API_KEY="your-uniparser-key"   # 使用 --pages-tree 时可省略
 export OPENAI_API_KEY="your-llm-key"
-export OPENAI_BASE_URL="http://192.168.198.191:8009/v1"   # 或其它 OpenAI 兼容地址
-export OPENAI_MODEL="Qwen3.5-397B-A17B-FP8"
+export OPENAI_BASE_URL="https://example.com/v1"
+export OPENAI_MODEL="your-model"
 ```
 
 可选环境变量：

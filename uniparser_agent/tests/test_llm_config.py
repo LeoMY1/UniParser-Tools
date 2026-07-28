@@ -78,7 +78,7 @@ def test_qwen_extra_body_injected() -> None:
     cfg = LLMConfig(
         api_key="sk",
         base_url="https://api.openai.com/v1",
-        model="Qwen3.5-397B-A17B-FP8",
+        model="qwen-test-model",
         enable_thinking=False,
     )
     assert cfg.resolved_extra_body() == {
