@@ -1,86 +1,11 @@
 # UniParser Agent
 
-Command-line tools for UniParser document parsing and exam VQA extraction.
+UniParser Agent 是基于 UniParser 的文档处理包，提供统一的命令行入口：
 
-- `parse`: parse a local PDF/image or public PDF URL into `pages_tree.json` and Markdown.
-- `vqa`: extract question, answer, and solution pairs from a document or an existing
-  `pages_tree.json`; figures are exported for multimodal datasets.
+- `parse`：将 PDF、图片或公开 PDF URL 解析为结构化文档。
+- `vqa`：从习题、试卷、题册或答案册中提取题目、答案、解析和相关图片，并生成结构化 VQA 数据。
 
-[中文文档](README_cn.md) · [Full pdf2vqa documentation](pdf2vqa/README.md)
+本包包含文档解析、LLM 调用和 pdf2vqa 流程所需的公共模块。
 
-## Install
-
-```bash
-cd uniparser_agent
-uv sync
-```
-
-Python 3.11 or newer is required.
-
-## Configuration
-
-```bash
-export UNIPARSER_API_KEY="your-uniparser-key"
-export OPENAI_API_KEY="your-llm-key"
-export OPENAI_BASE_URL="https://example.com/v1"
-export OPENAI_MODEL="your-model"
-```
-
-`UNIPARSER_API_KEY` is not needed when `vqa` receives an existing
-`pages_tree.json`. The LLM options can also be supplied with `--api-key`,
-`--base-url`, and `--model`.
-
-## Parse
-
-```bash
-uv run uniparser-agent parse /path/to/document.pdf
-uv run uniparser-agent parse /path/to/document.pdf -o ./parsed --overwrite
-```
-
-## Extract VQA pairs
-
-Single booklet:
-
-```bash
-uv run uniparser-agent vqa /path/to/exam.pdf -o ./vqa_out --overwrite
-```
-
-Question and answer booklets:
-
-```bash
-uv run uniparser-agent vqa /path/to/questions.pdf \
-  --answer-pdf /path/to/answers.pdf \
-  -o ./vqa_out \
-  --overwrite
-```
-
-Reuse a prior parse:
-
-```bash
-uv run uniparser-agent vqa \
-  --pages-tree /path/to/pages_tree.json \
-  -o ./vqa_out \
-  --overwrite
-```
-
-The VQA output includes:
-
-- `merged_vqa_pairs.jsonl`
-- `merged_vqa_pairs.md`
-- `vqa_images/`
-- `vqa_sharegpt.json`
-- `run_meta.json`
-
-See [pdf2vqa/README.md](pdf2vqa/README.md) for the full CLI reference,
-pipeline stages, schemas, and output layout.
-
-## Test
-
-```bash
-uv run pytest \
-  tests/test_vqa_adapter.py \
-  tests/test_vqa_parser.py \
-  tests/test_vqa_images.py \
-  tests/test_pdf_merger.py \
-  tests/test_llm_config.py
-```
+安装方式、配置说明、命令参数、处理流程和输出格式，请参阅
+[pdf2vqa 完整文档](pdf2vqa/README.md)。
