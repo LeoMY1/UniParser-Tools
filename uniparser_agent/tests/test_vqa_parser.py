@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from uniparser_agent.pdf2vqa.answer_recovery import recover_answer
 from uniparser_agent.pdf2vqa.output_parser import parse_llm_response
 from uniparser_agent.pdf2vqa.vqa_merger import jsonl_to_md, merge_vqa_pairs
 
@@ -20,7 +21,8 @@ def test_parse_and_merge_contiguous_qa():
     response = (
         "<chapter><title>0</title>"
         "<vqa_pair><label>1</label><question>1,2</question>"
-        "<answer>B</answer><solution>3,4</solution></vqa_pair>"
+        "<answer>B</answer><answer_source_ids>3</answer_source_ids>"
+        "<solution>3,4</solution></vqa_pair>"
         "</chapter>"
     )
     extracted = parse_llm_response(response, content)
@@ -72,6 +74,69 @@ def test_merge_question_only_and_answer_only_rows():
     assert "2+2=4" in by_label[1]["solution"]
     assert by_label[2]["answer"] == "6"
     assert "3+3=6" in by_label[2]["solution"]
+
+
+def test_answer_recovery_restores_exact_source_latex() -> None:
+    exact_answer = (
+        r"A = - E _ {\text {电子}} ^ {0} (d ^ {0}) ^ {1 2}, "
+        r"B = - 2 E _ {\text {电子}} ^ {0} (d ^ {0}) ^ {6}"
+    )
+    content = [
+        {"id": 0, "type": "text", "text": "Chapter"},
+        {"id": 1, "type": "equation", "text": f"答案：{exact_answer}"},
+    ]
+    response = (
+        "<chapter><title>0</title>"
+        "<vqa_pair><label>1</label><question></question>"
+        "<answer>A = -E_电子^0(d^0)^12, B = -2E_电子^0(d^0)^6</answer>"
+        "<answer_source_ids>1</answer_source_ids><solution>1</solution></vqa_pair>"
+        "</chapter>"
+    )
+
+    extracted = parse_llm_response(response, content)
+
+    assert extracted[0]["answer"] == exact_answer
+    assert extracted[0]["answer_source_ids"] == "1"
+
+
+def test_answer_recovery_rejects_changed_numeric_content() -> None:
+    content = [{"id": 0, "type": "text", "text": "答案：x = 12"}]
+    response = (
+        "<chapter><title></title>"
+        "<vqa_pair><label>1</label><question></question>"
+        "<answer>x = 13</answer><answer_source_ids>0</answer_source_ids>"
+        "<solution></solution></vqa_pair></chapter>"
+    )
+
+    extracted = parse_llm_response(response, content)
+
+    assert extracted[0]["answer"] == ""
+
+
+def test_answer_recovery_preserves_latex_wrappers_and_braces() -> None:
+    assert recover_answer("R", r"答案：\mathbb{R}") == r"\mathbb{R}"
+    assert recover_answer(r"\frac12", r"答案：\frac{1}{2}") == r"\frac{1}{2}"
+
+
+def test_answer_recovery_uses_high_confidence_fuzzy_source_span() -> None:
+    source_answer = "A = 1; B = 2; C = 3; D = 4; E = 5; F = 6"
+    llm_answer = "A = 1, B = 2; C = 3; D = 4; E = 5; F = 6"
+
+    assert recover_answer(llm_answer, f"答案：{source_answer}") == source_answer
+
+
+def test_answer_without_source_ids_is_not_trusted() -> None:
+    content = [{"id": 0, "type": "text", "text": "答案：B"}]
+    response = (
+        "<chapter><title></title>"
+        "<vqa_pair><label>1</label><question></question>"
+        "<answer>B</answer><solution></solution></vqa_pair></chapter>"
+    )
+
+    extracted = parse_llm_response(response, content)
+
+    assert extracted[0]["answer"] == ""
+    assert extracted[0]["answer_source_ids"] == ""
 
 
 def test_markdown_formats_formula_answers_as_inline_latex(tmp_path: Path) -> None:

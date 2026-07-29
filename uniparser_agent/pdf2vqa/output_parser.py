@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from uniparser_agent.pdf2vqa.answer_recovery import recover_answer
+
 
 def _id_to_text(input_ids: str, content_list: list[dict[str, Any]], image_prefix: str = "vqa_images") -> str:
     texts: list[str] = []
@@ -51,16 +53,22 @@ def parse_llm_response(
         for pair in re.findall(r"<vqa_pair>(.*?)</vqa_pair>", chapter_block, flags=re.DOTALL):
             q_match = re.search(r"<question>(.*?)</question>", pair, flags=re.DOTALL)
             a_match = re.search(r"<answer>(.*?)</answer>", pair, flags=re.DOTALL)
+            answer_source_match = re.search(r"<answer_source_ids>(.*?)</answer_source_ids>", pair, flags=re.DOTALL)
             s_match = re.search(r"<solution>(.*?)</solution>", pair, flags=re.DOTALL)
             label_match = re.search(r"<label>(.*?)</label>", pair, flags=re.DOTALL)
             if not label_match:
                 continue
             if not ((q_match and label_match) or (a_match and label_match) or (s_match and label_match)):
                 continue
+            raw_answer = a_match.group(1).strip() if a_match else ""
+            answer_source_ids = answer_source_match.group(1).strip() if answer_source_match else ""
+            answer_source = _id_to_text(answer_source_ids, content_list, image_prefix) if answer_source_ids else ""
+            answer = recover_answer(raw_answer, answer_source) or ""
             qa_list.append(
                 {
                     "question": (_id_to_text(q_match.group(1).strip(), content_list, image_prefix) if q_match else ""),
-                    "answer": a_match.group(1).strip() if a_match else "",
+                    "answer": answer,
+                    "answer_source_ids": answer_source_ids,
                     "solution": (_id_to_text(s_match.group(1).strip(), content_list, image_prefix) if s_match else ""),
                     "label": label_match.group(1).strip(),
                     "chapter_title": chapter_title,

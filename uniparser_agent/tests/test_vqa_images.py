@@ -159,7 +159,8 @@ def test_parser_and_sharegpt_image_placeholders(tmp_path: Path):
     response = (
         "<chapter><title></title>"
         "<vqa_pair><label>1</label><question>0,1</question>"
-        "<answer>A</answer><solution>2</solution></vqa_pair>"
+        "<answer>A</answer><answer_source_ids>2</answer_source_ids>"
+        "<solution>2</solution></vqa_pair>"
         "</chapter>"
     )
     extracted = parse_llm_response(response, content)
