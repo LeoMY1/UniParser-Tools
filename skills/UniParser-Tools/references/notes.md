@@ -14,6 +14,7 @@
    import hmac
    import hashlib
 
+
    def verify_callback(content, checksum, secret):
        expected = hmac.new(secret.encode(), content.encode(), hashlib.sha256).hexdigest()
        return hmac.compare_digest(expected, checksum)
