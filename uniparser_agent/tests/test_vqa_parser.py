@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from uniparser_agent.pdf2vqa.output_parser import parse_llm_response
-from uniparser_agent.pdf2vqa.vqa_merger import merge_vqa_pairs
+from uniparser_agent.pdf2vqa.vqa_merger import jsonl_to_md, merge_vqa_pairs
 
 
 def test_parse_and_merge_contiguous_qa():
@@ -69,3 +72,38 @@ def test_merge_question_only_and_answer_only_rows():
     assert "2+2=4" in by_label[1]["solution"]
     assert by_label[2]["answer"] == "6"
     assert "3+3=6" in by_label[2]["solution"]
+
+
+def test_markdown_formats_formula_answers_as_inline_latex(tmp_path: Path) -> None:
+    items = [
+        {
+            "label": 1,
+            "question": "Formula",
+            "answer": r"A = -E_{\text{电子}}^{0}(d^{0})^{12}",
+            "solution": "",
+        },
+        {
+            "label": 2,
+            "question": "Already formatted",
+            "answer": r"$\frac{1}{2}$",
+            "solution": "",
+        },
+        {
+            "label": 3,
+            "question": "Plain text",
+            "answer": "Yes",
+            "solution": "",
+        },
+    ]
+    jsonl_path = tmp_path / "merged.jsonl"
+    jsonl_path.write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in items),
+        encoding="utf-8",
+    )
+
+    md_path = jsonl_to_md(jsonl_path, tmp_path / "merged.md")
+    markdown = md_path.read_text(encoding="utf-8")
+
+    assert r"**Answer:** $A = -E_{\text{电子}}^{0}(d^{0})^{12}$" in markdown
+    assert r"**Answer:** $\frac{1}{2}$" in markdown
+    assert "**Answer:** Yes" in markdown

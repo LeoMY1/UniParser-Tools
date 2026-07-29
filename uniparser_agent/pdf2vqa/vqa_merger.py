@@ -8,6 +8,24 @@ from pathlib import Path
 from typing import Any
 
 
+_LATEX_COMMAND_RE = re.compile(r"\\[A-Za-z]+")
+_MATH_STRUCTURE_RE = re.compile(r"(?:[_^]\s*(?:\{[^{}]+\}|[A-Za-z0-9]))|(?:[A-Za-z0-9})]\s*[=<>]\s*)")
+
+
+def _format_answer_for_md(answer: str) -> str:
+    """Wrap formula-like answers in inline LaTeX delimiters."""
+    text = answer.strip()
+    if not text:
+        return text
+    if "$" in text or (text.startswith(r"\(") and text.endswith(r"\)")):
+        return text
+    if text.startswith(r"\[") and text.endswith(r"\]"):
+        return text
+    if _LATEX_COMMAND_RE.search(text) or _MATH_STRUCTURE_RE.search(text):
+        return f"${text}$"
+    return text
+
+
 def refine_title(title: str, strict_title_match: bool = False) -> str:
     title = re.sub(r"\s+", "", title)
     if strict_title_match:
@@ -146,7 +164,8 @@ def jsonl_to_md(jsonl_path: str | Path, md_path: str | Path) -> Path:
             data = json.loads(line)
             outfile.write(f"### Question {data['label']}\n\n")
             outfile.write(f"{data['question']}\n\n")
-            outfile.write(f"**Answer:** {data['answer']}\n\n")
+            answer = _format_answer_for_md(str(data["answer"]))
+            outfile.write(f"**Answer:** {answer}\n\n")
             if data.get("solution"):
                 outfile.write(f"**Solution:**\n\n{data['solution']}\n\n")
             outfile.write("---\n\n")
