@@ -5,6 +5,7 @@
 *.vscode
 *.txt
 *.__pycache__
+.venv/
 
 # compilation and distribution
 __pycache__
