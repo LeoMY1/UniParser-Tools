@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-import shutil
 import time
 from pathlib import Path
 from typing import Any
 
 from uniparser_agent.llm import LLMConfig
+from uniparser_agent.output_dir import replace_output_dir, resolve_output_dir
+from uniparser_agent.parse.api_client import resolve_input
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file
 from uniparser_agent.pdf2vqa.llm_client import VQALLMClient
@@ -19,17 +20,8 @@ from uniparser_agent.pdf2vqa.vqa_formatter import write_sharegpt
 from uniparser_agent.pdf2vqa.vqa_merger import jsonl_to_md, merge_vqa_pairs, write_merged_jsonl
 
 
-def _resolve_output_dir(output_dir: str | Path | None, overwrite: bool) -> Path:
-    if output_dir:
-        out = Path(output_dir).expanduser().resolve()
-    else:
-        out = (Path.cwd() / "vqa_out").resolve()
-    if out.exists():
-        if not overwrite:
-            raise FileExistsError(f"Output directory already exists: {out}. Pass overwrite=True or --overwrite.")
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=True)
-    return out
+def _resolve_output_dir(output_dir: str | Path | None) -> Path:
+    return resolve_output_dir(output_dir, default=Path.cwd() / "vqa_out")
 
 
 def _require_local_pdf(path: str | Path, *, label: str) -> Path:
@@ -66,28 +58,65 @@ def run_vqa_pipeline(
         raise ValueError("Provide input_path (pdf/url/image) or pages_tree_path.")
 
     started = time.time()
-    out = _resolve_output_dir(output_dir, overwrite=overwrite)
-    parse_dir = out / "parse"
-    parse_meta: dict[str, Any] = {}
-    merged_pdf_path: Path | None = None
-
+    pages_tree_bytes: bytes | None = None
+    question_pdf: Path | None = None
+    answer_path: Path | None = None
     if pages_tree_path:
         src_tree = Path(pages_tree_path).expanduser().resolve()
         if not src_tree.is_file():
             raise FileNotFoundError(f"pages_tree not found: {src_tree}")
+        load_pages_tree(src_tree)
+        pages_tree_bytes = src_tree.read_bytes()
+    elif answer_pdf:
+        assert input_path is not None
+        question_pdf = _require_local_pdf(input_path, label="question PDF")
+        answer_path = _require_local_pdf(answer_pdf, label="answer PDF")
+    else:
+        assert input_path is not None
+        resolve_input(input_path)
+
+    target = _resolve_output_dir(output_dir)
+    with replace_output_dir(target, overwrite=overwrite) as out:
+        return _run_vqa_pipeline_in_dir(
+            out=out,
+            started=started,
+            input_path=input_path,
+            pages_tree_bytes=pages_tree_bytes,
+            question_pdf=question_pdf,
+            answer_path=answer_path,
+            strict_title_match=strict_title_match,
+            llm_config=llm_config,
+            llm_client=llm_client,
+        )
+
+
+def _run_vqa_pipeline_in_dir(
+    *,
+    out: Path,
+    started: float,
+    input_path: str | None,
+    pages_tree_bytes: bytes | None,
+    question_pdf: Path | None,
+    answer_path: Path | None,
+    strict_title_match: bool,
+    llm_config: LLMConfig | None,
+    llm_client: VQALLMClient | None,
+) -> dict[str, Any]:
+    parse_dir = out / "parse"
+    parse_meta: dict[str, Any] = {}
+    merged_pdf_path: Path | None = None
+
+    if pages_tree_bytes is not None:
         parse_dir.mkdir(parents=True, exist_ok=True)
         dest_tree = parse_dir / "pages_tree.json"
-        shutil.copy2(src_tree, dest_tree)
+        dest_tree.write_bytes(pages_tree_bytes)
         tree_path = dest_tree
         parse_meta = {"mode": "pages_tree", "pages_tree_path": str(tree_path)}
     else:
         assert input_path is not None
         parse_source = input_path
-        question_pdf: Path | None = None
-        answer_path: Path | None = None
-        if answer_pdf:
-            question_pdf = _require_local_pdf(input_path, label="question PDF")
-            answer_path = _require_local_pdf(answer_pdf, label="answer PDF")
+        if answer_path is not None:
+            assert question_pdf is not None
             merge_dir = out / "merge"
             merge_dir.mkdir(parents=True, exist_ok=True)
             merged_pdf_path = merge_pdfs(
@@ -98,8 +127,8 @@ def run_vqa_pipeline(
 
         parse_result = parse_document(parse_source, output_dir=str(parse_dir), overwrite=True)
         tree_path = Path(parse_result["pages_tree_path"])
-        if answer_pdf:
-            assert question_pdf is not None and answer_path is not None and merged_pdf_path is not None
+        if answer_path is not None:
+            assert question_pdf is not None and merged_pdf_path is not None
             parse_meta = {
                 "mode": "dual_pdf",
                 "question_pdf": str(question_pdf),

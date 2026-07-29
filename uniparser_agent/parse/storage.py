@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,24 +13,6 @@ from uniparser_agent.parse.api_client import PENDING_STATUSES, UniParserApiClien
 
 POLL_INTERVAL_SEC = 3
 POLL_TIMEOUT_SEC = 1800
-
-
-def resolve_output_dir(
-    source_stem: str,
-    output_dir: str | None,
-    *,
-    overwrite: bool,
-) -> Path:
-    out = Path(output_dir).expanduser().resolve() if output_dir else default_output_dir(source_stem)
-    if out.exists() and not overwrite:
-        raise FileExistsError(f"Output directory exists: {out}. Use --overwrite to replace.")
-    if out.exists() and overwrite:
-        shutil.rmtree(out)
-    return out
-
-
-def default_output_dir(source_stem: str) -> Path:
-    return (Path.home() / "Uni-Parser-Skill" / source_stem).expanduser().resolve()
 
 
 def write_trigger_meta(

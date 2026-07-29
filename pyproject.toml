@@ -15,7 +15,18 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ['.']
-exclude = ['build', 'workspace', 'temp', 'temp.*', 'models', 'models.*', 'tests', 'tests.*']
+exclude = [
+    'build',
+    'workspace',
+    'temp',
+    'temp.*',
+    'models',
+    'models.*',
+    'tests',
+    'tests.*',
+    'uniparser_agent',
+    'uniparser_agent.*',
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "uniparser_tools.__version__" }
