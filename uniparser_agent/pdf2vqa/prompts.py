@@ -1,5 +1,3 @@
-"""VQA extraction system prompt (ported from DataFlow QAExtractPrompt)."""
-
 from __future__ import annotations
 
 

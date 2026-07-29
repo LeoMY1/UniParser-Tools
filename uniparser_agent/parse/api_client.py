@@ -184,7 +184,3 @@ def resolve_input(raw: str) -> tuple[str, str, Path | None]:
     if path.suffix.lower() in IMAGE_SUFFIXES:
         return "image", stem, path
     return "file", stem, path
-
-
-def default_output_dir(source_stem: str) -> Path:
-    return (Path.home() / "Uni-Parser-Skill" / source_stem).expanduser().resolve()
