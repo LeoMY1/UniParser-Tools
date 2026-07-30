@@ -64,6 +64,16 @@ pip install -e .
 pip install -e ".[test]"
 ```
 
+当 `.env` 中配置了 `UNIPARSER_API_KEY` 时，完整测试会连接真实服务，并分别
+通过本地 PDF、公开 HTTPS PDF 和图片 snip 提交 3 次计费解析：
+
+```bash
+python -m pytest -q
+```
+
+若 `.env` 不在当前仓库，可通过 `UNIPARSER_DOTENV_PATH=/path/to/.env`
+显式指定。
+
 安装后验证：
 
 ```bash
