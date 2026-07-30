@@ -1,4 +1,4 @@
-"""Regression checks for customer-facing playground notebooks."""
+"""Regression checks for customer-facing examples and documentation."""
 
 from __future__ import annotations
 
@@ -28,3 +28,13 @@ def test_playground_notebooks_have_no_saved_outputs_or_real_task_tokens() -> Non
             assert TASK_TOKEN_PATTERN.search(serialized_cell) is None, (
                 f"{notebook_path}: cell {cell_index} contains a task-token-shaped value"
             )
+
+
+def test_callback_pattern_uses_release_signature_contract() -> None:
+    pattern_path = REPO_ROOT / "skills" / "UniParser-Tools" / "references" / "patterns.md"
+    content = pattern_path.read_text(encoding="utf-8")
+
+    assert 'data["checksum"]' not in content
+    assert '"checksum":' not in content
+    assert "X-UniParser-Signature" in content
+    assert "request.get_data(cache=True)" in content
