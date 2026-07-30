@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 import requests
 from PIL import Image
 
+from uniparser_tools.api.account import UniParserAccountClient
 from uniparser_tools.api.transport import (
     DEFAULT_REQUEST_TIMEOUT,
     DEFAULT_SYNC_REQUEST_TIMEOUT,
@@ -151,6 +152,7 @@ class UniParserClient:
         self.host = self._transport.host
         self.request_timeout = request_timeout
         self.sync_request_timeout = sync_request_timeout
+        self.account = UniParserAccountClient.from_transport(self._transport)
 
     def close(self):
         self._transport.close()

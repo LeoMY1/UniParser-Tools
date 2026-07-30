@@ -309,6 +309,30 @@ result = parser.get_third_party_output(
 完整 HTML 表格的 span 升级。服务端未来增加未知字段时，转换器会忽略未知
 字段，而不是让已有客户代码因构造参数不匹配而崩溃。
 
+### 账户与用量（只读）
+
+解析客户端提供 `account` 命名空间，使用同一连接池和 API Key：
+
+```python
+profile = parser.account.get_current_user()
+balance = parser.account.get_balance()
+summary = parser.account.get_usage_summary(period="current_month")
+usage = parser.account.list_usage_records(page=1, size=20)
+transactions = parser.account.list_balance_transactions(page=1, size=20)
+```
+
+也可以独立创建只读账户客户端：
+
+```python
+from uniparser_tools.api.account import UniParserAccountClient
+
+with UniParserAccountClient(host=host, api_key=api_key) as account:
+    print(account.get_balance())
+```
+
+该封装不提供注册、资料更新、API Key 管理、充值或管理员写操作。用量明细
+遵循服务端当前契约，只返回最近 14 天并分页；`size` 的服务端上限为 100。
+
 ### 4. 使用异步回调 (Callbacks)
 
 UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定地址。这对于长耗时任务非常有用，无需轮询结果。

@@ -21,6 +21,22 @@
 from `backend_versions` as the trigger `model_version`. Service-discovery
 methods accept `http_timeout=`.
 
+## Read-only account APIs
+
+The parsing client exposes the same authenticated transport through
+`parser.account`:
+
+| Method | Description |
+|--------|-------------|
+| `get_current_user()` | Get the authenticated user/profile |
+| `get_balance()` | Get balance, currency, account status, and permissions |
+| `get_usage_summary(period)` | Get `current_month`, `last_month`, or rolling 30-day summary |
+| `list_usage_records(page, size)` | Get paginated usage records from the last 14 days |
+| `list_balance_transactions(page, size)` | Get paginated balance ledger |
+
+Use `UniParserAccountClient` directly when parsing methods are not needed.
+No account, API-key, balance, or administrative write operations are exposed.
+
 ### trigger_file() - Async Callback Parameters
 
 ```python
