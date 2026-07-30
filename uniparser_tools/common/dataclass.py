@@ -4,7 +4,7 @@ import functools
 import json
 import math
 import re
-from dataclasses import InitVar, asdict, dataclass, field, fields, is_dataclass
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from html import escape
 from io import StringIO
 from typing import Any, Dict, List, Tuple, Union
@@ -541,10 +541,7 @@ class Item(DataClassGeneric):
     lang: Language = Language.Unknown
     direction: Direction = Direction.Unknown  # 需要如何旋转
 
-    target: InitVar[bool] = False  # 是不是目标item，不写入asdict
-
-    def __post_init__(self, target: bool = False):
-        self.target = target
+    def __post_init__(self):
         if isinstance(self.bbox, list):
             self.bbox = BBox(*self.bbox)
         elif isinstance(self.bbox, dict):
@@ -672,11 +669,11 @@ class TextualResult(SemanticItem):
     type: LayoutType = LayoutType.Text
     bboxes: List[BBox] = field(default_factory=list)
     contents: List[str] = field(default_factory=list)
-    types: List[LayoutType] = field(default_factory=list)
     text: str = ""  # Deprecated: legacy plain text field; use contents/types/bboxes instead.
+    types: List[LayoutType] = field(default_factory=list)
 
-    def __post_init__(self, target: bool = False):
-        super().__post_init__(target)
+    def __post_init__(self):
+        super().__post_init__()
         if not self.contents and self.text:
             from uniparser_tools.utils.format_utils import parse_inline_text
 
@@ -860,9 +857,9 @@ class MoleculeResult(SemanticItem):
     caption: str = ""
     markush: bool = False
     smi: str = ""
-    esmi: str = ""
     sru: bool = False
     drawing: str = ""
+    esmi: str = ""
 
     @property
     def plain(self):
@@ -983,8 +980,8 @@ class ExpressionResult(SemanticItem):
     type: LayoutType = LayoutType.Expression
     reactions: List[Reaction] = field(default_factory=list)
 
-    def __post_init__(self, target: bool = False):
-        super().__post_init__(target)
+    def __post_init__(self):
+        super().__post_init__()
         if len(self.reactions) and isinstance(self.reactions[0], dict):
             self.reactions = [Reaction(**r) for r in self.reactions]
 
@@ -1083,8 +1080,8 @@ class TabularResult(SemanticItem):
     contents: List[str] = field(default_factory=list)
     structure: str = ""
 
-    def __post_init__(self, target: bool = False):
-        super().__post_init__(target)
+    def __post_init__(self):
+        super().__post_init__()
         assert len(self.placeholders) == len(self.contents)
         if self.bboxes:
             assert len(self.bboxes) == len(self.placeholders)

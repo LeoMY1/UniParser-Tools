@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from tests.utils import make_chart_data, make_reaction_dict, make_tabular_payload
-from uniparser_tools.common.constant import LayoutType
+from uniparser_tools.common.constant import Direction, Language, LayoutType
 from uniparser_tools.common.dataclass import (
     BBox,
     ChartResult,
@@ -38,6 +38,29 @@ ITEM_KWARGS = dict(
 
 
 class TestTextualResult:
+    def test_legacy_positional_arguments_keep_their_meaning(self) -> None:
+        r = TextualResult(
+            "tok",
+            0,
+            0,
+            BBox(0, 0, 1, 1),
+            1.0,
+            (100, 100),
+            LayoutType.Text,
+            False,
+            -1,
+            Language.Unknown,
+            Direction.Unknown,
+            "legacy-source",
+            [],
+            ["legacy text"],
+            "legacy text",
+        )
+
+        assert r.source == "legacy-source"
+        assert r.text == "legacy text"
+        assert r.types == [LayoutType.Text]
+
     def test_plain_is_text_field(self) -> None:
         r = TextualResult(
             **ITEM_KWARGS,
@@ -196,6 +219,32 @@ class TestChartResult:
 
 
 class TestMoleculeResult:
+    def test_legacy_positional_arguments_keep_their_meaning(self) -> None:
+        r = MoleculeResult(
+            "tok",
+            0,
+            0,
+            BBox(0, 0, 1, 1),
+            1.0,
+            (100, 100),
+            LayoutType.Molecule,
+            False,
+            -1,
+            Language.Unknown,
+            Direction.Unknown,
+            "legacy-source",
+            "legacy caption",
+            False,
+            "CCO",
+            True,
+            "legacy drawing",
+        )
+
+        assert r.source == "legacy-source"
+        assert r.sru is True
+        assert r.drawing == "legacy drawing"
+        assert r.esmi == ""
+
     def test_plain_prefers_smi(self) -> None:
         r = MoleculeResult(
             **{**ITEM_KWARGS, "type": LayoutType.Molecule},
