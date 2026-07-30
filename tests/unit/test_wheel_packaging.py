@@ -41,5 +41,8 @@ def test_repeated_wheel_builds_only_package_uniparser_tools(tmp_path: Path) -> N
         unexpected = [
             name for name in wheel.namelist() if not name.startswith(("uniparser_tools/", "uniparser_tools-"))
         ]
+        metadata_path = next(name for name in wheel.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = wheel.read(metadata_path).decode("utf-8")
 
     assert unexpected == []
+    assert "Requires-Python: >=3.11" in metadata

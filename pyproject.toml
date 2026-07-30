@@ -3,7 +3,7 @@ name = "uniparser-tools"
 dynamic = ["version", "dependencies"]
 description = "Document parser tools based on UniParser"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["ocr", "document-parser", "uniparser"]
 
 [project.optional-dependencies]
