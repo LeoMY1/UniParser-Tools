@@ -137,6 +137,19 @@ uv run uniparser-agent vqa \
 
 该方式适合更换模型或重新抽取，不会再次消耗 UniParser 解析额度。
 
+### 启用模型 thinking
+
+支持 `chat_template_kwargs.enable_thinking` 的模型服务可以使用 `--enable-thinking` 启用模型思考模式：
+
+```bash
+uv run uniparser-agent vqa \
+  --pages-tree /path/to/pages_tree.json \
+  -o ./vqa_out_thinking \
+  --enable-thinking
+```
+
+默认不启用 thinking。运行后可在 `run_meta.json` 的 `llm.enable_thinking` 和 `llm.extra_body` 中确认实际配置。
+
 ## 常用参数
 
 ```text
@@ -151,6 +164,7 @@ uniparser-agent vqa [OPTIONS] [INPUT_PATH]
 | `--answer-pdf`        | 输入独立答案册 PDF            |
 | `--pages-tree`        | 复用已有 `pages_tree.json` |
 | `--overwrite`         | 删除并重建已存在的输出目录          |
+| `--enable-thinking`   | 为支持该 thinking 参数的模型启用思考模式 |
 | `--json`              | 在终端输出机器可读的运行摘要         |
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from uniparser_agent.llm.config import LLMConfig, resolve_llm_config
+from uniparser_agent.pdf2vqa.llm_client import VQALLMClient
 
 
 def test_resolve_from_openai_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -46,6 +47,22 @@ def test_config_object_with_partial_override(monkeypatch: pytest.MonkeyPatch) ->
     cfg = resolve_llm_config(config=base, model="override-model")
     assert cfg.api_key == "sk-base"
     assert cfg.model == "override-model"
+
+
+def test_vqa_client_preserves_thinking_from_config() -> None:
+    config = LLMConfig(
+        api_key="sk",
+        base_url="http://example.com/v1",
+        model="qwen-test-model",
+        enable_thinking=True,
+    )
+
+    client = VQALLMClient(config=config)
+
+    assert client.enable_thinking is True
+    assert client.meta()["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": True},
+    }
 
 
 def test_missing_required_raises(monkeypatch: pytest.MonkeyPatch) -> None:
