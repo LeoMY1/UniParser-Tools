@@ -113,11 +113,13 @@ parser = UniParserClient(
     api_key=os.getenv("UNIPARSER_API_KEY"),
     request_timeout=(10, 60),  # 普通请求：连接/读取超时
     sync_request_timeout=(10, 1860),  # 同步解析请求：连接/读取超时
+    upload_request_timeout=(60, 300),  # TOS 上传：socket/响应超时
 )
 ```
 
 `request_timeout` 用于健康检查、结果获取和异步任务提交；`sync_request_timeout`
-只用于 `sync=True` 的解析请求。它们是客户端 HTTP 超时，不等同于服务端解析预算。
+只用于 `sync=True` 的解析请求；`upload_request_timeout` 用于 TOS 文件内容上传。
+它们是客户端 HTTP 超时，不等同于服务端解析预算。
 客户端可作为上下文管理器使用，以及时关闭连接池：
 
 ```python
@@ -217,6 +219,8 @@ result = parser.trigger_url(source_url, server_generated_token=True)
 地址。该地址是短期 bearer credential，不应记录到日志或转发给其他服务。
 客户端向预签名地址上传时不会携带 UniParser API Key；高层
 `upload_files_to_tos()` 完成上传后也不会在返回值中保留 `upload_url`。
+可通过客户端的 `upload_request_timeout=` 或单次调用的 `http_timeout=`
+调整上传超时。
 
 ## 快速开始
 

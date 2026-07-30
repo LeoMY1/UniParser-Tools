@@ -400,6 +400,7 @@ class TestTOSUpload:
         assert session.calls[1][0] == "PUT"
         assert session.calls[1][1] == link["upload_url"]
         assert "X-API-Key" not in session.calls[1][2]["headers"]
+        assert session.calls[1][2]["timeout"] == (60.0, 300.0)
 
     def test_transport_redacts_presigned_url_from_request_errors(self) -> None:
         session = FakeSession(

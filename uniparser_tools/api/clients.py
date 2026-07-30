@@ -12,6 +12,7 @@ from uniparser_tools.api.account import UniParserAccountClient
 from uniparser_tools.api.transport import (
     DEFAULT_REQUEST_TIMEOUT,
     DEFAULT_SYNC_REQUEST_TIMEOUT,
+    DEFAULT_UPLOAD_REQUEST_TIMEOUT,
     RequestTimeout,
     UniParserHTTPTransport,
 )
@@ -139,6 +140,7 @@ class UniParserClient:
         *,
         request_timeout: RequestTimeout = DEFAULT_REQUEST_TIMEOUT,
         sync_request_timeout: RequestTimeout = DEFAULT_SYNC_REQUEST_TIMEOUT,
+        upload_request_timeout: RequestTimeout = DEFAULT_UPLOAD_REQUEST_TIMEOUT,
         session: Optional[requests.Session] = None,
     ):
         self._transport = UniParserHTTPTransport(
@@ -152,6 +154,7 @@ class UniParserClient:
         self.host = self._transport.host
         self.request_timeout = request_timeout
         self.sync_request_timeout = sync_request_timeout
+        self.upload_request_timeout = upload_request_timeout
         self.account = UniParserAccountClient.from_transport(self._transport)
 
     def close(self):
@@ -539,7 +542,7 @@ class UniParserClient:
                         authenticated=False,
                         expect_json=False,
                         data=file_obj,
-                        timeout=http_timeout,
+                        timeout=self.upload_request_timeout if http_timeout is None else http_timeout,
                         error_message="TOS upload failed",
                     )
             except OSError as exc:

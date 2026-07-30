@@ -99,7 +99,8 @@ Uploading does not start parsing. Presigned `PUT` requests do not include the
 UniParser API key. Treat URLs returned by `request_tos_upload_links()` as
 short-lived bearer credentials: do not log or forward them. The high-level
 `upload_files_to_tos()` helper removes each `upload_url` from its result after
-the upload completes.
+the upload completes. TOS content uploads use the client's longer
+`upload_request_timeout` default; pass `http_timeout=` to override one call.
 
 ## Parse Modes
 
