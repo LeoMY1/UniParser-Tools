@@ -65,6 +65,9 @@ class TestClientConstruction:
         assert c.trigger_url_endpoint.endswith("/trigger-url-async")
         assert c.trigger_snip_endpoint.endswith("/trigger-snip-async")
         assert c.request_tos_upload_links_endpoint.endswith("/request-tos-upload-links")
+        assert c.health_endpoint.endswith("/health")
+        assert c.version_endpoint.endswith("/version")
+        assert c.get_constants_endpoint.endswith("/get-constants")
         assert c.get_result_endpoint.endswith("/get-result")
         assert c.get_formatted_endpoint.endswith("/get-formatted")
         assert c.get_third_party_output_endpoint.endswith("/get-third-party-output")
@@ -221,6 +224,51 @@ class TestResultAPIs:
             "formatter": "mineru",
         }
         assert session.calls[0][2]["timeout"] == (8, 9)
+
+
+class TestServiceDiscovery:
+    def test_health_accepts_per_call_timeout(self) -> None:
+        session = FakeSession(response=FakeResponse(payload={"status": "Healthy"}))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.health(http_timeout=(1, 2))
+
+        assert result["status"] == "Healthy"
+        assert session.calls[0][2]["timeout"] == (1, 2)
+
+    def test_version_preserves_model_backend_metadata(self) -> None:
+        payload = {
+            "version": "frontend-1.3",
+            "default_version": "v1.3",
+            "backend_versions": {
+                "v1.3": {
+                    "available": True,
+                    "capabilities": {"preset_layout_reparse": True},
+                }
+            },
+        }
+        session = FakeSession(response=FakeResponse(payload=payload))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.version()
+
+        assert result == payload
+        assert result["default_version"] == "v1.3"
+        assert result["backend_versions"]["v1.3"]["available"] is True
+
+    def test_get_constants_returns_service_contract(self) -> None:
+        payload = {
+            "LayoutType": {"paragraph": "paragraph"},
+            "TokenRegEx": r"^[-\\._?=&a-zA-Z0-9]{1,128}$",
+        }
+        session = FakeSession(response=FakeResponse(payload=payload))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.get_constants(http_timeout=(3, 4))
+
+        assert result == payload
+        assert session.calls[0][1].endswith("/get-constants")
+        assert session.calls[0][2]["timeout"] == (3, 4)
 
 
 class TestSubmissionPayloads:

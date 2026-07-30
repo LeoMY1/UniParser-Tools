@@ -4,6 +4,9 @@
 
 | Method | Description |
 |--------|-------------|
+| `health(...)` | Check service/backend health |
+| `version(...)` | Get frontend and model-backend version metadata |
+| `get_constants(...)` | Get live enums, layout types, and token rules |
 | `trigger_file(file_path, ...)` | Submit PDF file for parsing |
 | `trigger_snip(snip_path, ...)` | Submit image for parsing |
 | `trigger_url(pdf_url, ...)` | Submit HTTP(S), S3, OSS, or TOS source for parsing |
@@ -12,6 +15,11 @@
 | `get_result(token, ...)` | Get raw parsing results |
 | `get_formatted(token, ...)` | Get formatted output |
 | `get_third_party_output(token, ...)` | Get a third-party-compatible result payload |
+
+`version()` returns `default_version`, `backend_versions`, and backend
+`capabilities` when the deployment exposes multiple parser models. Use a key
+from `backend_versions` as the trigger `model_version`. Service-discovery
+methods accept `http_timeout=`.
 
 ### trigger_file() - Async Callback Parameters
 

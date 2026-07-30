@@ -118,6 +118,19 @@ with UniParserClient(host=host, api_key=api_key) as parser:
     result = parser.version()
 ```
 
+`version()` 会原样返回 `release/v1.3` 的模型路由信息，包括
+`default_version`、`backend_versions`，以及后端声明的 `capabilities`；
+可据此选择 `trigger_*()` 的 `model_version`。`get_constants()` 返回服务端
+当前的 `LayoutType`、解析/格式枚举和 token 规则。`health()`、`version()`
+和 `get_constants()` 也都支持单次 `http_timeout=`。
+
+```python
+service = parser.version()
+default_model = service["default_version"]
+capabilities = service["backend_versions"][default_model].get("capabilities", {})
+constants = parser.get_constants()
+```
+
 ## 解析配置：7 个语义类 + 2 个枚举
 
 提交解析任务时（`trigger_file` / `trigger_snip` / `trigger_url`），可分别设置 7 类语义元素的处理模式：

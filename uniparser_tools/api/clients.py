@@ -190,6 +190,18 @@ class UniParserClient:
         return f"{self.host}/request-tos-upload-links"
 
     @property
+    def health_endpoint(self):
+        return f"{self.host}/health"
+
+    @property
+    def version_endpoint(self):
+        return f"{self.host}/version"
+
+    @property
+    def get_constants_endpoint(self):
+        return f"{self.host}/get-constants"
+
+    @property
     def get_result_endpoint(self):
         return f"{self.host}/get-result"
 
@@ -208,11 +220,19 @@ class UniParserClient:
     def validate_token(self, token: str):
         assert re.match(r"^[-\._?=&a-zA-Z0-9]{1,128}$", token), f"token: {token} contains illegal characters"
 
-    def health(self):
-        return self._transport.request("GET", "/health", error_message="health check failed")
+    def health(self, *, http_timeout: Optional[RequestTimeout] = None):
+        return self._transport.request("GET", "/health", timeout=http_timeout, error_message="health check failed")
 
-    def version(self):
-        return self._transport.request("GET", "/version", error_message="version request failed")
+    def version(self, *, http_timeout: Optional[RequestTimeout] = None):
+        return self._transport.request("GET", "/version", timeout=http_timeout, error_message="version request failed")
+
+    def get_constants(self, *, http_timeout: Optional[RequestTimeout] = None):
+        return self._transport.request(
+            "GET",
+            "/get-constants",
+            timeout=http_timeout,
+            error_message="constants request failed",
+        )
 
     def trigger_file(
         self,
