@@ -152,6 +152,50 @@ with UniParserClient(host=host, api_key=api_key) as parser:
 | `2` | `OCRHighQuality` | 高质 OCR，支持行内公式 |
 | `3` | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
 
+### 提交任务的通用参数
+
+三个提交入口已与 `release/v1.3` 对齐。`trigger_file`、`trigger_snip` 和
+`trigger_url` 都支持以下参数：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `timeout` | `1800` | 服务端解析预算（秒），不是 HTTP 超时 |
+| `http_timeout` | `None` | 仅覆盖本次请求的客户端 HTTP 超时 |
+| `inplace_update` | `False` | 是否允许更新同 token 的已有任务 |
+| `preset_layout` | `None` | 预设版面；可传 JSON 字符串或 Python 列表 |
+| `model_version` | `None` | 指定服务端 `/version` 返回的模型版本 |
+| `server_generated_token` | `False` | token 为空时交给服务端生成；默认保留历史确定性 token |
+| `callback_url` / `callback_secret` | `None` | 异步任务完成回调及其验证密钥 |
+
+`padding_snip` 只适用于文件和图片入口；`proxy` 只适用于 URL 入口。URL
+入口支持服务端接受的 HTTP(S) 以及 S3、OSS、TOS 对象地址。`preset_layout`
+在三个入口中都会按服务端契约编码成 JSON 字符串。
+
+```python
+result = parser.trigger_url(
+    "tos://bucket/document.pdf",
+    sync=False,
+    model_version="v1.3",
+    preset_layout=[[{"type": "textual", "bbox": [0, 0, 100, 30]}]],
+    server_generated_token=True,
+)
+token = result["token"]
+```
+
+### TOS 预签名上传
+
+本地文件可以先上传到 TOS，再把返回的 `source_url` 交给 `trigger_url`。
+上传与解析刻意分成两步，调用上传助手不会自动启动计费解析：
+
+```python
+uploaded = parser.upload_files_to_tos(["./large-document.pdf"])
+source_url = uploaded["files"][0]["source_url"]
+result = parser.trigger_url(source_url, server_generated_token=True)
+```
+
+如需自行执行上传，可调用 `request_tos_upload_links()` 获取预签名 `PUT`
+地址。客户端向预签名地址上传时不会携带 UniParser API Key。
+
 ## 快速开始
 
 > ‼️‼️‼️ 以下仅为代码功能示例，具体运行代码请参考 `playground/*.ipynb` ‼️‼️‼️
@@ -179,7 +223,7 @@ from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
 # 科学文献解析模式（推荐默认值）
 result = parser.trigger_file(
-    pdf_path="./example.pdf",
+    file_path="./example.pdf",
     textual=ParseModeTextual.OCRHighQuality,  # high quality
     equation=ParseMode.OCRHighQuality,        # high quality
     table=ParseMode.OCRHighQuality,           # high quality

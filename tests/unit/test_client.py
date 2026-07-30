@@ -10,8 +10,9 @@ import json
 
 import pytest
 import requests
+from PIL import Image
 
-from uniparser_tools.api.clients import UniParserClient
+from uniparser_tools.api.clients import TOSUploadFile, UniParserClient
 
 
 class FakeResponse:
@@ -28,8 +29,9 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, response=None, error=None):
+    def __init__(self, response=None, responses=None, error=None):
         self.response = response or FakeResponse(payload={"status": "success"})
+        self.responses = list(responses or [])
         self.error = error
         self.calls = []
         self.closed = False
@@ -38,6 +40,8 @@ class FakeSession:
         self.calls.append((method, url, kwargs))
         if self.error:
             raise self.error
+        if self.responses:
+            return self.responses.pop(0)
         return self.response
 
     def close(self):
@@ -59,6 +63,7 @@ class TestClientConstruction:
         assert c.trigger_file_endpoint.endswith("/trigger-file-async")
         assert c.trigger_url_endpoint.endswith("/trigger-url-async")
         assert c.trigger_snip_endpoint.endswith("/trigger-snip-async")
+        assert c.request_tos_upload_links_endpoint.endswith("/request-tos-upload-links")
         assert c.get_result_endpoint.endswith("/get-result")
         assert c.get_formatted_endpoint.endswith("/get-formatted")
 
@@ -177,3 +182,142 @@ class TestHTTPTransport:
             pass
 
         assert session.closed is True
+
+
+class TestSubmissionPayloads:
+    @staticmethod
+    def _preset_layout():
+        return [[{"type": "textual", "bbox": [0, 0, 20, 20]}]]
+
+    def test_trigger_file_sends_latest_form_fields(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.trigger_file(
+            str(path),
+            timeout=321,
+            padding_snip=False,
+            inplace_update=True,
+            preset_layout=self._preset_layout(),
+            model_version="v1.3",
+            http_timeout=(2, 3),
+        )
+
+        payload = session.calls[0][2]["data"]
+        assert payload["timeout"] == 321
+        assert payload["padding_snip"] is False
+        assert payload["inplace_update"] is True
+        assert json.loads(payload["preset_layout"]) == self._preset_layout()
+        assert payload["model_version"] == "v1.3"
+        assert session.calls[0][2]["timeout"] == (2, 3)
+
+    def test_trigger_snip_sends_latest_form_fields(self, tmp_path) -> None:
+        path = tmp_path / "snip.png"
+        Image.new("RGB", (2, 2), "white").save(path)
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.trigger_snip(
+            str(path),
+            timeout=123,
+            padding_snip=False,
+            inplace_update=True,
+            preset_layout=self._preset_layout(),
+            model_version="v1.3",
+        )
+
+        payload = session.calls[0][2]["data"]
+        assert payload["timeout"] == 123
+        assert payload["padding_snip"] is False
+        assert payload["inplace_update"] is True
+        assert json.loads(payload["preset_layout"]) == self._preset_layout()
+        assert payload["model_version"] == "v1.3"
+        assert payload["img"]
+
+    def test_trigger_url_serializes_preset_layout_inside_json_body(self) -> None:
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.trigger_url(
+            "tos://bucket/document.pdf",
+            timeout=456,
+            inplace_update=True,
+            preset_layout=self._preset_layout(),
+            model_version="v1.3",
+        )
+
+        payload = session.calls[0][2]["json"]
+        assert payload["timeout"] == 456
+        assert payload["inplace_update"] is True
+        assert isinstance(payload["preset_layout"], str)
+        assert json.loads(payload["preset_layout"]) == self._preset_layout()
+        assert payload["model_version"] == "v1.3"
+        assert "padding_snip" not in payload
+
+    def test_server_generated_token_omits_deterministic_token(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession(response=FakeResponse(payload={"status": "waiting", "token": "server-token"}))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.trigger_file(str(path), sync=False, server_generated_token=True)
+
+        assert session.calls[0][2]["data"]["token"] is None
+        assert result["token"] == "server-token"
+
+
+class TestTOSUpload:
+    def test_requests_upload_links_for_names_and_explicit_tokens(self) -> None:
+        session = FakeSession(response=FakeResponse(payload={"files": []}))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.request_tos_upload_links(
+            [
+                "first.pdf",
+                TOSUploadFile(filename="second.png", token="explicit-token"),
+            ]
+        )
+
+        assert session.calls[0][2]["json"] == {
+            "files": [
+                {"filename": "first.pdf", "token": None},
+                {"filename": "second.png", "token": "explicit-token"},
+            ]
+        }
+
+    def test_upload_helper_puts_without_api_key(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        link = {
+            "filename": "document.pdf",
+            "token": "server-token",
+            "upload_url": "https://tos.example.com/upload?signature=secret",
+            "source_url": "tos://bucket/document.pdf",
+        }
+        session = FakeSession(
+            responses=[
+                FakeResponse(payload={"files": [link]}),
+                FakeResponse(status_code=200, payload=None),
+            ]
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.upload_files_to_tos([str(path)])
+
+        assert result["status"] == "success"
+        assert result["files"][0]["source_url"] == "tos://bucket/document.pdf"
+        assert result["files"][0]["uploaded"] is True
+        assert session.calls[1][0] == "PUT"
+        assert session.calls[1][1] == link["upload_url"]
+        assert "X-API-Key" not in session.calls[1][2]["headers"]
+
+    def test_upload_helper_rejects_token_count_mismatch(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        client = UniParserClient(host="https://example.com", api_key="k", session=FakeSession())
+
+        result = client.upload_files_to_tos([str(path)], tokens=[])
+
+        assert result["status"] == "error"

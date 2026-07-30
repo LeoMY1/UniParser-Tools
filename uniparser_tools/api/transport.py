@@ -45,6 +45,7 @@ class UniParserHTTPTransport:
         *,
         timeout: Optional[RequestTimeout] = None,
         authenticated: bool = True,
+        expect_json: bool = True,
         error_message: str = "request failed",
         token: Optional[str] = None,
         **kwargs,
@@ -94,6 +95,12 @@ class UniParserHTTPTransport:
                 result.setdefault("token", token)
             return result
 
+        if not expect_json:
+            return {
+                "status": "success",
+                "http_status": response.status_code,
+            }
+
         if payload is not None:
             return payload
 
@@ -110,4 +117,3 @@ class UniParserHTTPTransport:
     def close(self) -> None:
         if self._owns_session:
             self.session.close()
-

@@ -6,7 +6,9 @@
 |--------|-------------|
 | `trigger_file(file_path, ...)` | Submit PDF file for parsing |
 | `trigger_snip(snip_path, ...)` | Submit image for parsing |
-| `trigger_url(pdf_url, ...)` | Submit PDF URL for parsing |
+| `trigger_url(pdf_url, ...)` | Submit HTTP(S), S3, OSS, or TOS source for parsing |
+| `request_tos_upload_links(files, ...)` | Request presigned TOS upload targets |
+| `upload_files_to_tos(file_paths, ...)` | Upload local files without starting a parse |
 | `get_result(token, ...)` | Get raw parsing results |
 | `get_formatted(token, ...)` | Get formatted output |
 
@@ -35,6 +37,34 @@ Same parameters as `trigger_file()` for image parsing.
 ### trigger_url() - Async Callback Parameters
 
 Same parameters as `trigger_file()` for URL-based parsing.
+
+`padding_snip` is not accepted by the URL endpoint; `proxy` is URL-only.
+
+### Common release/v1.3 trigger parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `timeout` | `1800` | Server-side parse budget in seconds |
+| `http_timeout` | `None` | Per-call client HTTP timeout override |
+| `inplace_update` | `False` | Update an existing task with the same token |
+| `preset_layout` | `None` | JSON string or Python list describing known layout |
+| `model_version` | `None` | Model version advertised by `/version` |
+| `server_generated_token` | `False` | Ask the server to generate a token when none is supplied |
+
+The default remains a deterministic client-generated token for backward
+compatibility. `preset_layout` is serialized to a JSON string for all three
+trigger endpoints, including `trigger_url`.
+
+### TOS presigned upload
+
+```python
+uploaded = parser.upload_files_to_tos(["./document.pdf"])
+source_url = uploaded["files"][0]["source_url"]
+result = parser.trigger_url(source_url, server_generated_token=True)
+```
+
+Uploading does not start parsing. Presigned `PUT` requests do not include the
+UniParser API key.
 
 ## Parse Modes
 
