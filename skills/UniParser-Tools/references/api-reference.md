@@ -55,6 +55,13 @@ result = parser.trigger_file(
 | `callback_url` | str | `None` | HTTP POST endpoint for completion notification |
 | `callback_secret` | str | `None` | Shared secret for HMAC-SHA256 payload verification |
 
+The release/v1.3 callback body is the raw JSON result. Verify
+`X-UniParser-Signature: sha256=<hex>` by computing HMAC-SHA256 over the exact
+raw body bytes before JSON parsing. Use `Idempotency-Key` for deduplication and
+inspect `X-UniParser-Callback-Attempt` for retries. The URL and secret must be
+provided together, callbacks require `sync=False`, and deployments may enforce
+a callback-host allowlist.
+
 ### trigger_snip() - Async Callback Parameters
 
 Same parameters as `trigger_file()` for image parsing.

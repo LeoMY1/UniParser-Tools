@@ -358,7 +358,15 @@ if result["status"] == "success":
     print(f"异步任务已提交，完成后将回调到指定地址。Token: {token}")
 ```
 
-回调请求的 Payload 将包含 `checksum` 和 `content`。你可以使用 `callback_secret` 对 `content` 进行 HMAC-SHA256 签名校验，以确保内容未被篡改。
+`release/v1.3` 的回调 body 是原始 JSON 结果，不再包成
+`{"checksum": ..., "content": ...}`。服务端对实际收到的 body bytes 使用
+`callback_secret` 计算 HMAC-SHA256，并在
+`X-UniParser-Signature: sha256=<hex>` 中发送签名；接收方必须在解析 JSON
+之前，对原始 body bytes 验签。`Idempotency-Key` 可用于去重，
+`X-UniParser-Callback-Attempt` 表示当前重试次数。
+
+`callback_url` 仅允许搭配 `sync=False` 使用，且必须与 `callback_secret`
+同时提供；部署方还可能对回调 host 配置 allowlist。
 
 ### 5. 解析图片文件
 
