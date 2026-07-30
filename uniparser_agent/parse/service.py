@@ -30,43 +30,48 @@ def parse_document(
     out = resolve_output_dir(output_dir, default=default_out)
     client = make_client()
 
-    with replace_output_dir(out, overwrite=overwrite):
-        if kind == "file":
-            trigger = client.trigger_file(str(path))
-            input_type = "file"
-        elif kind == "image":
-            trigger = client.trigger_snip(str(path))
-            input_type = "image"
-        else:
-            trigger = client.trigger_url(input_path)
-            input_type = "url"
+    try:
+        with replace_output_dir(out, overwrite=overwrite):
+            if kind == "file":
+                trigger = client.trigger_file(str(path))
+                input_type = "file"
+            elif kind == "image":
+                trigger = client.trigger_snip(str(path))
+                input_type = "image"
+            else:
+                trigger = client.trigger_url(input_path)
+                input_type = "url"
 
-        if trigger.get("status") != "success":
-            save_stage_error(out, "trigger_error.json", trigger)
-            raise RuntimeError(trigger.get("message") or trigger.get("description") or "trigger failed")
+            if trigger.get("status") != "success":
+                save_stage_error(out, "trigger_error.json", trigger)
+                raise RuntimeError(trigger.get("message") or trigger.get("description") or "trigger failed")
 
-        token = trigger.get("token")
-        if not token:
-            raise RuntimeError("trigger response missing token")
+            token = trigger.get("token")
+            if not token:
+                raise RuntimeError("trigger response missing token")
 
-        meta_path = write_trigger_meta(
-            out,
-            token=token,
-            input_type=input_type,
-            input_value=input_path,
-        )
+            meta_path = write_trigger_meta(
+                out,
+                token=token,
+                input_type=input_type,
+                input_value=input_path,
+            )
 
-        summary = complete_parse_job(client, token, out_dir=out, source_stem=source_stem)
-        return {
-            "output_dir": summary["output_dir"],
-            "pages_tree_path": summary["pages_tree_path"],
-            "markdown_path": summary["markdown_path"],
-            "token": summary.get("token", ""),
-            "input_type": input_type,
-            "source_stem": source_stem,
-            "source": input_path,
-            "trigger_meta_path": str(meta_path),
-        }
+            summary = complete_parse_job(client, token, out_dir=out, source_stem=source_stem)
+            return {
+                "output_dir": summary["output_dir"],
+                "pages_tree_path": summary["pages_tree_path"],
+                "markdown_path": summary["markdown_path"],
+                "token": summary.get("token", ""),
+                "input_type": input_type,
+                "source_stem": source_stem,
+                "source": input_path,
+                "trigger_meta_path": str(meta_path),
+            }
+    finally:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
 
 def load_pages_tree(pages_tree_path: str | Path) -> dict[str, Any]:

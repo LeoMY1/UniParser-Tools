@@ -70,22 +70,25 @@ def register_tools(mcp: FastMCP) -> None:
             return config_error(str(exc))
 
         try:
-            req = ParseRequest(
-                file_path=file_path,
-                image_path=image_path,
-                pdf_url=pdf_url,
-                output_dir=output_dir,
-                overwrite=overwrite,
-                async_mode=async_mode,
-                textual=textual,
-                equation=equation,
-                table=table,
-                chart=chart,
-                figure=figure,
-                expression=expression,
-                molecule=molecule,
-            )
-        except ValueError as exc:
-            return input_error(str(exc))
+            try:
+                req = ParseRequest(
+                    file_path=file_path,
+                    image_path=image_path,
+                    pdf_url=pdf_url,
+                    output_dir=output_dir,
+                    overwrite=overwrite,
+                    async_mode=async_mode,
+                    textual=textual,
+                    equation=equation,
+                    table=table,
+                    chart=chart,
+                    figure=figure,
+                    expression=expression,
+                    molecule=molecule,
+                )
+            except ValueError as exc:
+                return input_error(str(exc))
 
-        return await run_parse(client, req, ctx)
+            return await run_parse(client, req, ctx)
+        finally:
+            client.close()
