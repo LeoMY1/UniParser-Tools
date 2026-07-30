@@ -104,7 +104,18 @@ import os
 parser = UniParserClient(
     host="https://uniparser.dp.tech/",
     api_key=os.getenv("UNIPARSER_API_KEY"),
+    request_timeout=(10, 60),       # 普通请求：连接/读取超时
+    sync_request_timeout=(10, 1860), # 同步解析请求：连接/读取超时
 )
+```
+
+`request_timeout` 用于健康检查、结果获取和异步任务提交；`sync_request_timeout`
+只用于 `sync=True` 的解析请求。它们是客户端 HTTP 超时，不等同于服务端解析预算。
+客户端可作为上下文管理器使用，以及时关闭连接池：
+
+```python
+with UniParserClient(host=host, api_key=api_key) as parser:
+    result = parser.version()
 ```
 
 ## 解析配置：7 个语义类 + 2 个枚举
@@ -354,10 +365,11 @@ token = result["token"]
 
 | 字段 | 出现场景 | 说明 |
 |------|------|------|
-| `status` | 始终存在 | `"success"` / `"error"`（见 `StatusFlag`） |
+| `status` | 任务响应或错误响应 | `"success"` / `"error"`（见 `StatusFlag`）；`version` 等信息接口不保证该字段 |
 | `token` | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯 |
-| `description` | 错误时 | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
-| `message` | 错误时 | 服务端返回的原始报文（非 JSON 时才填充） |
+| `description` | 错误时 | 服务端业务错误，或不含本地 traceback 的网络错误摘要 |
+| `message` | 错误时 | 客户端请求阶段说明；非 JSON 响应会额外保留在 `body` |
+| `http_status` | HTTP 4xx/5xx 时 | 原始 HTTP 状态码，同时保留服务端 JSON 错误体 |
 
 > 直接调用 REST API（curl / 自研客户端）时才需要关注 `401/403/429/…` 等原始 HTTP 状态码，详见各部署实例 `<host>/api` 上的 Authentication 章节。
 

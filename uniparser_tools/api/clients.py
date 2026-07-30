@@ -1,13 +1,17 @@
-import json
 import re
-import traceback
 import uuid
 from dataclasses import asdict, dataclass
-from typing import List, Union
+from typing import List, Optional, Union
 
 import requests
 from PIL import Image
 
+from uniparser_tools.api.transport import (
+    DEFAULT_REQUEST_TIMEOUT,
+    DEFAULT_SYNC_REQUEST_TIMEOUT,
+    RequestTimeout,
+    UniParserHTTPTransport,
+)
 from uniparser_tools.common.constant import (
     FormatFlag,
     IntEnum,
@@ -91,12 +95,38 @@ class GetFormattedData:
 
 
 class UniParserClient:
-    def __init__(self, host: str, api_key: str):
-        assert api_key, "api_key can not be empty"
-        assert host.startswith("http"), "host must start with http or https"
+    def __init__(
+        self,
+        host: str,
+        api_key: str,
+        *,
+        request_timeout: RequestTimeout = DEFAULT_REQUEST_TIMEOUT,
+        sync_request_timeout: RequestTimeout = DEFAULT_SYNC_REQUEST_TIMEOUT,
+        session: Optional[requests.Session] = None,
+    ):
+        self._transport = UniParserHTTPTransport(
+            host,
+            api_key,
+            request_timeout=request_timeout,
+            session=session,
+        )
         self.api_key = api_key
         self.user = uuid.uuid5(uuid.NAMESPACE_DNS, self.api_key)
-        self.host = host
+        self.host = self._transport.host
+        self.request_timeout = request_timeout
+        self.sync_request_timeout = sync_request_timeout
+
+    def close(self):
+        self._transport.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def _trigger_http_timeout(self, sync: bool):
+        return self.sync_request_timeout if sync else self.request_timeout
 
     @property
     def trigger_file_endpoint(self):
@@ -126,46 +156,10 @@ class UniParserClient:
         assert re.match(r"^[-\._?=&a-zA-Z0-9]{1,128}$", token), f"token: {token} contains illegal characters"
 
     def health(self):
-        try:
-            headers = {"X-API-Key": self.api_key}
-            response = requests.get(f"{self.host}/health", headers=headers, timeout=30)
-        except Exception:
-            return {
-                "status": StatusFlag.Error,
-                "description": traceback.format_exc(),
-            }
-        if response.status_code >= 400:
-            return {
-                "status": "error",
-                "http_status": response.status_code,
-                "description": response.reason_phrase,
-                "body": response.text,
-            }
-        try:
-            return response.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "message": response.text}
+        return self._transport.request("GET", "/health", error_message="health check failed")
 
     def version(self):
-        try:
-            headers = {"X-API-Key": self.api_key}
-            response = requests.get(f"{self.host}/version", headers=headers, timeout=30)
-        except Exception:
-            return {
-                "status": StatusFlag.Error,
-                "description": traceback.format_exc(),
-            }
-        if response.status_code >= 400:
-            return {
-                "status": "error",
-                "http_status": response.status_code,
-                "description": response.reason_phrase,
-                "body": response.text,
-            }
-        try:
-            return response.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "message": response.text}
+        return self._transport.request("GET", "/version", error_message="version request failed")
 
     def trigger_file(
         self,
@@ -212,22 +206,25 @@ class UniParserClient:
         )
 
         try:
-            headers = {"X-API-Key": self.api_key}
-            files = {"file": open(file_path, "rb")}
             data = asdict(trigger_data, dict_factory=int_enum_factory)
-            response = requests.post(self.trigger_file_endpoint, files=files, data=data, headers=headers)
-        except Exception:
+            with open(file_path, "rb") as file_obj:
+                return self._transport.request(
+                    "POST",
+                    "/trigger-file-async",
+                    files={"file": file_obj},
+                    data=data,
+                    timeout=self._trigger_http_timeout(sync),
+                    error_message="trigger file failed",
+                    token=token,
+                )
+        except OSError as exc:
             return {
                 "status": StatusFlag.Error,
                 "token": token,
                 "message": "trigger file failed",
-                "description": traceback.format_exc(),
+                "description": str(exc),
+                "error_type": type(exc).__name__,
             }
-
-        try:
-            return response.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "token": token, "message": response.text}
 
     def trigger_snip(
         self,
@@ -269,21 +266,25 @@ class UniParserClient:
         )
 
         try:
-            headers = {"X-API-Key": self.api_key}
-            img = dump_image_base64_str(Image.open(snip_path).convert("RGB"))
+            with Image.open(snip_path) as source_image:
+                img = dump_image_base64_str(source_image.convert("RGB"))
             data = {"img": img, **asdict(trigger_data, dict_factory=int_enum_factory)}
-            result = requests.post(self.trigger_snip_endpoint, data=data, headers=headers)
-        except Exception:
+            return self._transport.request(
+                "POST",
+                "/trigger-snip-async",
+                data=data,
+                timeout=self._trigger_http_timeout(sync),
+                error_message="trigger snip failed",
+                token=token,
+            )
+        except (OSError, ValueError) as exc:
             return {
                 "status": StatusFlag.Error,
                 "token": token,
                 "message": "trigger snip failed",
-                "description": traceback.format_exc(),
+                "description": str(exc),
+                "error_type": type(exc).__name__,
             }
-        try:
-            return result.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "token": token, "message": result.text}
 
     def trigger_url(
         self,
@@ -326,21 +327,15 @@ class UniParserClient:
             callback_url=callback_url,
             callback_secret=callback_secret,
         )
-        try:
-            headers = {"X-API-Key": self.api_key}
-            data = asdict(trigger_data, dict_factory=int_enum_factory)
-            result = requests.post(self.trigger_url_endpoint, json=data, headers=headers)
-        except Exception:
-            return {
-                "status": StatusFlag.Error,
-                "token": token,
-                "message": "trigger url failed",
-                "description": traceback.format_exc(),
-            }
-        try:
-            return result.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "token": token, "message": result.text}
+        data = asdict(trigger_data, dict_factory=int_enum_factory)
+        return self._transport.request(
+            "POST",
+            "/trigger-url-async",
+            json=data,
+            timeout=self._trigger_http_timeout(sync),
+            error_message="trigger url failed",
+            token=token,
+        )
 
     def get_result(
         self,
@@ -359,21 +354,14 @@ class UniParserClient:
             pages_tree=pages_tree,
             molecule_source=molecule_source,
         )
-        try:
-            headers = {"X-API-Key": self.api_key}
-            data = asdict(data, dict_factory=int_enum_factory)
-            result = requests.post(self.get_result_endpoint, json=data, headers=headers)
-        except Exception:
-            return {
-                "status": StatusFlag.Error,
-                "token": token,
-                "message": "get result failed",
-                "description": traceback.format_exc(),
-            }
-        try:
-            return result.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "token": token, "message": result.text}
+        payload = asdict(data, dict_factory=int_enum_factory)
+        return self._transport.request(
+            "POST",
+            "/get-result",
+            json=payload,
+            error_message="get result failed",
+            token=token,
+        )
 
     def get_formatted(
         self,
@@ -408,18 +396,11 @@ class UniParserClient:
             equation=equation,
             marginalia=marginalia,
         )
-        try:
-            headers = {"X-API-Key": self.api_key}
-            data = asdict(data, dict_factory=int_enum_factory)
-            result = requests.post(self.get_formatted_endpoint, json=data, headers=headers)
-        except Exception:
-            return {
-                "status": StatusFlag.Error,
-                "token": token,
-                "message": "get formatted failed",
-                "description": traceback.format_exc(),
-            }
-        try:
-            return result.json()
-        except json.decoder.JSONDecodeError:
-            return {"status": StatusFlag.Error, "token": token, "message": result.text}
+        payload = asdict(data, dict_factory=int_enum_factory)
+        return self._transport.request(
+            "POST",
+            "/get-formatted",
+            json=payload,
+            error_message="get formatted failed",
+            token=token,
+        )

@@ -6,10 +6,42 @@ unless credentials are provided.
 
 from __future__ import annotations
 
-import pytest
+import json
 
-from uniparser_tools.api import clients as clients_mod
+import pytest
+import requests
+
 from uniparser_tools.api.clients import UniParserClient
+
+
+class FakeResponse:
+    def __init__(self, status_code: int = 200, payload=None, text: str = "", reason: str = "OK"):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+        self.reason = reason
+
+    def json(self):
+        if self._payload is None:
+            raise json.JSONDecodeError("invalid", self.text, 0)
+        return self._payload
+
+
+class FakeSession:
+    def __init__(self, response=None, error=None):
+        self.response = response or FakeResponse(payload={"status": "success"})
+        self.error = error
+        self.calls = []
+        self.closed = False
+
+    def request(self, method, url, **kwargs):
+        self.calls.append((method, url, kwargs))
+        if self.error:
+            raise self.error
+        return self.response
+
+    def close(self):
+        self.closed = True
 
 
 class TestClientConstruction:
@@ -22,7 +54,8 @@ class TestClientConstruction:
             UniParserClient(host="example.com", api_key="k")
 
     def test_endpoints_compose_correctly(self) -> None:
-        c = UniParserClient(host="https://example.com", api_key="k")
+        c = UniParserClient(host="https://example.com/", api_key="k")
+        assert c.host == "https://example.com"
         assert c.trigger_file_endpoint.endswith("/trigger-file-async")
         assert c.trigger_url_endpoint.endswith("/trigger-url-async")
         assert c.trigger_snip_endpoint.endswith("/trigger-snip-async")
@@ -60,33 +93,87 @@ class TestTokenHelpers:
 class TestClientErrorShapes:
     """When the underlying request raises, we expect structured error dicts."""
 
-    def _raise_conn_err(self, *args, **kwargs):
-        import requests as _requests
-
-        raise _requests.ConnectionError("simulated")
-
-    def test_health_returns_error_dict_on_request_failure(self, monkeypatch) -> None:
-        monkeypatch.setattr(clients_mod.requests, "get", self._raise_conn_err)
-        c = UniParserClient(host="https://example.com", api_key="k")
+    def test_health_returns_error_dict_on_request_failure(self) -> None:
+        session = FakeSession(error=requests.ConnectionError("simulated"))
+        c = UniParserClient(host="https://example.com", api_key="k", session=session)
         result = c.health()
         assert isinstance(result, dict)
         assert result.get("status") == "error"
         assert "description" in result
 
-    def test_version_returns_error_dict_on_request_failure(self, monkeypatch) -> None:
-        monkeypatch.setattr(clients_mod.requests, "get", self._raise_conn_err)
-        c = UniParserClient(host="https://example.com", api_key="k")
+    def test_version_returns_error_dict_on_request_failure(self) -> None:
+        session = FakeSession(error=requests.ConnectionError("simulated"))
+        c = UniParserClient(host="https://example.com", api_key="k", session=session)
         result = c.version()
         assert isinstance(result, dict)
         assert result.get("status") == "error"
         assert "description" in result
 
-    def test_trigger_file_returns_error_dict_on_request_failure(self, monkeypatch, tmp_path) -> None:
+    def test_trigger_file_returns_error_dict_on_request_failure(self, tmp_path) -> None:
         p = tmp_path / "dummy.pdf"
         p.write_bytes(b"%PDF-1.4 tiny")
-        monkeypatch.setattr(clients_mod.requests, "post", self._raise_conn_err)
-        c = UniParserClient(host="https://example.com", api_key="k")
+        session = FakeSession(error=requests.ConnectionError("simulated"))
+        c = UniParserClient(host="https://example.com", api_key="k", session=session)
         result = c.trigger_file(file_path=str(p))
         assert isinstance(result, dict)
         assert result.get("status") == "error"
         assert "token" in result
+
+
+class TestHTTPTransport:
+    def test_uses_short_timeout_for_async_trigger(self, tmp_path) -> None:
+        p = tmp_path / "dummy.pdf"
+        p.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession()
+        c = UniParserClient(
+            host="https://example.com",
+            api_key="k",
+            request_timeout=(1, 2),
+            sync_request_timeout=(3, 4),
+            session=session,
+        )
+
+        c.trigger_file(file_path=str(p), sync=False)
+
+        assert session.calls[0][2]["timeout"] == (1, 2)
+
+    def test_uses_sync_timeout_for_sync_trigger(self, tmp_path) -> None:
+        p = tmp_path / "dummy.pdf"
+        p.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession()
+        c = UniParserClient(
+            host="https://example.com",
+            api_key="k",
+            request_timeout=(1, 2),
+            sync_request_timeout=(3, 4),
+            session=session,
+        )
+
+        c.trigger_file(file_path=str(p), sync=True)
+
+        assert session.calls[0][2]["timeout"] == (3, 4)
+
+    def test_http_error_preserves_json_body(self) -> None:
+        session = FakeSession(
+            response=FakeResponse(
+                status_code=429,
+                payload={"status": "error", "description": "rate limited"},
+                reason="Too Many Requests",
+            )
+        )
+        c = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = c.health()
+
+        assert result["description"] == "rate limited"
+        assert result["http_status"] == 429
+
+    def test_client_context_closes_owned_session(self, monkeypatch) -> None:
+        session = FakeSession()
+        monkeypatch.setattr("uniparser_tools.api.transport.requests.Session", lambda: session)
+        c = UniParserClient(host="https://example.com", api_key="k")
+
+        with c:
+            pass
+
+        assert session.closed is True
