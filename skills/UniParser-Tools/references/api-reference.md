@@ -42,9 +42,9 @@ No account, API-key, balance, or administrative write operations are exposed.
 ```python
 result = parser.trigger_file(
     file_path="./document.pdf",
-    sync=False,                    # Required for async mode
-    callback_url="https://...",    # Your callback endpoint
-    callback_secret="your-secret", # For signature verification
+    sync=False,  # Required for async mode
+    callback_url="https://...",  # Your callback endpoint
+    callback_secret="your-secret",  # For signature verification
     # ... other parse mode parameters
 )
 ```
@@ -110,10 +110,10 @@ the upload completes.
 - `ParseModeTextual.Disable` - Skip textual extraction
 
 **For table, molecule, chart, figure, expression, equation:**
-- `ParseMode.OCRFast` - Fast OCR (default)
+- `ParseMode.OCRFast` - Fast OCR
 - `ParseMode.OCRHighQuality` - High quality OCR
 - `ParseMode.DumpBase64` - Return raw image as base64
-- `ParseMode.Disable` - Skip extraction
+- `ParseMode.Disable` - Skip extraction (client default)
 
 ## Format Flags
 

@@ -58,6 +58,12 @@ pip install -e .
 
 > **说明：** 仅执行 `pip install -r requirements.txt` **不会**注册 `uniparser` 命令；SDK 开发用前者即可，CLI 必须执行 `pip install -e .`。
 
+开发和运行测试时，请安装测试依赖：
+
+```bash
+pip install -e ".[test]"
+```
+
 安装后验证：
 
 ```bash
@@ -101,11 +107,12 @@ uniparser parse report.pdf
 
 ```python
 import os
+
 parser = UniParserClient(
     host="https://uniparser.dp.tech/",
     api_key=os.getenv("UNIPARSER_API_KEY"),
-    request_timeout=(10, 60),       # 普通请求：连接/读取超时
-    sync_request_timeout=(10, 1860), # 同步解析请求：连接/读取超时
+    request_timeout=(10, 60),  # 普通请求：连接/读取超时
+    sync_request_timeout=(10, 1860),  # 同步解析请求：连接/读取超时
 )
 ```
 
@@ -222,13 +229,10 @@ import os
 from uniparser_tools.api.clients import UniParserClient
 
 # 设置 API 密钥
-api_key = os.getenv('UNIPARSER_API_KEY')
+api_key = os.getenv("UNIPARSER_API_KEY")
 
 # 初始化客户端
-parser = UniParserClient(
-    host="https://uniparser.dp.tech/",
-    api_key=api_key
-)
+parser = UniParserClient(host="https://uniparser.dp.tech/", api_key=api_key)
 ```
 
 ### 2. 解析 PDF 文件（科学文献推荐默认）
@@ -240,12 +244,12 @@ from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 result = parser.trigger_file(
     file_path="./example.pdf",
     textual=ParseModeTextual.OCRHighQuality,  # high quality
-    equation=ParseMode.OCRHighQuality,        # high quality
-    table=ParseMode.OCRHighQuality,           # high quality
-    chart=ParseMode.DumpBase64,               # original image base64
-    figure=ParseMode.DumpBase64,              # original image base64
-    expression=ParseMode.DumpBase64,          # original image base64
-    molecule=ParseMode.OCRFast,               # fast
+    equation=ParseMode.OCRHighQuality,  # high quality
+    table=ParseMode.OCRHighQuality,  # high quality
+    chart=ParseMode.DumpBase64,  # original image base64
+    figure=ParseMode.DumpBase64,  # original image base64
+    expression=ParseMode.DumpBase64,  # original image base64
+    molecule=ParseMode.OCRFast,  # fast
 )
 
 if result["status"] == "success":
@@ -259,7 +263,7 @@ if result["status"] == "success":
 
 | 开关 | 默认 | 说明 |
 |------|------|------|
-| `content` | `True` | 返回全文纯/富文本，适合 LLM |
+| `content` | `False` | 返回全文纯/富文本，适合 LLM |
 | `objects` | `False` | JSON 语义块列表，适合语义分析 |
 | `pages_dict` | `False` | 按页组织的原始解析布局 |
 | `pages_tree` | `False` | 带父子关系的嵌套树，适合复杂分析 |
@@ -446,9 +450,9 @@ from uniparser_tools.common.constant import FormatFlag
 result = parser.get_formatted(
     token,
     content=True,
-    textual=FormatFlag.Markdown,    # 文本使用 Markdown
-    table=FormatFlag.Html,          # 表格使用 HTML
-    equation=FormatFlag.Latex,       # 公式使用 LaTeX
+    textual=FormatFlag.Markdown,  # 文本使用 Markdown
+    table=FormatFlag.Html,  # 表格使用 HTML
+    equation=FormatFlag.Latex,  # 公式使用 LaTeX
 )
 
 if result["status"] == "success":

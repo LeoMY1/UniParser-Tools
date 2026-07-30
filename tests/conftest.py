@@ -50,11 +50,7 @@ def api_key() -> str | None:
 
 @pytest.fixture(scope="session")
 def api_host() -> str | None:
-    return (
-        os.environ.get("UNIPARSER_TEST_HOST")
-        or os.environ.get("UNIPARSER_BASE_URL")
-        or "https://uniparser.dp.tech"
-    )
+    return os.environ.get("UNIPARSER_TEST_HOST") or os.environ.get("UNIPARSER_BASE_URL") or "https://uniparser.dp.tech"
 
 
 @pytest.fixture(scope="session")

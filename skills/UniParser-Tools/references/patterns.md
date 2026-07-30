@@ -77,26 +77,23 @@ from flask import Flask, request
 app = Flask(__name__)
 CALLBACK_SECRET = "your-secret-key"
 
-@app.route('/callback', methods=['POST'])
+
+@app.route("/callback", methods=["POST"])
 def handle_callback():
     data = request.json
-    content = data['content']
-    received_checksum = data['checksum']
-    
+    content = data["content"]
+    received_checksum = data["checksum"]
+
     # Verify signature
-    expected = hmac.new(
-        CALLBACK_SECRET.encode(),
-        json.dumps(content).encode(),
-        hashlib.sha256
-    ).hexdigest()
-    
+    expected = hmac.new(CALLBACK_SECRET.encode(), json.dumps(content).encode(), hashlib.sha256).hexdigest()
+
     if not hmac.compare_digest(received_checksum, expected):
-        return {'error': 'Invalid signature'}, 401
-    
+        return {"error": "Invalid signature"}, 401
+
     # Process the result
-    token = data['token']
+    token = data["token"]
     print(f"Task {token} completed!")
-    return {'status': 'ok'}
+    return {"status": "ok"}
 ```
 
 ## Pattern 4: Mixed Format Output
@@ -105,10 +102,10 @@ def handle_callback():
 result = parser.get_formatted(
     token,
     content=True,
-    textual=FormatFlag.Markdown,   # Text as Markdown
-    table=FormatFlag.Html,         # Tables as HTML
-    equation=FormatFlag.Latex,     # Equations as LaTeX
-    figure=FormatFlag.Markdown,    # Figures as Markdown img
+    textual=FormatFlag.Markdown,  # Text as Markdown
+    table=FormatFlag.Html,  # Tables as HTML
+    equation=FormatFlag.Latex,  # Equations as LaTeX
+    figure=FormatFlag.Markdown,  # Figures as Markdown img
 )
 ```
 
