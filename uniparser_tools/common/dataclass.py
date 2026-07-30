@@ -4,13 +4,12 @@ import functools
 import json
 import math
 import re
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from dataclasses import InitVar, asdict, dataclass, field, fields, is_dataclass
 from html import escape
 from io import StringIO
 from typing import Any, Dict, List, Tuple, Union
 from urllib.parse import quote
 
-import latex2mathml.converter
 import pandas as pd
 from pylatexenc.latexencode import unicode_to_latex
 
@@ -50,7 +49,7 @@ def item2format_(item: SemanticItem, item_format: FormatFlag):
         if not isinstance(item, GroupedResult):
             s = getattr(item, item_format)
             if not item.plain and getattr(item, "source", ""):
-                if B64_RE.match(item.source):
+                if B64_RE.fullmatch(item.source):
                     if item_format == FormatFlag.Markdown:
                         s += f"![{item.type}](data:image/png;base64,{item.source})"
                     elif item_format == FormatFlag.Html:
@@ -542,7 +541,10 @@ class Item(DataClassGeneric):
     lang: Language = Language.Unknown
     direction: Direction = Direction.Unknown  # 需要如何旋转
 
-    def __post_init__(self):
+    target: InitVar[bool] = False  # 是不是目标item，不写入asdict
+
+    def __post_init__(self, target: bool = False):
+        self.target = target
         if isinstance(self.bbox, list):
             self.bbox = BBox(*self.bbox)
         elif isinstance(self.bbox, dict):
@@ -553,6 +555,14 @@ class Item(DataClassGeneric):
             self.lang = Language(self.lang)
         if isinstance(self.direction, int):
             self.direction = Direction(self.direction)
+
+    @staticmethod
+    def _coerce_bbox(bbox):
+        if isinstance(bbox, list):
+            return BBox(*bbox)
+        if isinstance(bbox, dict):
+            return BBox(**bbox)
+        return bbox
 
     @property
     def r_bbox(self):
@@ -662,17 +672,54 @@ class TextualResult(SemanticItem):
     type: LayoutType = LayoutType.Text
     bboxes: List[BBox] = field(default_factory=list)
     contents: List[str] = field(default_factory=list)
-    text: str = ""
+    types: List[LayoutType] = field(default_factory=list)
+    text: str = ""  # Deprecated: legacy plain text field; use contents/types/bboxes instead.
 
-    def __post_init__(self):
-        super().__post_init__()
-        assert len(self.bboxes) == len(self.contents)
-        if len(self.bboxes) and isinstance(self.bboxes[0], dict):
-            self.bboxes = [BBox(**b) for b in self.bboxes]
+    def __post_init__(self, target: bool = False):
+        super().__post_init__(target)
+        if not self.contents and self.text:
+            from uniparser_tools.utils.format_utils import parse_inline_text
+
+            self.contents, self.types = parse_inline_text(self.text)
+            self.bboxes = []
+        elif self.contents and not self.types:
+            self.types = [LayoutType.Text] * len(self.contents)
+        if not self.text:
+            self.text = "".join(self.contents)
+        self.bboxes = [self._coerce_bbox(bbox) for bbox in self.bboxes]
+        self.types = [LayoutType(t) if isinstance(t, str) else t for t in self.types]
+        if len(self.contents) != len(self.types):
+            raise ValueError("TextualResult contents/types length mismatch")
+        if self.bboxes and len(self.bboxes) != len(self.contents):
+            raise ValueError("TextualResult bboxes must be empty or match contents length")
+        if any(bbox is None for bbox in self.bboxes):
+            raise ValueError("TextualResult bboxes must not contain None")
+
+    @staticmethod
+    def _content_format(content: str, content_type: LayoutType, item_format: FormatFlag) -> str:
+        if content_type in [LayoutType.Equation, LayoutType.EquationInline]:
+            return EquationResult.format_latex_repr(content, item_format, inline=True)
+        if content_type == LayoutType.Molecule:
+            return MoleculeResult.format_molecule_text(content, item_format, inline=True)
+        if item_format == FormatFlag.Html:
+            return escape(content)
+        if item_format == FormatFlag.Latex:
+            try:
+                return unicode_to_latex(content, unknown_char_policy="keep", unknown_char_warning=False)
+            except Exception:
+                get_root_logger().exception(f"unicode_to_latex failed: {content}")
+                return content
+        return content
+
+    def _inline_text(self, item_format: FormatFlag) -> str:
+        return "".join(
+            self._content_format(content, content_type, item_format)
+            for content, content_type in zip(self.contents, self.types)
+        )
 
     @property
     def plain(self):
-        return self.text
+        return self._inline_text(FormatFlag.Plain)
 
     @property
     def markup(self):
@@ -683,35 +730,51 @@ class TextualResult(SemanticItem):
 
     @property
     def markdown(self):
+        plain = self._inline_text(FormatFlag.Markdown)
         if self.type in [LayoutType.Paragraph, LayoutType.Text, LayoutType.Description]:
-            return self.plain
+            return plain
         elif self.type == LayoutType.Legend:
-            return f"{self.plain}"
+            return f"*{plain}*"
         elif self.type in [LayoutType.Token, LayoutType.EquationID, LayoutType.MoleculeID]:
-            return f"{self.plain}"
+            return f"{plain}"
         elif self.type in [
             LayoutType.Caption,
             LayoutType.TableCaption,
             LayoutType.FigureCaption,
             LayoutType.ImageCaption,
+            LayoutType.AlgorithmCaption,
+            LayoutType.ExpressionCaption,
         ]:
-            return f"{self.plain}"
+            return f"**{plain}**"
+        elif self.type in [
+            LayoutType.AlgorithmFootnote,
+            LayoutType.ImageFootnote,
+            LayoutType.TableFootnote,
+            LayoutType.PageNote,
+        ]:
+            return f"*{plain}*"
+        elif self.type == LayoutType.Algorithm:
+            body = plain.rstrip("\n")
+            return f"```\n{body}\n```"
         elif self.type == LayoutType.Title:
-            return f"# {self.plain}"
+            return f"## {plain}"
         elif self.type == LayoutType.DocumentTitle:
-            return f"# {self.plain}"
+            return f"# {plain}"
         else:
-            return self.plain
+            return plain
 
     @property
     def latex(self):
-        try:
-            # 对于无法映射到 LaTeX 的字符（例如中文“物”），使用 unknown_char_policy=\"keep\"
-            # 以保留原始字符并避免 pylatexenc 打印告警。
-            plain = unicode_to_latex(self.plain, unknown_char_policy="keep", unknown_char_warning=False)
-        except Exception:
-            get_root_logger().exception(f"unicode_to_latex failed: {self.plain}")
-            plain = self.plain
+        if self.contents:
+            plain = self._inline_text(FormatFlag.Latex)
+        else:
+            try:
+                # 对于无法映射到 LaTeX 的字符（例如中文“物”），使用 unknown_char_policy=\"keep\"
+                # 以保留原始字符并避免 pylatexenc 打印告警。
+                plain = unicode_to_latex(self.plain, unknown_char_policy="keep", unknown_char_warning=False)
+            except Exception:
+                get_root_logger().exception(f"unicode_to_latex failed: {self.plain}")
+                plain = self.plain
         if self.type in [LayoutType.Paragraph, LayoutType.Text, LayoutType.Description]:
             return plain
         elif self.type == LayoutType.Legend:
@@ -723,8 +786,21 @@ class TextualResult(SemanticItem):
             LayoutType.TableCaption,
             LayoutType.FigureCaption,
             LayoutType.ImageCaption,
+            LayoutType.AlgorithmCaption,
+            LayoutType.ExpressionCaption,
         ]:
             return f"\\textbf{{{plain}}}"
+        elif self.type in [
+            LayoutType.AlgorithmFootnote,
+            LayoutType.ImageFootnote,
+            LayoutType.TableFootnote,
+            LayoutType.PageNote,
+        ]:
+            return f"\\textit{{{plain}}}"
+        elif self.type == LayoutType.Algorithm:
+            # verbatim needs raw source text, not latex-escaped body.
+            body = "".join(self.contents) if self.contents else self.plain
+            return f"\\begin{{verbatim}}\n{body.rstrip()}\n\\end{{verbatim}}"
         elif self.type == LayoutType.Title:
             return f"\\section{{{plain}}}"
         elif self.type == LayoutType.DocumentTitle:
@@ -734,25 +810,38 @@ class TextualResult(SemanticItem):
 
     @property
     def html(self):
+        plain = self._inline_text(FormatFlag.Html)
+        type_cls = getattr(self.type, "value", "text")
         if self.type in [LayoutType.Paragraph, LayoutType.Text, LayoutType.Description]:
-            return f"<p>{self.plain}</p>"
+            return f"<p>{plain}</p>"
         elif self.type == LayoutType.Legend:
-            return f"<legend>{self.plain}</legend>"
+            return f"<legend>{plain}</legend>"
         elif self.type in [LayoutType.Token, LayoutType.EquationID, LayoutType.MoleculeID]:
-            return f"<em>{self.plain}</em>"
+            return f"<em>{plain}</em>"
         elif self.type in [
             LayoutType.Caption,
             LayoutType.TableCaption,
             LayoutType.FigureCaption,
             LayoutType.ImageCaption,
+            LayoutType.AlgorithmCaption,
+            LayoutType.ExpressionCaption,
         ]:
-            return f"<caption>{self.plain}</caption>"
+            return f'<caption class="caption-{type_cls}">{plain}</caption>'
+        elif self.type in [
+            LayoutType.AlgorithmFootnote,
+            LayoutType.ImageFootnote,
+            LayoutType.TableFootnote,
+            LayoutType.PageNote,
+        ]:
+            return f'<aside class="footnote footnote-{type_cls}"><em>{plain}</em></aside>'
+        elif self.type == LayoutType.Algorithm:
+            return f'<pre class="algorithm"><code>{plain}</code></pre>'
         elif self.type == LayoutType.Title:
-            return f"<h2>{self.plain}</h2>"
+            return f'<h2 class="title">{plain}</h2>'
         elif self.type == LayoutType.DocumentTitle:
-            return f"<h1>{self.plain}</h1>"
+            return f'<h1 class="document-title">{plain}</h1>'
         else:
-            return f"<p>{self.plain}</p>"
+            return f"<p>{plain}</p>"
 
 
 @dataclass
@@ -771,6 +860,7 @@ class MoleculeResult(SemanticItem):
     caption: str = ""
     markush: bool = False
     smi: str = ""
+    esmi: str = ""
     sru: bool = False
     drawing: str = ""
 
@@ -785,21 +875,31 @@ class MoleculeResult(SemanticItem):
     def markup(self):
         return f"\\begin{{{self.type.value}}}\n{self.plain}\n\\end{{{self.type.value}}}"
 
+    @staticmethod
+    def format_molecule_text(text: str, item_format: FormatFlag, inline: bool = False):
+        if item_format == FormatFlag.Markdown:
+            return f"`{text}`"
+        if item_format == FormatFlag.Latex:
+            return f"\\texttt{{{unicode_to_latex(text, unknown_char_policy='keep', unknown_char_warning=False)}}}"
+        if item_format == FormatFlag.Html:
+            return f"<code>{escape(text)}</code>"
+        return text
+
     @property
     def markdown(self):
         # if self.drawing.strip():
         #     return f"<div><div>{self.drawing}</div><code>{self.plain}</code></div>"
-        return f"***{self.plain}***"
+        return self.format_molecule_text(self.plain, FormatFlag.Markdown)
 
     @property
     def latex(self):
-        return f"\\textit{{\\textbf{{{self.plain}}}}}"
+        return self.format_molecule_text(self.plain, FormatFlag.Latex)
 
     @property
     def html(self):
         # if self.drawing.strip():
         #     return f"<div><div>{self.drawing}</div><code>{self.plain}</code></div>"
-        return f"<code>{self.plain}</code>"
+        return self.format_molecule_text(self.plain, FormatFlag.Html)
 
 
 @dataclass
@@ -814,6 +914,28 @@ class ReactionComponent(DataClassGeneric):
             self.bbox = BBox(*self.bbox)
         elif isinstance(self.bbox, dict):
             self.bbox = BBox(**self.bbox)
+
+    @property
+    def is_molecule(self):
+        return self.category_id == 1 or self.category == "[Mol]"
+
+    def format_text(self, item_format: FormatFlag) -> str:
+        text = str(self.text or "").strip()
+        if not text:
+            return ""
+        if self.is_molecule:
+            return TextualResult._content_format(text, LayoutType.Molecule, item_format)
+
+        from uniparser_tools.utils.format_utils import parse_inline_text
+
+        contents, types = parse_inline_text(text)
+        if not contents:
+            contents, types = [text], [LayoutType.Text]
+        content_types = types or [LayoutType.Text] * len(contents)
+        return "".join(
+            TextualResult._content_format(str(content), content_type, item_format)
+            for content, content_type in zip(contents, content_types)
+        )
 
 
 @dataclass
@@ -861,21 +983,31 @@ class ExpressionResult(SemanticItem):
     type: LayoutType = LayoutType.Expression
     reactions: List[Reaction] = field(default_factory=list)
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __post_init__(self, target: bool = False):
+        super().__post_init__(target)
         if len(self.reactions) and isinstance(self.reactions[0], dict):
             self.reactions = [Reaction(**r) for r in self.reactions]
 
-    @functools.cached_property
-    def df(self) -> pd.DataFrame:
+    @staticmethod
+    def _format_components(components, item_format: FormatFlag, sep: str = ",") -> str:
+        texts = []
+        for component in components or []:
+            if isinstance(component, dict):
+                component = ReactionComponent(**component)
+            text = component.format_text(item_format)
+            if text:
+                texts.append(text)
+        return sep.join(texts)
+
+    def _df_for_format(self, item_format: FormatFlag) -> pd.DataFrame:
         try:
             reactions = []
             for r in self.reactions:
                 reactions.append(
                     dict(
-                        reactants=",".join([repr(r.text) for r in r.reactants]),
-                        products=",".join([repr(p.text) for p in r.products]),
-                        conditions=",".join([repr(c.text) for c in r.conditions]),
+                        reactants=self._format_components(r.reactants, item_format),
+                        products=self._format_components(r.products, item_format),
+                        conditions=self._format_components(r.conditions, item_format),
                     )
                 )
             if not len(reactions):
@@ -890,6 +1022,10 @@ class ExpressionResult(SemanticItem):
             )
             return pd.DataFrame()
 
+    @functools.cached_property
+    def df(self) -> pd.DataFrame:
+        return self._df_for_format(FormatFlag.Plain)
+
     @property
     def plain(self):
         if self.df.shape[-1] == 0:
@@ -902,15 +1038,39 @@ class ExpressionResult(SemanticItem):
 
     @property
     def markdown(self):
-        return self.df.to_markdown(index=False, disable_numparse=True)
+        df = self._df_for_format(FormatFlag.Markdown)
+        if df.shape[-1] == 0:
+            return ""
+        return df.to_markdown(index=False, disable_numparse=True)
 
     @property
     def latex(self):
-        return self.df.style.hide(axis="index").format(escape="latex").to_latex()
+        return self._df_for_format(FormatFlag.Latex).style.hide(axis="index").to_latex()
 
     @property
     def html(self):
-        return self.df.to_html(index=False)
+        def component_html(components):
+            return self._format_components(components, FormatFlag.Html, sep="<br>")
+
+        rows = []
+        for reaction in self.reactions or []:
+            reactants = (
+                reaction.get("reactants", []) if isinstance(reaction, dict) else getattr(reaction, "reactants", [])
+            )
+            products = reaction.get("products", []) if isinstance(reaction, dict) else getattr(reaction, "products", [])
+            conditions = (
+                reaction.get("conditions", []) if isinstance(reaction, dict) else getattr(reaction, "conditions", [])
+            )
+            rows.append(
+                "<tr>"
+                f"<td>{component_html(reactants)}</td>"
+                f"<td>{component_html(conditions)}</td>"
+                f"<td>{component_html(products)}</td>"
+                "</tr>"
+            )
+        if not rows:
+            return ""
+        return "<table><tr><th>reactants</th><th>conditions</th><th>products</th></tr>" + "".join(rows) + "</table>"
 
 
 @dataclass
@@ -923,33 +1083,55 @@ class TabularResult(SemanticItem):
     contents: List[str] = field(default_factory=list)
     structure: str = ""
 
-    def __post_init__(self):
-        super().__post_init__()
-        assert len(self.bboxes) == len(self.labels) == len(self.placeholders) == len(self.contents)
+    def __post_init__(self, target: bool = False):
+        super().__post_init__(target)
+        assert len(self.placeholders) == len(self.contents)
+        if self.bboxes:
+            assert len(self.bboxes) == len(self.placeholders)
+        if self.labels:
+            assert len(self.labels) == len(self.placeholders)
         if self.types:  # 兼容旧版本
-            assert len(self.bboxes) == len(self.types)
+            assert len(self.types) == len(self.placeholders)
         if len(self.bboxes) and isinstance(self.bboxes[0], dict):
             self.bboxes = [BBox(**b) for b in self.bboxes]
         if len(self.labels) and isinstance(self.labels[0], int):
             self.labels = [TableBBoxType(i) for i in self.labels]
-        if len(self.types) and isinstance(self.types[0], int):
-            self.types = [LayoutType(i) for i in self.types]
+        if len(self.types):
+            self.types = [LayoutType(i) if isinstance(i, (int, str)) else i for i in self.types]
+
+    def _table_html_for_format(self, item_format: FormatFlag) -> str:
+        html = self.structure
+        content_types = self.types or [LayoutType.Text] * len(self.contents)
+        for placeholder, content, content_type in zip(
+            self.placeholders[::-1], self.contents[::-1], content_types[::-1]
+        ):
+            formatted = TextualResult._content_format(str(content), content_type, item_format)
+            if item_format != FormatFlag.Html:
+                # Preserve table structure while letting the cell text carry
+                # markdown/latex/plain inline formatting literally.
+                formatted = escape(formatted)
+            html = html.replace(placeholder, formatted)
+        return html
+
+    def _table_html(self) -> str:
+        html = self._table_html_for_format(FormatFlag.Html)
+        html = "\n" + html + "\n"
+        return html
 
     @functools.cached_property
     def full_html(self) -> str:
-        html = self.structure
-        for placeholder, content in zip(self.placeholders[::-1], self.contents[::-1]):
-            # escape tag > < / in content to avoid html parse error
-            html = html.replace(placeholder, escape(content))
-        return html
+        return self._table_html_for_format(FormatFlag.Html)
+
+    def _df_for_format(self, item_format: FormatFlag) -> pd.DataFrame:
+        df = read_html(StringIO(self._table_html_for_format(item_format)))[0]
+        df = df.dropna(how="all")  # drop empty 'NaN' rows
+        df = df[df.astype(bool).sum(axis=1) > 0]  # remove empty 'blacksapce' rows
+        return df
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
         try:
-            df = read_html(StringIO(self.full_html))[0]
-            df = df.dropna(how="all")  # drop empty 'NaN' rows
-            df = df[df.astype(bool).sum(axis=1) > 0]  # remove empty 'blacksapce' rows
-            return df
+            return self._df_for_format(FormatFlag.Plain)
         except Exception:
             get_root_logger().warning(
                 f"{self.token} {self.page} {self.block} {self.type} convert html to dataframe error: {repr(self.structure)}"
@@ -968,11 +1150,11 @@ class TabularResult(SemanticItem):
 
     @property
     def markdown(self):
-        return self.df.to_markdown(index=False, disable_numparse=True)
+        return self._df_for_format(FormatFlag.Markdown).to_markdown(index=False, disable_numparse=True)
 
     @property
     def latex(self):
-        return self.df.style.hide(axis="index").format(escape="latex").to_latex()
+        return self._df_for_format(FormatFlag.Latex).style.hide(axis="index").to_latex()
 
     @property
     def html(self):
@@ -1007,9 +1189,18 @@ class ChartResult(SemanticItem):
     def df(self):
         try:
             # chart is not standard markdown table, so we convert it to markdown table
-            underlying_df = pd.DataFrame([[col.strip() for col in row.split("|")] for row in self.data.split("\n")])
+            underlying_df = pd.DataFrame(
+                [[col.strip() for col in row.strip("|").split("|")] for row in self.data.split("\n")]
+            )
+            underlying_df = underlying_df.replace(r"^\s*$", None, regex=True).dropna(how="all")
+            if underlying_df.empty:
+                return pd.DataFrame()
+
             underlying_df.columns = underlying_df.iloc[0]
             underlying_df = underlying_df[1:]
+            if underlying_df.empty:
+                return pd.DataFrame()
+
             return underlying_df
         except Exception:
             get_root_logger().warning(
@@ -1037,7 +1228,7 @@ class ChartResult(SemanticItem):
 
     @property
     def html(self):
-        return self.df.style.hide(axis="index").to_html(exclude_styles=True)
+        return self.df.to_html(index=False)
 
 
 @dataclass
@@ -1079,21 +1270,30 @@ class EquationResult(SemanticItem):
     def markup(self):
         return f"\\begin{{equation}}\n{self.latex_repr}\n\\end{{equation}}"
 
+    @staticmethod
+    def format_latex_repr(latex_repr: str, item_format: FormatFlag, inline: bool = False):
+        if item_format == FormatFlag.Plain:
+            # only for textual result, not for equation result
+            return f"\\({latex_repr}\\)" if inline else f"\\[\n{latex_repr}\n\\]"
+        if item_format == FormatFlag.Markdown:
+            return f"${latex_repr}$" if inline else f"$$\n{latex_repr}\n$$"
+        if item_format == FormatFlag.Latex:
+            return f"\\({latex_repr}\\)" if inline else f"\\[\n{latex_repr}\n\\]"
+        if item_format == FormatFlag.Html:
+            return f"\\({latex_repr}\\)" if inline else f"\\[\n{latex_repr}\n\\]"
+        return latex_repr
+
     @property
     def markdown(self):
-        return f"$$\n{self.latex_repr}\n$$"
+        return self.format_latex_repr(self.latex_repr, FormatFlag.Markdown)
 
     @property
     def latex(self):
-        return self.latex_repr
+        return self.format_latex_repr(self.latex_repr, FormatFlag.Latex)
 
     @property
     def html(self):
-        try:
-            return latex2mathml.converter.convert(self.latex_repr)
-        except Exception:
-            get_root_logger().exception(f"Failed to convert latex to mathml: {self.latex_repr}")
-            return f"<math>{self.latex_repr}</math>"
+        return self.format_latex_repr(self.latex_repr, FormatFlag.Html)
 
 
 @dataclass
@@ -1132,6 +1332,11 @@ class GroupedResult(SemanticItem):
     @property
     def html(self):
         return f"{self.prefix}" + "\n\n".join([item.html for item in self.items]) + f"{self.suffix}"
+
+    @classmethod
+    def clone(cls, item, **extra):
+        extra.setdefault("method", "default-clone")
+        return super().clone(item, **extra)
 
 
 if __name__ == "__main__":

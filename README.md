@@ -248,10 +248,11 @@ if result["status"] == "success":
 | `objects` | `False` | JSON 语义块列表，适合语义分析 |
 | `pages_dict` | `False` | 按页组织的原始解析布局 |
 | `pages_tree` | `False` | 带父子关系的嵌套树，适合复杂分析 |
-| `return_half` | `False` | 解析进行中即取已完成部分 |
 | `molecule_source` | `False` | 返回分子原始源（SMILES/mol 等） |
 
 同一 token 可复用，多次获取不同组合不会重复计费。
+两个结果接口都可用 `http_timeout=` 覆盖单次读取超时，适合包含大量对象或
+Base64 源的大文档。
 
 #### 输出格式（`FormatFlag`，仅作用于 `content` / `objects` 中的文本字段）
 
@@ -279,6 +280,22 @@ if result["status"] == "success":
     print(result["content"])
 ```
 
+如需 MinerU 兼容结构，可直接调用第三方格式结果接口：
+
+```python
+from uniparser_tools.common.constant import ThirdPartyFormatter
+
+result = parser.get_third_party_output(
+    token,
+    formatter=ThirdPartyFormatter.MinerU,
+)
+```
+
+`dict2obj()` / `build_item()` 已对齐 `release/v1.3` 的结果模型，包括
+文本块的 `contents + types` 行内公式/分子表示、分子的 `esmi` 字段，以及
+完整 HTML 表格的 span 升级。服务端未来增加未知字段时，转换器会忽略未知
+字段，而不是让已有客户代码因构造参数不匹配而崩溃。
+
 ### 4. 使用异步回调 (Callbacks)
 
 UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定地址。这对于长耗时任务非常有用，无需轮询结果。
@@ -286,7 +303,7 @@ UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定�
 ```python
 # 提交带回调地址的异步解析任务
 result = parser.trigger_file(
-    pdf_path="./example.pdf",
+    file_path="./example.pdf",
     sync=False,  # 必须为 False 才能触发异步回调
     callback_url="https://your-server.com/api/callback",
     callback_secret="your-shared-secret",  # 用于校验回调内容的签名

@@ -59,17 +59,27 @@ class TestTextualResult:
     def test_title_markdown_gets_heading(self) -> None:
         kw = {**ITEM_KWARGS, "type": LayoutType.Title}
         r = TextualResult(**kw, bboxes=[], contents=[], text="Chapter 1")
-        assert r.markdown == "# Chapter 1"
+        assert r.markdown == "## Chapter 1"
 
     def test_title_html_uses_h2(self) -> None:
         kw = {**ITEM_KWARGS, "type": LayoutType.Title}
         r = TextualResult(**kw, bboxes=[], contents=[], text="Chapter 1")
-        assert r.html == "<h2>Chapter 1</h2>"
+        assert r.html == '<h2 class="title">Chapter 1</h2>'
 
     def test_document_title_latex_uses_title_macro(self) -> None:
         kw = {**ITEM_KWARGS, "type": LayoutType.DocumentTitle}
         r = TextualResult(**kw, bboxes=[], contents=[], text="Doc")
         assert r.latex == "\\title{Doc}"
+
+    def test_inline_types_format_equation_and_molecule(self) -> None:
+        r = TextualResult(
+            **ITEM_KWARGS,
+            bboxes=[],
+            contents=["Yield ", "x^2", " for ", "CCO"],
+            types=[LayoutType.Text, LayoutType.EquationInline, LayoutType.Text, LayoutType.Molecule],
+        )
+        assert r.plain == r"Yield \(x^2\) for CCO"
+        assert r.markdown == "Yield $x^2$ for `CCO`"
 
 
 class TestTabularResult:
@@ -203,27 +213,35 @@ class TestMoleculeResult:
         )
         assert r.plain == "*NC(=O)*"
 
-    def test_markdown_wraps_in_bold_italic(self) -> None:
+    def test_markdown_wraps_in_code(self) -> None:
         r = MoleculeResult(
             **{**ITEM_KWARGS, "type": LayoutType.Molecule},
             smi="CCO",
         )
-        assert r.markdown == "***CCO***"
+        assert r.markdown == "`CCO`"
+
+    def test_esmi_is_preserved(self) -> None:
+        r = MoleculeResult(
+            **{**ITEM_KWARGS, "type": LayoutType.Molecule},
+            smi="CCO",
+            esmi="[CH3][CH2][OH]",
+        )
+        assert r.esmi == "[CH3][CH2][OH]"
 
 
 class TestEquationResult:
-    def test_latex_identity(self) -> None:
+    def test_latex_uses_display_delimiters(self) -> None:
         r = EquationResult(**{**ITEM_KWARGS, "type": LayoutType.Equation}, latex_repr="a+b")
-        assert r.latex == "a+b"
+        assert r.latex == "\\[\na+b\n\\]"
         assert r.markdown == "$$\na+b\n$$"
 
-    def test_html_returns_mathml_like(self) -> None:
+    def test_html_uses_mathjax_compatible_delimiters(self) -> None:
         r = EquationResult(**{**ITEM_KWARGS, "type": LayoutType.Equation}, latex_repr="a+b")
-        assert "<math" in r.html
+        assert r.html == "\\[\na+b\n\\]"
 
-    def test_html_fallback_on_unconvertible(self) -> None:
+    def test_html_preserves_unknown_latex_commands(self) -> None:
         r = EquationResult(**{**ITEM_KWARGS, "type": LayoutType.Equation}, latex_repr="\\unknown_cmd{xx}")
-        assert "<math" in r.html
+        assert "\\unknown_cmd{xx}" in r.html
 
 
 class TestFigureResult:

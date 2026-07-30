@@ -1,3 +1,5 @@
+from functools import lru_cache
+from inspect import Parameter, signature
 from typing import Dict, List
 
 from uniparser_tools.common.constant import FormatFlag, LayoutType, ParseMode, to_semantic
@@ -13,34 +15,68 @@ from uniparser_tools.common.dataclass import (
     TabularResult,
     TextualResult,
 )
+from uniparser_tools.utils.format_utils import parse_inline_text, parse_table_full_html
+from uniparser_tools.utils.log import get_root_logger
+
+
+@lru_cache(maxsize=None)
+def _init_param_names(cls):
+    return {
+        name
+        for name, param in signature(cls).parameters.items()
+        if param.kind in (Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY)
+    }
+
+
+def _filter_init_kwargs(cls, block: Dict):
+    valid_keys = _init_param_names(cls)
+    return {key: value for key, value in block.items() if key in valid_keys}
+
+
+def _upgrade_table_structure_spans(block: Dict) -> None:
+    if "html" in block:
+        block["structure"] = block.pop("html")
+    if "text" in block:
+        block.pop("text")
+
+    if block.get("placeholders"):
+        if block.get("contents") and not block.get("types"):
+            block["types"] = [LayoutType.Text] * len(block["contents"])
+        return
+    if block.get("structure"):
+        block.update(parse_table_full_html(str(block["structure"])))
 
 
 def build_item(block: Dict):
     if "pages" in block:
         block.pop("pages")
     if "reactions" in block:
-        item = ExpressionResult(**block)
+        item = ExpressionResult(**_filter_init_kwargs(ExpressionResult, block))
     elif "placeholders" in block:
-        if "html" in block:
-            block["structure"] = block.pop("html")
-        if "text" in block:
-            block.pop("text")
-        item = TabularResult(**block)
+        _upgrade_table_structure_spans(block)
+        item = TabularResult(**_filter_init_kwargs(TabularResult, block))
     elif "markush" in block:
-        item = MoleculeResult(**block)
+        item = MoleculeResult(**_filter_init_kwargs(MoleculeResult, block))
     elif "data" in block:
-        item = ChartResult(**block)
+        item = ChartResult(**_filter_init_kwargs(ChartResult, block))
     elif "desc" in block:
-        item = FigureResult(**block)
+        item = FigureResult(**_filter_init_kwargs(FigureResult, block))
     elif "latex_repr" in block:
-        item = EquationResult(**block)
+        item = EquationResult(**_filter_init_kwargs(EquationResult, block))
     elif "text" in block:
-        item = TextualResult(**block)
+        kwargs = _filter_init_kwargs(TextualResult, block)
+        if not kwargs.get("contents"):
+            kwargs["contents"], kwargs["types"] = parse_inline_text(kwargs["text"])
+            kwargs["bboxes"] = []
+        if not kwargs.get("types", []):
+            kwargs["types"] = [LayoutType.Text] * len(kwargs["contents"])
+        kwargs["text"] = "".join(kwargs["contents"])
+        item = TextualResult(**kwargs)
     elif "items" in block:
         items = [build_item(child) for child in block["items"]]
-        item = GroupedResult.clone(GroupedResult(**block), items=items)
+        item = GroupedResult.clone(GroupedResult(**_filter_init_kwargs(GroupedResult, block)), items=items)
     else:
-        item = LayoutItem(**block)
+        item = LayoutItem(**_filter_init_kwargs(LayoutItem, block))
     return item
 
 
@@ -75,14 +111,38 @@ def item2format(item: SemanticItem, data: Dict, status: Dict):
         s = ""
     else:
         if not isinstance(item, GroupedResult):
-            item_format = data.__dict__[to_semantic(item.type)]
-            s = getattr(item, item_format)
+            try:
+                item_format = data.__dict__[to_semantic(item.type)]
+            except KeyError:
+                if item.type in [
+                    LayoutType.PageHeader,
+                    LayoutType.PageFooter,
+                ]:
+                    item_format = data.__dict__[to_semantic(LayoutType.Paragraph)]
+                else:
+                    get_root_logger().exception(
+                        f"Failed to get item format for {item.type} -> {to_semantic(item.type)}"
+                    )
+                    return ""
+            # temporarily disabled for compatibility
+            if False and item.type in [
+                LayoutType.Molecule,
+            ]:
+                s = item.source
+            else:
+                s = getattr(item, item_format)
             if not item.plain and getattr(item, "source", ""):
                 if status["dict_cfg"][to_semantic(item.type)] == ParseMode.DumpBase64:
+                    # Use SVG for molecules, PNG for others
+                    # temporarily disabled for compatibility
+                    if False and item.type == LayoutType.Molecule:
+                        mime_type = "image/svg+xml"
+                    else:
+                        mime_type = "image/png"
                     if item_format == FormatFlag.Markdown:
-                        s += f"![{item.type}](data:image/png;base64,{item.source})"
+                        s += f"![{item.type}](data:{mime_type};base64,{item.source})"
                     elif item_format == FormatFlag.Html:
-                        s += f"<img src='data:image/png;base64,{item.source}' alt='{item.type}'/>"
+                        s += f"<img src='data:{mime_type};base64,{item.source}' alt='{item.type}'/>"
                 elif status["dict_cfg"][to_semantic(item.type)] == ParseMode.DumpLocal:
                     if item_format == FormatFlag.Markdown:
                         s += f"![{item.type}]({item.source})"

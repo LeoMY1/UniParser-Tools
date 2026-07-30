@@ -11,6 +11,7 @@
 | `upload_files_to_tos(file_paths, ...)` | Upload local files without starting a parse |
 | `get_result(token, ...)` | Get raw parsing results |
 | `get_formatted(token, ...)` | Get formatted output |
+| `get_third_party_output(token, ...)` | Get a third-party-compatible result payload |
 
 ### trigger_file() - Async Callback Parameters
 
@@ -101,6 +102,12 @@ UniParser API key.
 | `molecule_source=True` | Include molecule source images | Chemical structure analysis |
 
 **Note:** `get_formatted()` also supports `marginalia=True` to include page headers/footers/numbers.
+Both result methods accept `http_timeout=` for large response payloads.
+
+`get_third_party_output()` currently accepts
+`ThirdPartyFormatter.MinerU`. The local `build_item()` / `dict2obj()`
+conversion path understands release/v1.3 inline `contents + types`, molecule
+`esmi`, and full-HTML table spans, and ignores unknown response fields.
 
 ## Ordering Methods
 

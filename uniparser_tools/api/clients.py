@@ -22,6 +22,7 @@ from uniparser_tools.common.constant import (
     ParseMode,
     ParseModeTextual,
     StatusFlag,
+    ThirdPartyFormatter,
 )
 from uniparser_tools.utils.image import dump_image_base64_str
 
@@ -123,6 +124,12 @@ class GetFormattedData:
     marginalia: bool
 
 
+@dataclass
+class GetThirdPartyData:
+    token: str
+    formatter: ThirdPartyFormatter
+
+
 class UniParserClient:
     def __init__(
         self,
@@ -189,6 +196,10 @@ class UniParserClient:
     @property
     def get_formatted_endpoint(self):
         return f"{self.host}/get-formatted"
+
+    @property
+    def get_third_party_output_endpoint(self):
+        return f"{self.host}/get-third-party-output"
 
     def to_token(self, task_id: str):
         token = uuid.uuid5(self.user, task_id).hex
@@ -534,6 +545,7 @@ class UniParserClient:
         pages_dict: bool = False,
         pages_tree: bool = False,
         molecule_source: bool = False,
+        http_timeout: Optional[RequestTimeout] = None,
     ):
         data = GetResultData(
             token=token,
@@ -548,6 +560,7 @@ class UniParserClient:
             "POST",
             "/get-result",
             json=payload,
+            timeout=http_timeout,
             error_message="get result failed",
             token=token,
         )
@@ -568,6 +581,7 @@ class UniParserClient:
         expression: FormatFlag = FormatFlag.Markdown,
         equation: FormatFlag = FormatFlag.Markdown,
         marginalia: bool = False,
+        http_timeout: Optional[RequestTimeout] = None,
     ):
         data = GetFormattedData(
             token=token,
@@ -590,6 +604,25 @@ class UniParserClient:
             "POST",
             "/get-formatted",
             json=payload,
+            timeout=http_timeout,
             error_message="get formatted failed",
+            token=token,
+        )
+
+    def get_third_party_output(
+        self,
+        token: str,
+        formatter: ThirdPartyFormatter = ThirdPartyFormatter.MinerU,
+        *,
+        http_timeout: Optional[RequestTimeout] = None,
+    ):
+        data = GetThirdPartyData(token=token, formatter=formatter)
+        payload = asdict(data, dict_factory=int_enum_factory)
+        return self._transport.request(
+            "POST",
+            "/get-third-party-output",
+            json=payload,
+            timeout=http_timeout,
+            error_message="get third-party output failed",
             token=token,
         )

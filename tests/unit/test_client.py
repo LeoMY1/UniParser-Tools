@@ -13,6 +13,7 @@ import requests
 from PIL import Image
 
 from uniparser_tools.api.clients import TOSUploadFile, UniParserClient
+from uniparser_tools.common.constant import ThirdPartyFormatter
 
 
 class FakeResponse:
@@ -66,6 +67,7 @@ class TestClientConstruction:
         assert c.request_tos_upload_links_endpoint.endswith("/request-tos-upload-links")
         assert c.get_result_endpoint.endswith("/get-result")
         assert c.get_formatted_endpoint.endswith("/get-formatted")
+        assert c.get_third_party_output_endpoint.endswith("/get-third-party-output")
 
 
 class TestTokenHelpers:
@@ -182,6 +184,43 @@ class TestHTTPTransport:
             pass
 
         assert session.closed is True
+
+
+class TestResultAPIs:
+    def test_get_result_accepts_per_call_http_timeout(self) -> None:
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.get_result("task-token", objects=True, http_timeout=(4, 5))
+
+        assert session.calls[0][2]["timeout"] == (4, 5)
+        assert session.calls[0][2]["json"]["objects"] is True
+
+    def test_get_formatted_accepts_per_call_http_timeout(self) -> None:
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.get_formatted("task-token", content=True, http_timeout=(6, 7))
+
+        assert session.calls[0][2]["timeout"] == (6, 7)
+        assert session.calls[0][2]["json"]["content"] is True
+
+    def test_get_third_party_output_sends_formatter(self) -> None:
+        session = FakeSession(response=FakeResponse(payload={"status": "success", "content": {}}))
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.get_third_party_output(
+            "task-token",
+            formatter=ThirdPartyFormatter.MinerU,
+            http_timeout=(8, 9),
+        )
+
+        assert result["status"] == "success"
+        assert session.calls[0][2]["json"] == {
+            "token": "task-token",
+            "formatter": "mineru",
+        }
+        assert session.calls[0][2]["timeout"] == (8, 9)
 
 
 class TestSubmissionPayloads:
