@@ -207,7 +207,9 @@ result = parser.trigger_url(source_url, server_generated_token=True)
 ```
 
 如需自行执行上传，可调用 `request_tos_upload_links()` 获取预签名 `PUT`
-地址。客户端向预签名地址上传时不会携带 UniParser API Key。
+地址。该地址是短期 bearer credential，不应记录到日志或转发给其他服务。
+客户端向预签名地址上传时不会携带 UniParser API Key；高层
+`upload_files_to_tos()` 完成上传后也不会在返回值中保留 `upload_url`。
 
 ## 快速开始
 

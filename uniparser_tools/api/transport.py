@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional, Tuple, Union
 from urllib.parse import urlparse
 
@@ -12,6 +13,21 @@ RequestTimeout = Union[float, Tuple[float, Optional[float]]]
 
 DEFAULT_REQUEST_TIMEOUT: RequestTimeout = (10.0, 60.0)
 DEFAULT_SYNC_REQUEST_TIMEOUT: RequestTimeout = (10.0, 1860.0)
+
+
+def _redact_url_queries(value: str) -> str:
+    """Remove bearer-style query strings from URLs included in diagnostics."""
+    return re.sub(r"(?P<url>(?:https?://|/)[^\s?]+)\?[^\s]+", r"\g<url>?<redacted>", value)
+
+
+def _redact_diagnostic_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _redact_diagnostic_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_diagnostic_value(item) for item in value]
+    if isinstance(value, str):
+        return _redact_url_queries(value)
+    return value
 
 
 class UniParserHTTPTransport:
@@ -67,7 +83,7 @@ class UniParserHTTPTransport:
             payload: Dict[str, Any] = {
                 "status": StatusFlag.Error,
                 "message": error_message,
-                "description": str(exc),
+                "description": _redact_url_queries(str(exc)),
                 "error_type": type(exc).__name__,
             }
             if token is not None:
@@ -81,14 +97,14 @@ class UniParserHTTPTransport:
 
         if response.status_code >= 400:
             if isinstance(payload, dict):
-                result = dict(payload)
+                result = _redact_diagnostic_value(payload)
                 result.setdefault("status", StatusFlag.Error)
                 result.setdefault("description", response.reason or error_message)
             else:
                 result = {
                     "status": StatusFlag.Error,
                     "description": response.reason or error_message,
-                    "body": response.text,
+                    "body": _redact_url_queries(response.text),
                 }
             result["http_status"] = response.status_code
             if token is not None:
@@ -108,7 +124,7 @@ class UniParserHTTPTransport:
             "status": StatusFlag.Error,
             "message": error_message,
             "description": "response body is not valid JSON",
-            "body": response.text,
+            "body": _redact_url_queries(response.text),
         }
         if token is not None:
             result["token"] = token

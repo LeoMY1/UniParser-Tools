@@ -396,9 +396,72 @@ class TestTOSUpload:
         assert result["status"] == "success"
         assert result["files"][0]["source_url"] == "tos://bucket/document.pdf"
         assert result["files"][0]["uploaded"] is True
+        assert "upload_url" not in result["files"][0]
         assert session.calls[1][0] == "PUT"
         assert session.calls[1][1] == link["upload_url"]
         assert "X-API-Key" not in session.calls[1][2]["headers"]
+
+    def test_transport_redacts_presigned_url_from_request_errors(self) -> None:
+        session = FakeSession(
+            error=requests.ConnectionError("failed for https://tos.example.com/upload?X-Tos-Signature=FAKE_BEARER")
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client._transport.request(
+            "PUT",
+            "https://tos.example.com/upload?X-Tos-Signature=FAKE_BEARER",
+            authenticated=False,
+            expect_json=False,
+        )
+
+        assert "FAKE_BEARER" not in result["description"]
+        assert "?<redacted>" in result["description"]
+
+    def test_transport_redacts_presigned_url_from_json_errors(self) -> None:
+        session = FakeSession(
+            response=FakeResponse(
+                status_code=403,
+                payload={
+                    "status": "error",
+                    "description": ("upload denied for https://tos.example.com/upload?X-Tos-Signature=FAKE_BEARER"),
+                },
+                reason="Forbidden",
+            )
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.health()
+
+        assert "FAKE_BEARER" not in result["description"]
+        assert "?<redacted>" in result["description"]
+
+    def test_upload_count_mismatch_does_not_return_presigned_urls(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession(
+            response=FakeResponse(
+                payload={
+                    "files": [
+                        {
+                            "filename": "document.pdf",
+                            "upload_url": "https://tos.example.com/upload?X-Tos-Signature=FAKE_BEARER",
+                            "source_url": "tos://bucket/document.pdf",
+                        },
+                        {
+                            "filename": "unexpected.pdf",
+                            "upload_url": "https://tos.example.com/upload?X-Tos-Signature=OTHER_FAKE_BEARER",
+                            "source_url": "tos://bucket/unexpected.pdf",
+                        },
+                    ]
+                }
+            )
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.upload_files_to_tos([str(path)])
+
+        assert result["status"] == "error"
+        assert all("upload_url" not in item for item in result["files"])
 
     def test_upload_helper_rejects_token_count_mismatch(self, tmp_path) -> None:
         path = tmp_path / "document.pdf"

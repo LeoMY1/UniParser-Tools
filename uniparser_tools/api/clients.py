@@ -514,7 +514,11 @@ class UniParserClient:
                 "status": StatusFlag.Error,
                 "message": "upload files to TOS failed",
                 "description": "the service returned an unexpected number of upload links",
-                "files": links,
+                "files": [
+                    {key: value for key, value in link.items() if key != "upload_url"}
+                    for link in links
+                    if isinstance(link, dict)
+                ],
             }
 
         uploaded_files = []
@@ -555,7 +559,12 @@ class UniParserClient:
                     "upload": upload_result,
                     "files": uploaded_files,
                 }
-            uploaded_files.append({**link, "uploaded": True})
+            uploaded_files.append(
+                {
+                    **{key: value for key, value in link.items() if key != "upload_url"},
+                    "uploaded": True,
+                }
+            )
 
         return {"status": StatusFlag.Success, "files": uploaded_files}
 

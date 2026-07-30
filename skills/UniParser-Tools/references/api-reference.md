@@ -96,7 +96,10 @@ result = parser.trigger_url(source_url, server_generated_token=True)
 ```
 
 Uploading does not start parsing. Presigned `PUT` requests do not include the
-UniParser API key.
+UniParser API key. Treat URLs returned by `request_tos_upload_links()` as
+short-lived bearer credentials: do not log or forward them. The high-level
+`upload_files_to_tos()` helper removes each `upload_url` from its result after
+the upload completes.
 
 ## Parse Modes
 
