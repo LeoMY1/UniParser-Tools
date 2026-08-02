@@ -20,12 +20,16 @@ app = typer.Typer(
 @app.command("parse")
 def parse_cmd(
     input_path: str = typer.Argument(..., help="Local PDF/image path or public PDF URL."),
-    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="Output directory."),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Replace output directory if it exists."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Preferred output directory; a suffixed sibling is used if occupied.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Parse a document with UniParser scientific-paper defaults."""
-    result = parse_document(input_path, output_dir=output_dir, overwrite=overwrite)
+    result = parse_document(input_path, output_dir=output_dir)
     if json_output:
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
         return
@@ -41,7 +45,12 @@ def vqa_cmd(
         None,
         help="Local PDF/image path or public PDF URL. Omit when using --pages-tree.",
     ),
-    output_dir: Optional[str] = typer.Option(None, "-o", "--output-dir", help="VQA output directory."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Preferred VQA output directory; a suffixed sibling is used if occupied.",
+    ),
     answer_pdf: Optional[str] = typer.Option(
         None,
         "--answer-pdf",
@@ -52,7 +61,6 @@ def vqa_cmd(
         "--pages-tree",
         help="Skip UniParser parse and use an existing pages_tree.json.",
     ),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Replace output directory if it exists."),
     api_key: Optional[str] = typer.Option(
         None,
         "--api-key",
@@ -97,7 +105,6 @@ def vqa_cmd(
         answer_pdf=answer_pdf,
         pages_tree_path=pages_tree,
         output_dir=output_dir,
-        overwrite=overwrite,
         llm_config=llm_config,
     )
     if json_output:

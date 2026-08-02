@@ -45,9 +45,13 @@ def register_tools(mcp: FastMCP) -> None:
         pdf_url: Annotated[str | None, Field(description="Publicly accessible PDF URL.")] = None,
         output_dir: Annotated[
             str | None,
-            Field(description="Directory for saved results. Default: ~/Uni-Parser-Skill/<stem>/."),
+            Field(
+                description=(
+                    "Preferred directory for saved results. If occupied, a suffixed sibling is used. "
+                    "Default: ~/Uni-Parser-Skill/<stem>/."
+                )
+            ),
         ] = None,
-        overwrite: Annotated[bool, Field(description="Replace output directory if it exists.")] = False,
         async_mode: Annotated[
             bool,
             Field(description="Submit with sync=false and poll until completion."),
@@ -76,7 +80,6 @@ def register_tools(mcp: FastMCP) -> None:
                     image_path=image_path,
                     pdf_url=pdf_url,
                     output_dir=output_dir,
-                    overwrite=overwrite,
                     async_mode=async_mode,
                     textual=textual,
                     equation=equation,

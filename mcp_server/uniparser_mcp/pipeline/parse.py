@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
-from uniparser_mcp.errors import dir_exists_error, input_error, parse_error
+from uniparser_mcp.errors import input_error, parse_error
 from uniparser_mcp.input import InputKind, ResolvedInput, display_label, resolve_request
 from uniparser_mcp.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
 from uniparser_mcp.pipeline.output import (
@@ -137,13 +137,10 @@ async def run_parse(client: UniParserClient, req: ParseRequest, ctx: Context | N
     if isinstance(resolved, str):
         return input_error(resolved)
 
-    out_dir, dir_err = resolve_output_dir(
-        resolved.source_stem,
-        req.output_dir,
-        overwrite=req.overwrite,
-    )
-    if dir_err == "DIR_EXISTS":
-        return dir_exists_error(out_dir)
+    try:
+        out_dir = resolve_output_dir(resolved.source_stem, req.output_dir)
+    except (OSError, ValueError) as exc:
+        return input_error(str(exc))
 
     trigger_kwargs = resolve_trigger_kwargs(
         sync=not req.async_mode,

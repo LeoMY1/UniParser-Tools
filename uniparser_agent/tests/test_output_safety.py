@@ -1,4 +1,4 @@
-"""Regression tests for safe output replacement."""
+"""Regression tests for collision-safe output allocation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from uniparser_agent.output_dir import default_parse_output_dir, replace_output_dir
+from uniparser_agent.output_dir import default_parse_output_dir
 from uniparser_agent.parse import service as parse_service
 from uniparser_agent.pdf2vqa.pipeline import run_vqa_pipeline
 
@@ -68,46 +68,7 @@ def test_parse_url_traversal_is_rejected_before_client_creation(monkeypatch: pyt
         parse_service.parse_document("https://example.com/..")
 
 
-def test_output_replacement_does_not_restore_previous_directory_on_failure(tmp_path: Path) -> None:
-    output = tmp_path / "output"
-    output.mkdir()
-    (output / "previous.txt").write_text("previous", encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="failed"):
-        with replace_output_dir(output, overwrite=True) as work_dir:
-            (work_dir / "partial.txt").write_text("partial", encoding="utf-8")
-            raise RuntimeError("failed")
-
-    assert not (output / "previous.txt").exists()
-    assert (output / "partial.txt").read_text(encoding="utf-8") == "partial"
-    assert not list(tmp_path.glob(".output.backup-*"))
-
-
-def test_output_replacement_commits_successful_run(tmp_path: Path) -> None:
-    output = tmp_path / "output"
-    output.mkdir()
-    (output / "previous.txt").write_text("previous", encoding="utf-8")
-
-    with replace_output_dir(output, overwrite=True) as work_dir:
-        (work_dir / "current.txt").write_text("current", encoding="utf-8")
-
-    assert not (output / "previous.txt").exists()
-    assert (output / "current.txt").read_text(encoding="utf-8") == "current"
-    assert not list(tmp_path.glob(".output.backup-*"))
-
-
-def test_failed_new_output_is_left_for_diagnostics(tmp_path: Path) -> None:
-    output = tmp_path / "output"
-
-    with pytest.raises(RuntimeError, match="failed"):
-        with replace_output_dir(output, overwrite=False) as work_dir:
-            (work_dir / "partial.txt").write_text("partial", encoding="utf-8")
-            raise RuntimeError("failed")
-
-    assert (output / "partial.txt").read_text(encoding="utf-8") == "partial"
-
-
-def test_parse_failure_keeps_partial_output_without_restoring_previous(
+def test_parse_failure_preserves_existing_output_and_keeps_partial_sibling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -120,15 +81,13 @@ def test_parse_failure_keeps_partial_output_without_restoring_previous(
         parse_service.parse_document(
             "https://example.com/exam.pdf",
             output_dir=str(output),
-            overwrite=True,
         )
 
-    assert not (output / "previous.txt").exists()
-    assert (output / "trigger_error.json").is_file()
-    assert not list(tmp_path.glob(".parse.backup-*"))
+    assert (output / "previous.txt").read_text(encoding="utf-8") == "previous"
+    assert (tmp_path / "parse_1" / "trigger_error.json").is_file()
 
 
-def test_vqa_validates_pages_tree_before_replacing_output(tmp_path: Path) -> None:
+def test_vqa_validates_pages_tree_before_allocating_output(tmp_path: Path) -> None:
     output = tmp_path / "vqa"
     output.mkdir()
     (output / "previous.txt").write_text("previous", encoding="utf-8")
@@ -139,14 +98,14 @@ def test_vqa_validates_pages_tree_before_replacing_output(tmp_path: Path) -> Non
         run_vqa_pipeline(
             pages_tree_path=str(invalid_tree),
             output_dir=str(output),
-            overwrite=True,
             llm_client=_LLMFailureClient(),  # type: ignore[arg-type]
         )
 
     assert (output / "previous.txt").read_text(encoding="utf-8") == "previous"
+    assert not (tmp_path / "vqa_1").exists()
 
 
-def test_vqa_failure_keeps_partial_output_without_restoring_previous(tmp_path: Path) -> None:
+def test_vqa_failure_preserves_existing_output_and_keeps_partial_sibling(tmp_path: Path) -> None:
     output = tmp_path / "vqa"
     output.mkdir()
     (output / "previous.txt").write_text("previous", encoding="utf-8")
@@ -157,11 +116,10 @@ def test_vqa_failure_keeps_partial_output_without_restoring_previous(tmp_path: P
         run_vqa_pipeline(
             pages_tree_path=str(pages_tree),
             output_dir=str(output),
-            overwrite=True,
             llm_client=_LLMFailureClient(),  # type: ignore[arg-type]
         )
 
-    assert not (output / "previous.txt").exists()
-    assert (output / "parse" / "pages_tree.json").is_file()
-    assert (output / "llm_content_list.json").is_file()
-    assert not list(tmp_path.glob(".vqa.backup-*"))
+    sibling = tmp_path / "vqa_1"
+    assert (output / "previous.txt").read_text(encoding="utf-8") == "previous"
+    assert (sibling / "parse" / "pages_tree.json").is_file()
+    assert (sibling / "llm_content_list.json").is_file()
