@@ -133,7 +133,7 @@ uv run pytest tests/ -v -s -o log_cli=true -o log_cli_level=DEBUG
 | 工具返回「未设置 UNIPARSER_BASE_URL」或「未设置 UNIPARSER_API_KEY」 | MCP 的 `env` 未注入或拼写错误 |
 | `uniparser_health` 失败 | 用户服务未启动、端口/防火墙不一致、或 `UNIPARSER_BASE_URL` 与真实监听地址不符 |
 | `uniparser_parse_file` 失败 | 路径不存在、无读权限，或服务端无法访问该路径（远程部署时常见） |
-| `uniparser_parse_url` 长时间无结果 | PDF 较大或 URL 较慢；`UniParserClient` 对单次请求使用固定超时（见客户端实现），可适当调大服务或网关超时 |
+| `uniparser_parse_url` 长时间无结果 | PDF 较大或 URL 较慢；可通过 `UniParserClient` 的 `request_timeout` / `sync_request_timeout` 区分普通请求与同步解析请求超时 |
 
 ## 与主仓库的关系
 

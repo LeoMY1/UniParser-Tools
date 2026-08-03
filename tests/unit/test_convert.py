@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from tests.utils import make_reaction_dict
+from uniparser_tools.common.constant import LayoutType
 from uniparser_tools.common.dataclass import (
     ChartResult,
     EquationResult,
@@ -67,9 +68,10 @@ def test_build_item_dispatches_by_payload_shape(extra, expected_cls) -> None:
 
 def test_build_item_grouped_recurses() -> None:
     child = {**BASE_BLOCK, "text": "child", "bboxes": [], "contents": []}
-    block = {**BASE_BLOCK, "type": "tablegroup", "items": [child], "level": 1}
+    block = {**BASE_BLOCK, "type": "tablegroup", "items": [child], "level": 1, "method": "gap-tree"}
     item = build_item(block)
     assert isinstance(item, GroupedResult)
+    assert item.method == "gap-tree"
     assert len(item.items) == 1
     assert isinstance(item.items[0], TextualResult)
 
@@ -85,6 +87,55 @@ def test_build_item_strips_pages_key() -> None:
     item = build_item(block)
     assert isinstance(item, TextualResult)
     assert not hasattr(item, "pages")
+
+
+def test_build_item_tolerates_new_and_unknown_result_fields() -> None:
+    block = {
+        **BASE_BLOCK,
+        "text": "Yield \\(x^2\\) from `CCO`",
+        "bboxes": [],
+        "contents": ["Yield ", "x^2", " from ", "CCO"],
+        "types": ["text", "equationinline", "text", "molecule"],
+        "release_v1_3_extra": "future-compatible",
+    }
+    item = build_item(block)
+    assert isinstance(item, TextualResult)
+    assert item.markdown == "Yield $x^2$ from `CCO`"
+    assert not hasattr(item, "release_v1_3_extra")
+
+
+def test_build_item_filters_unknown_nested_reaction_fields() -> None:
+    reaction = make_reaction_dict()
+    reaction["release_v1_3_extra"] = "future-compatible"
+    reaction["reactants"][0]["component_extra"] = "future-compatible"
+    block = {
+        **BASE_BLOCK,
+        "type": "expression",
+        "reactions": [reaction],
+    }
+
+    item = build_item(block)
+
+    assert isinstance(item, ExpressionResult)
+    assert len(item.reactions) == 1
+    assert item.reactions[0].reactants[0].text == "A"
+    assert not hasattr(item.reactions[0], "release_v1_3_extra")
+    assert not hasattr(item.reactions[0].reactants[0], "component_extra")
+
+
+def test_build_item_upgrades_full_html_table_spans() -> None:
+    block = {
+        **BASE_BLOCK,
+        "type": "table",
+        "placeholders": [],
+        "contents": [],
+        "structure": "<table><tr><td>value \\(x^2\\)</td></tr></table>",
+    }
+    item = build_item(block)
+    assert isinstance(item, TabularResult)
+    assert item.placeholders
+    assert LayoutType.EquationInline in item.types
+    assert "$x^2$" in item.markdown
 
 
 def test_dict2obj_returns_nested_list() -> None:

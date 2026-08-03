@@ -56,47 +56,50 @@ result = parser.trigger_file(
 
 ### Callback Payload
 
-When the parsing task completes, the service sends a POST request to `callback_url`:
+When parsing completes, the service sends the raw JSON result to
+`callback_url`. It signs the exact body bytes with HMAC-SHA256 and puts the
+signature in the `X-UniParser-Signature: sha256=<hex>` header. The body is not
+wrapped in `content` / `checksum` fields.
 
 ```json
 {
     "token": "abc123...",
-    "status": "success",
-    "content": { ... },
-    "checksum": "hmac-sha256-signature"
+    "status": "success"
 }
 ```
+
+Use `Idempotency-Key` to deduplicate callback retries. The
+`X-UniParser-Callback-Attempt` header reports the current attempt number.
 
 ### Verify Callback Signature
 
 ```python
-import hmac
 import hashlib
+import hmac
+
 from flask import Flask, request
 
 app = Flask(__name__)
 CALLBACK_SECRET = "your-secret-key"
 
-@app.route('/callback', methods=['POST'])
+
+@app.route("/callback", methods=["POST"])
 def handle_callback():
-    data = request.json
-    content = data['content']
-    received_checksum = data['checksum']
-    
-    # Verify signature
-    expected = hmac.new(
-        CALLBACK_SECRET.encode(),
-        json.dumps(content).encode(),
-        hashlib.sha256
-    ).hexdigest()
-    
-    if not hmac.compare_digest(received_checksum, expected):
-        return {'error': 'Invalid signature'}, 401
-    
-    # Process the result
-    token = data['token']
+    raw_body = request.get_data(cache=True)
+    received_signature = request.headers.get("X-UniParser-Signature", "")
+    prefix = "sha256="
+    if not received_signature.startswith(prefix):
+        return {"error": "Missing or invalid signature"}, 401
+
+    expected = hmac.new(CALLBACK_SECRET.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(received_signature[len(prefix) :], expected):
+        return {"error": "Invalid signature"}, 401
+
+    data = request.get_json()
+    token = data["token"]
     print(f"Task {token} completed!")
-    return {'status': 'ok'}
+    return {"status": "ok"}
 ```
 
 ## Pattern 4: Mixed Format Output
@@ -105,10 +108,10 @@ def handle_callback():
 result = parser.get_formatted(
     token,
     content=True,
-    textual=FormatFlag.Markdown,   # Text as Markdown
-    table=FormatFlag.Html,         # Tables as HTML
-    equation=FormatFlag.Latex,     # Equations as LaTeX
-    figure=FormatFlag.Markdown,    # Figures as Markdown img
+    textual=FormatFlag.Markdown,  # Text as Markdown
+    table=FormatFlag.Html,  # Tables as HTML
+    equation=FormatFlag.Latex,  # Equations as LaTeX
+    figure=FormatFlag.Markdown,  # Figures as Markdown img
 )
 ```
 

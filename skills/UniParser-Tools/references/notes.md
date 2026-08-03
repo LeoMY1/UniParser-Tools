@@ -1,5 +1,13 @@
 # Important Notes
 
+## Result Quality and Retention
+
+- High-quality modes use generative models and may omit, misread, misassociate, or add plausible-looking content across text, tables, equations, charts, figures, reactions, and molecules. Verify critical fields, numbers, equations, names, and structures against the source. Do not use parsing output as the sole basis for high-risk decisions.
+- High-quality table parsing recovers semantics and structure but does not provide precise source-page coordinates for each cell. Choose a method that explicitly provides position data when downstream work requires overlays, highlighting, or coordinate-level auditing.
+- Chart parsing may recover labels, legends, axes, values, or trends incorrectly. Verify precise values and interpretations against the original chart.
+- High-quality modes are slower. Prefer asynchronous submission with suitable polling, callbacks, and timeouts for long documents or batches.
+- Online parsing results are retained for only **24 hours**. Fetch and store required results promptly; a task token is not a long-term storage reference.
+
 ## Key Points
 
 1. **Concurrency Limit**: Maximum 5 concurrent requests on public service
@@ -14,10 +22,16 @@
    import hmac
    import hashlib
 
-   def verify_callback(content, checksum, secret):
-       expected = hmac.new(secret.encode(), content.encode(), hashlib.sha256).hexdigest()
-       return hmac.compare_digest(expected, checksum)
+
+   def verify_callback(raw_body: bytes, signature: str, secret: str) -> bool:
+       if not signature.startswith("sha256="):
+           return False
+       expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+       return hmac.compare_digest(expected, signature[len("sha256=") :])
    ```
+   Read `raw_body` before JSON parsing and take `signature` from the
+   `X-UniParser-Signature` header. The body is not wrapped in
+   `checksum` / `content` fields.
 
 5. **Ordering Methods**: Default is `GapTree`; alternatives: `Naive`, `XYCut`, `XYCutExp`
 

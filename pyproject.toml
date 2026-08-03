@@ -3,8 +3,16 @@ name = "uniparser-tools"
 dynamic = ["version", "dependencies"]
 description = "Document parser tools based on UniParser"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["ocr", "document-parser", "uniparser"]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7,<10",
+    "python-dotenv>=1,<2",
+    "ruff==0.16.1",
+    "setuptools>=61",
+]
 
 [project.scripts]
 uniparser = "uniparser_tools.cli.main:cli"
@@ -15,6 +23,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ['.']
+include = ['uniparser_tools*']
 exclude = ['build', 'workspace', 'temp', 'temp.*', 'models', 'models.*', 'tests', 'tests.*']
 
 [tool.setuptools.dynamic]
@@ -22,7 +31,7 @@ version = { attr = "uniparser_tools.__version__" }
 dependencies = { file = ["requirements.txt"] }
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 indent-width = 4
 extend-exclude = []
@@ -51,5 +60,5 @@ minversion = "7.0"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
-    "live: tests that hit a real UniParser backend (skipped unless UNIPARSER_TEST_API_KEY and UNIPARSER_TEST_HOST are set)",
+    "live: tests that hit a real UniParser backend (credentials may be loaded from a dotenv file)",
 ]
