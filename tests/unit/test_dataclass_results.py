@@ -10,8 +10,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from tests.utils import make_chart_data, make_reaction_dict, make_tabular_payload
-from uniparser_tools.common.constant import Direction, Language, LayoutType
+from tests.utils import MALFORMED_HTML, make_chart_data, make_reaction_dict, make_tabular_payload
+from uniparser_tools.common.constant import Direction, FormatFlag, Language, LayoutType
 from uniparser_tools.common.dataclass import (
     BBox,
     ChartResult,
@@ -146,6 +146,14 @@ class TestTabularResult:
         r = TabularResult(**payload)
         assert r.plain == ""
 
+    @pytest.mark.parametrize("structure", ["<table></table>", MALFORMED_HTML])
+    def test_markdown_and_latex_are_empty_for_unusable_tables(self, structure: str) -> None:
+        payload = make_tabular_payload(structure=structure, placeholders=[], contents=[])
+        r = TabularResult(**payload)
+
+        assert r.markdown == ""
+        assert r.latex == ""
+
     def test_latex_returns_tabular_env(self, simple_tabular: TabularResult) -> None:
         latex = simple_tabular.latex
         assert "\\begin{tabular}" in latex
@@ -190,6 +198,9 @@ class TestExpressionResult:
         )
         assert r.df.shape == (0, 0)
         assert r.plain == ""
+        assert r.markdown == ""
+        assert r.latex == ""
+        assert r.html == ""
 
     def test_markdown_latex_html_non_empty(self, expr_single: ExpressionResult) -> None:
         assert expr_single.markdown.startswith("|")
@@ -216,6 +227,8 @@ class TestChartResult:
         r = ChartResult(**{**ITEM_KWARGS, "type": LayoutType.Chart}, data="")
         df = r.df
         assert df.shape[1] == 0 or df.shape[0] == 0
+        assert r.markdown == ""
+        assert r.latex == ""
 
 
 class TestMoleculeResult:
@@ -299,6 +312,14 @@ class TestFigureResult:
         assert r.plain == "cat on a mat"
         assert r.markdown == "cat on a mat"
         assert r.html == "cat on a mat"
+
+    def test_markdown_wraps_image_sources_in_angle_brackets(self) -> None:
+        r = FigureResult(
+            **{**ITEM_KWARGS, "type": LayoutType.Figure},
+            source="https://example.com/a figure.png",
+        )
+
+        assert "![figure](<https://example.com/a figure.png>)" in r.format_as(FormatFlag.Markdown)
 
 
 class TestGroupedResult:

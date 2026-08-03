@@ -11,6 +11,8 @@ from uniparser_tools.common.dataclass import (
     GroupedResult,
     LayoutItem,
     MoleculeResult,
+    Reaction,
+    ReactionComponent,
     SemanticItem,
     TabularResult,
     TextualResult,
@@ -33,6 +35,21 @@ def _filter_init_kwargs(cls, block: Dict):
     return {key: value for key, value in block.items() if key in valid_keys}
 
 
+def _normalize_reaction_payload(reaction):
+    if not isinstance(reaction, dict):
+        return reaction
+
+    normalized = _filter_init_kwargs(Reaction, reaction)
+    for field_name in ("reactants", "conditions", "products"):
+        components = normalized.get(field_name)
+        if isinstance(components, list):
+            normalized[field_name] = [
+                _filter_init_kwargs(ReactionComponent, component) if isinstance(component, dict) else component
+                for component in components
+            ]
+    return normalized
+
+
 def _upgrade_table_structure_spans(block: Dict) -> None:
     if "html" in block:
         block["structure"] = block.pop("html")
@@ -51,7 +68,10 @@ def build_item(block: Dict):
     if "pages" in block:
         block.pop("pages")
     if "reactions" in block:
-        item = ExpressionResult(**_filter_init_kwargs(ExpressionResult, block))
+        kwargs = _filter_init_kwargs(ExpressionResult, block)
+        if isinstance(kwargs.get("reactions"), list):
+            kwargs["reactions"] = [_normalize_reaction_payload(reaction) for reaction in kwargs["reactions"]]
+        item = ExpressionResult(**kwargs)
     elif "placeholders" in block:
         _upgrade_table_structure_spans(block)
         item = TabularResult(**_filter_init_kwargs(TabularResult, block))
@@ -73,8 +93,9 @@ def build_item(block: Dict):
         kwargs["text"] = "".join(kwargs["contents"])
         item = TextualResult(**kwargs)
     elif "items" in block:
-        items = [build_item(child) for child in block["items"]]
-        item = GroupedResult.clone(GroupedResult(**_filter_init_kwargs(GroupedResult, block)), items=items)
+        kwargs = _filter_init_kwargs(GroupedResult, block)
+        kwargs["items"] = [build_item(child) for child in block["items"]]
+        item = GroupedResult(**kwargs)
     else:
         item = LayoutItem(**_filter_init_kwargs(LayoutItem, block))
     return item
