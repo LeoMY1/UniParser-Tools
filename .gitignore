@@ -65,6 +65,7 @@ deploy
 *.bmp
 *.pdf
 *.json
+!uniparser_agent/tests/fixtures/*.json
 
 # env
 .env

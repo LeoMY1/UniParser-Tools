@@ -1,12 +1,14 @@
 [project]
 name = "uniparser-agent"
 version = "0.1.0"
-description = "UniParser document parsing and exam VQA extraction"
+description = "UniParser agent: chemistry library, exam VQA, and PDF translation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.0.0",
+    "pymupdf>=1.24.0",
     "pypdf>=4.0.0",
+    "rdkit>=2023.9.1",
     "requests>=2.32.0",
     "typer>=0.12.0",
     "uniparser-tools",
@@ -34,7 +36,10 @@ build-backend = "setuptools.build_meta"
 packages = [
     "uniparser_agent",
     "uniparser_agent.parse",
+    "uniparser_agent.chemistry",
+    "uniparser_agent.chemistry.llm_io_debug",
     "uniparser_agent.pdf2vqa",
+    "uniparser_agent.pdf2translate",
     "uniparser_agent.llm",
 ]
 

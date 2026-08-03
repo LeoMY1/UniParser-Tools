@@ -1,3 +1,3 @@
-"""UniParser document parsing and exam VQA extraction."""
+"""UniParser agent for parsing, chemistry, VQA, and PDF translation."""
 
 __version__ = "0.1.0"

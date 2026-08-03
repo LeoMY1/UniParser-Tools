@@ -1,0 +1,69 @@
+{
+  "status": "success",
+  "token": "fixture-token",
+  "pages_tree": [
+    [
+      {
+        "token": "fixture-token",
+        "page": 1,
+        "block": 1,
+        "bbox": {"x1": 0.1, "y1": 0.1, "x2": 0.2, "y2": 0.2},
+        "conf": 0.95,
+        "page_size": [1000, 1000],
+        "type": "molecule",
+        "markush": false,
+        "smi": "CCO",
+        "caption": "",
+        "sru": false
+      },
+      {
+        "token": "fixture-token",
+        "page": 1,
+        "block": 2,
+        "bbox": {"x1": 0.3, "y1": 0.1, "x2": 0.4, "y2": 0.2},
+        "conf": 0.9,
+        "page_size": [1000, 1000],
+        "type": "molecule",
+        "markush": true,
+        "smi": "*NC(=O)Nc1nc(*)c2c(*)n[nH]c2c1*",
+        "caption": "*NC(=O)Nc1nc(*)c2c(*)n[nH]c2c1*<sep><a>0:R[2]</a>",
+        "sru": false
+      },
+      {
+        "token": "fixture-token",
+        "page": 2,
+        "block": 10,
+        "bbox": {"x1": 0.1, "y1": 0.5, "x2": 0.9, "y2": 0.7},
+        "conf": 1.0,
+        "page_size": [1000, 1000],
+        "type": "expression",
+        "reactions": [
+          {
+            "reactants": [
+              {"bbox": [0.0, 0.0, 0.1, 0.1], "category": "[Mol]", "category_id": 1, "text": "CCO"}
+            ],
+            "products": [
+              {"bbox": [0.0, 0.0, 0.1, 0.1], "category": "[Mol]", "category_id": 1, "text": "CC=O"}
+            ],
+            "conditions": [
+              {"bbox": [0.0, 0.0, 0.1, 0.1], "category": "[Txt]", "category_id": 2, "text": "DCM"}
+            ]
+          }
+        ]
+      },
+      {
+        "token": "fixture-token",
+        "page": 2,
+        "block": 11,
+        "bbox": {"x1": 0.1, "y1": 0.8, "x2": 0.2, "y2": 0.9},
+        "conf": 0.5,
+        "page_size": [1000, 1000],
+        "type": "molecule",
+        "markush": false,
+        "smi": "not-a-smiles",
+        "caption": "",
+        "sru": false
+      }
+    ]
+  ]
+}

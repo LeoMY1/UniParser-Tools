@@ -1,0 +1,94 @@
+{
+  "status": "success",
+  "token": "fixture-mixed",
+  "pages_tree": [
+    [
+      {
+        "token": "fixture-mixed",
+        "page": 1,
+        "block": 100,
+        "type": "moleculegroup",
+        "items": [
+          {
+            "type": "molecule",
+            "page": 1,
+            "block": 101,
+            "smi": "*c1c2c(cn1*)C(=O)c1ccccc1-2",
+            "caption": "",
+            "markush": true,
+            "conf": 0.9
+          },
+          {
+            "type": "moleculeid",
+            "page": 1,
+            "block": 102,
+            "text": "(I)"
+          }
+        ]
+      },
+      {
+        "token": "fixture-mixed",
+        "page": 2,
+        "block": 200,
+        "type": "moleculegroup",
+        "items": [
+          {
+            "type": "molecule",
+            "page": 2,
+            "block": 201,
+            "smi": "*C#Cc1ccccc1C(=O)/C=C\\[N](*)[Cu]",
+            "caption": "",
+            "markush": true,
+            "conf": 0.9
+          },
+          {
+            "type": "moleculeid",
+            "page": 2,
+            "block": 202,
+            "text": "1"
+          }
+        ]
+      },
+      {
+        "token": "fixture-mixed",
+        "page": 3,
+        "block": 300,
+        "type": "moleculegroup",
+        "items": [
+          {
+            "type": "molecule",
+            "page": 3,
+            "block": 301,
+            "smi": "O=C(/C=C\\Nc1ccccc1)c1ccccc1C#Cc1ccccc1",
+            "caption": "",
+            "markush": false,
+            "conf": 0.95
+          }
+        ]
+      },
+      {
+        "token": "fixture-mixed",
+        "page": 3,
+        "block": 310,
+        "type": "moleculegroup",
+        "items": [
+          {
+            "type": "molecule",
+            "page": 3,
+            "block": 311,
+            "smi": "O=C1c2ccccc2-c2c1cn(-c1ccccc1)c2-c1ccccc1",
+            "caption": "",
+            "markush": false,
+            "conf": 0.99
+          },
+          {
+            "type": "moleculeid",
+            "page": 3,
+            "block": 312,
+            "text": "(IA)"
+          }
+        ]
+      }
+    ]
+  ]
+}
