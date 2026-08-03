@@ -56,15 +56,14 @@ CREATE INDEX IF NOT EXISTS idx_compounds_label ON compounds(doc_id, compound_lab
 @dataclass
 class IngestSummary:
     doc_id: str
+    patent_structure_path: str = ""
+    patent_basic_info_path: str = ""
     n_compounds: int = 0
     n_unique_compounds: int = 0
     n_markush: int = 0
     n_invalid: int = 0
     n_with_activities: int = 0
     n_enriched: int = 0
-    # Backward-compatible aliases used by older CLI/tests
-    n_extractions: int = 0
-    n_reactions: int = 0
 
 
 class ChemistryStore:
@@ -208,14 +207,7 @@ class ChemistryStore:
 
         self._conn.commit()
         summary.n_unique_compounds = summary.n_compounds
-        summary.n_extractions = summary.n_compounds
         return summary
-
-    # Compatibility shim for older call sites during transition
-    def ingest(self, **kwargs: Any) -> IngestSummary:
-        if "compounds" in kwargs:
-            return self.ingest_compounds(**kwargs)
-        raise TypeError("ChemistryStore.ingest now requires compounds=list[LogicalCompound]")
 
     def get_document_stats(self, doc_id: str) -> dict[str, Any]:
         doc = self._conn.execute("SELECT * FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
@@ -231,7 +223,6 @@ class ChemistryStore:
             "parsed_at": doc["parsed_at"],
             "pages_tree_path": doc["pages_tree_path"],
             "compounds": n_compounds,
-            "extractions": n_compounds,
             "unique_compounds": n_compounds,
             "invalid": self._conn.execute(
                 "SELECT COUNT(*) FROM compounds WHERE doc_id = ? AND validation_status = 'invalid'",
@@ -255,7 +246,6 @@ class ChemistryStore:
                 """,
                 (doc_id,),
             ).fetchone()[0],
-            "reactions": 0,
         }
 
     def fetch_compounds_for_doc(self, doc_id: str) -> list[dict[str, Any]]:
@@ -274,27 +264,6 @@ class ChemistryStore:
             "documents": self._conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0],
             "compounds": self._conn.execute("SELECT COUNT(*) FROM compounds").fetchone()[0],
         }
-
-    def fetch_library_compounds(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            """
-            SELECT
-                COALESCE(inchikey, compound_label, smi, CAST(id AS TEXT)) AS dedupe_key,
-                MIN(id) AS id,
-                MAX(canonical_smiles) AS canonical_smiles,
-                MAX(inchikey) AS inchikey,
-                MAX(smi) AS smi,
-                MAX(compound_label) AS compound_label,
-                MAX(name) AS name,
-                MAX(validation_status) AS validation_status,
-                COUNT(DISTINCT doc_id) AS doc_count,
-                GROUP_CONCAT(DISTINCT doc_id) AS doc_ids
-            FROM compounds
-            GROUP BY COALESCE(inchikey, compound_label, smi, CAST(id AS TEXT))
-            ORDER BY id
-            """
-        ).fetchall()
-        return [dict(row) for row in rows]
 
     def fetch_table(self, table: str, doc_id: str | None = None) -> list[dict[str, Any]]:
         allowed = {"compounds", "documents"}

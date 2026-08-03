@@ -40,65 +40,6 @@ def parse_enrich_response(raw: str) -> list[dict[str, Any]]:
     return [x for x in items if isinstance(x, dict)]
 
 
-def _normalize_activities(raw_acts: Any, prealigned: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    if not isinstance(raw_acts, list):
-        raw_acts = []
-    for a in raw_acts:
-        if not isinstance(a, dict):
-            continue
-        kind = a.get("activity_type") or a.get("metric") or a.get("kind") or "other"
-        kind_map = {
-            "ic50": "IC50",
-            "IC50": "IC50",
-            "inhibition": "inhibition",
-            "aggregation": "aggregation",
-            "viability": "cell_viability",
-            "cell_viability": "cell_viability",
-            "synergy": "synergy",
-        }
-        activity_type = kind_map.get(str(kind), str(kind))
-        value = a.get("activity_value", a.get("value"))
-        sd = a.get("activity_value_sd", a.get("sd"))
-        unit = a.get("activity_unit", a.get("unit", ""))
-        assay = a.get("assay", "")
-        condition = a.get("condition") or a.get("partner") or ""
-        evidence = a.get("evidence") or a.get("raw") or ""
-        out.append(
-            {
-                "activity_type": activity_type,
-                "activity_value": value,
-                "activity_value_sd": sd,
-                "activity_unit": unit,
-                "assay": assay,
-                "condition": condition or None,
-                "evidence": evidence,
-            }
-        )
-    # If LLM returned empty but we have prealigned rows, seed best-effort activities
-    if not out and prealigned:
-        for row in prealigned:
-            kind = row.get("kind", "other")
-            kind_map = {
-                "ic50": "IC50",
-                "inhibition": "inhibition",
-                "viability": "cell_viability",
-                "synergy": "synergy",
-            }
-            out.append(
-                {
-                    "activity_type": kind_map.get(kind, kind),
-                    "activity_value": row.get("value"),
-                    "activity_value_sd": None,
-                    "activity_unit": row.get("unit", ""),
-                    "assay": kind,
-                    "condition": row.get("partner") or None,
-                    "evidence": row.get("raw") or "",
-                }
-            )
-    return out
-
-
 def _index_key(item: dict[str, Any]) -> str:
     return str(
         item.get("compound_label") or item.get("label") or item.get("compound_id") or item.get("smiles") or ""

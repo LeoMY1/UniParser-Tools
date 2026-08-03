@@ -15,7 +15,7 @@ SCIENTIFIC_PAPER_TRIGGER: dict[str, object] = {
     "table": 2,
     "chart": -1,
     "figure": -1,
-    "expression": -1,
+    "expression": 1,
     "molecule": 1,
     "ordering_method": "xy_cut_exp",
 }

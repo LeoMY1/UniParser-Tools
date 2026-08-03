@@ -7,6 +7,12 @@ from uniparser_agent.chemistry.config import default_db_path
 from uniparser_agent.chemistry.enrich import enrich_compounds
 from uniparser_agent.chemistry.jobspec import JobSpec
 from uniparser_agent.chemistry.join import build_logical_compounds
+from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
+from uniparser_agent.chemistry.patent_structure import (
+    BlockResolver,
+    build_patent_structure,
+    write_patent_structure_payload,
+)
 from uniparser_agent.chemistry.store import ChemistryStore, IngestSummary
 from uniparser_agent.llm import LLMConfig
 from uniparser_agent.parse.service import load_pages_tree, parse_document
@@ -24,6 +30,7 @@ def ingest_pages_tree(
     source: str | None = None,
     markdown_path: str | None = None,
     output_dir: str | None = None,
+    patent_output_dir: str | Path | None = None,
     token: str = "",
     db_path: Path | None = None,
     skip_enrich: bool = False,
@@ -36,6 +43,26 @@ def ingest_pages_tree(
     jobspec.source = source or str(path)
     jobspec.db_path = db_path or jobspec.db_path or default_db_path()
 
+    patent_structure_path = ""
+    patent_basic_info_path = ""
+    if patent_output_dir is not None:
+        artifact_dir = Path(patent_output_dir).expanduser().resolve()
+        patent_structure = build_patent_structure(pages_tree_doc, resolved_doc_id)
+        resolver = BlockResolver(pages_tree_doc, patent_structure)
+        patent_structure_path = str(
+            write_patent_structure_payload(
+                patent_structure,
+                artifact_dir / "patent_structure.json",
+            )
+        )
+        patent_basic_info_path = str(
+            write_patent_basic_info(
+                resolver,
+                resolved_doc_id,
+                artifact_dir / "patent_basic_info.json",
+            )
+        )
+
     compounds = build_logical_compounds(pages_tree_doc, resolved_doc_id)
     compounds = enrich_compounds(
         resolved_doc_id,
@@ -46,7 +73,7 @@ def ingest_pages_tree(
     )
 
     with ChemistryStore(jobspec.db_path) as store:
-        return store.ingest_compounds(
+        summary = store.ingest_compounds(
             doc_id=resolved_doc_id,
             source=jobspec.source,
             pages_tree_path=str(path),
@@ -56,6 +83,9 @@ def ingest_pages_tree(
             jobspec=jobspec,
             compounds=compounds,
         )
+    summary.patent_structure_path = patent_structure_path
+    summary.patent_basic_info_path = patent_basic_info_path
+    return summary
 
 
 def run_full_pipeline(
@@ -82,6 +112,7 @@ def run_full_pipeline(
         source=input_path,
         markdown_path=parse_result.get("markdown_path"),
         output_dir=parse_result.get("output_dir"),
+        patent_output_dir=parse_result.get("output_dir"),
         token=parse_result.get("token", ""),
         db_path=jobspec.db_path,
         skip_enrich=skip_enrich,
@@ -91,4 +122,6 @@ def run_full_pipeline(
         "parse": parse_result,
         "ingest": summary,
         "db_path": str(jobspec.db_path),
+        "patent_structure_path": summary.patent_structure_path,
+        "patent_basic_info_path": summary.patent_basic_info_path,
     }

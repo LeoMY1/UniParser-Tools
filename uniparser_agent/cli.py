@@ -8,11 +8,13 @@ import typer
 
 from uniparser_agent.chemistry.config import default_db_path
 from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
-from uniparser_agent.chemistry.jobspec import PROFILE_MODULES, JobSpec
+from uniparser_agent.chemistry.jobspec import JobSpec
+from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
+from uniparser_agent.chemistry.patent_structure import BlockResolver, build_patent_structure, write_patent_structure
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
 from uniparser_agent.chemistry.store import ChemistryStore
 from uniparser_agent.llm import LLMConfig, resolve_llm_config
-from uniparser_agent.parse.service import parse_document
+from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2translate.pipeline import run_translate_pipeline
 from uniparser_agent.pdf2vqa.pipeline import run_vqa_pipeline
 
@@ -62,11 +64,84 @@ def parse_cmd(
     typer.echo(f"Output directory: {result['output_dir']}")
 
 
+@app.command("patent-structure")
+def patent_structure_cmd(
+    pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
+    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Patent document identifier."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Output directory; defaults to the pages_tree.json directory.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Build the fixed-depth CN patent structure tree from UniParser output."""
+    pages_path = Path(pages_tree_path).expanduser().resolve()
+    pages_tree_doc = load_pages_tree(pages_path)
+    resolved_doc_id = (doc_id or pages_path.parent.name).strip() or pages_path.parent.name
+    target_dir = Path(output_dir).expanduser().resolve() if output_dir else pages_path.parent
+    structure_path = write_patent_structure(
+        pages_tree_doc,
+        resolved_doc_id,
+        target_dir / "patent_structure.json",
+    )
+    payload = {
+        "doc_id": resolved_doc_id,
+        "patent_format": "CN",
+        "patent_structure_path": str(structure_path),
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"Patent structure: {structure_path}")
+
+
+@app.command("patent-basic-info")
+def patent_basic_info_cmd(
+    pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
+    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Patent document identifier."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Output directory; defaults to the pages_tree.json directory.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Extract rule-only CN patent basic information through semantic navigation."""
+    pages_path = Path(pages_tree_path).expanduser().resolve()
+    pages_tree_doc = load_pages_tree(pages_path)
+    resolved_doc_id = (doc_id or pages_path.parent.name).strip() or pages_path.parent.name
+    target_dir = Path(output_dir).expanduser().resolve() if output_dir else pages_path.parent
+    semantic_tree_path = target_dir / "patent_structure.json"
+    if not semantic_tree_path.exists():
+        semantic_tree_path = pages_path.parent / "patent_structure.json"
+    if semantic_tree_path.exists():
+        patent_structure = json.loads(semantic_tree_path.read_text(encoding="utf-8"))
+    else:
+        patent_structure = build_patent_structure(pages_tree_doc, resolved_doc_id)
+    resolver = BlockResolver(pages_tree_doc, patent_structure)
+    basic_info_path = write_patent_basic_info(
+        resolver,
+        resolved_doc_id,
+        target_dir / "patent_basic_info.json",
+    )
+    payload = {
+        "doc_id": resolved_doc_id,
+        "patent_format": "CN",
+        "patent_basic_info_path": str(basic_info_path),
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"Patent basic information: {basic_info_path}")
+
+
 @app.command("ingest")
 def ingest_cmd(
     pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
     doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
-    profile: str = typer.Option("molecules_only", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
     db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
     source: Optional[str] = typer.Option(None, "--source", help="Original source path or URL."),
     skip_enrich: bool = typer.Option(
@@ -85,7 +160,7 @@ def ingest_cmd(
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Ingest molecule library from an existing pages_tree.json (Strategy A enrich)."""
-    jobspec = JobSpec.from_profile(profile, db_path=Path(db) if db else default_db_path())
+    jobspec = JobSpec(db_path=Path(db) if db else default_db_path())
     llm_config = None
     if not skip_enrich:
         try:
@@ -103,6 +178,7 @@ def ingest_cmd(
         jobspec=jobspec,
         doc_id=doc_id,
         source=source,
+        patent_output_dir=Path(pages_tree_path).expanduser().resolve().parent,
         db_path=jobspec.db_path,
         skip_enrich=skip_enrich,
         llm_config=llm_config,
@@ -116,6 +192,8 @@ def ingest_cmd(
         "n_invalid": summary.n_invalid,
         "n_with_activities": summary.n_with_activities,
         "n_enriched": summary.n_enriched,
+        "patent_structure_path": summary.patent_structure_path,
+        "patent_basic_info_path": summary.patent_basic_info_path,
         "skip_enrich": skip_enrich,
     }
     if json_output:
@@ -128,7 +206,6 @@ def ingest_cmd(
 def run_cmd(
     input_path: str = typer.Argument(..., help="Local PDF/image path or public PDF URL."),
     doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
-    profile: str = typer.Option("molecules_only", "--profile", help=f"Profile: {list(PROFILE_MODULES)}"),
     output_dir: Optional[str] = typer.Option(
         None,
         "-o",
@@ -152,7 +229,7 @@ def run_cmd(
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Parse a document and ingest into the molecule library."""
-    jobspec = JobSpec.from_profile(profile, db_path=Path(db) if db else default_db_path())
+    jobspec = JobSpec(db_path=Path(db) if db else default_db_path())
     llm_config = None
     if not skip_enrich:
         try:
@@ -179,6 +256,8 @@ def run_cmd(
         "db_path": result["db_path"],
         "pages_tree_path": result["parse"]["pages_tree_path"],
         "markdown_path": result["parse"]["markdown_path"],
+        "patent_structure_path": result["patent_structure_path"],
+        "patent_basic_info_path": result["patent_basic_info_path"],
         "n_compounds": summary.n_compounds,
         "n_unique_compounds": summary.n_unique_compounds,
         "n_markush": summary.n_markush,
@@ -191,6 +270,8 @@ def run_cmd(
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
         return
     typer.echo(f"Pages tree: {payload['pages_tree_path']}")
+    typer.echo(f"Patent structure: {payload['patent_structure_path']}")
+    typer.echo(f"Patent basic information: {payload['patent_basic_info_path']}")
     typer.echo(f"Database: {payload['db_path']}")
     _print_summary(payload)
 
@@ -493,7 +574,7 @@ def _build_llm_config(
 
 def _print_summary(payload: dict) -> None:
     typer.echo(f"doc_id: {payload['doc_id']}")
-    typer.echo(f"compounds: {payload.get('n_compounds', payload.get('n_extractions', 0))}")
+    typer.echo(f"compounds: {payload['n_compounds']}")
     typer.echo(f"unique_compounds: {payload['n_unique_compounds']}")
     typer.echo(f"markush: {payload['n_markush']}")
     typer.echo(f"invalid: {payload['n_invalid']}")

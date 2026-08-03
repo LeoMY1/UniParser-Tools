@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.db:
         db_path = Path(args.db).expanduser().resolve()
-        jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+        jobspec = JobSpec(db_path=db_path)
         with ChemistryStore(db_path) as store:
             summary = store.ingest_compounds(
                 doc_id=doc_id,

@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from uniparser_agent.chemistry.tables import (
-    ActivityRow,
     CatalogRow,
     extract_catalog_tables,
     normalize_label,
@@ -55,24 +54,6 @@ def _block_type(block: dict[str, Any]) -> str:
 
 def _molecule_smiles(block: dict[str, Any]) -> str:
     return str(block.get("smi") or block.get("esmi") or "").strip()
-
-
-def truncate_nmr(text: str, max_len: int = 500) -> str:
-    """Legacy helper: compact spectral peaks line-by-line, never across units."""
-    compacted: list[str] = []
-    spectral = re.compile(r"(NMR|HRMS|ESI|δ\s*=|核磁|质谱)", re.IGNORECASE)
-    for line in text.splitlines():
-        match = spectral.search(line)
-        if match and len(line) - match.start() > 100:
-            prefix = line[: match.start()].rstrip()
-            marker = f"{match.group(1)} [spectral peaks omitted]"
-            compacted.append(" ".join(part for part in (prefix, marker) if part))
-        else:
-            compacted.append(line)
-    text = "\n".join(compacted)
-    if len(text) > max_len:
-        return text[: max_len - 15] + " [...truncated]"
-    return text
 
 
 def extract_molecules(pages: list[Any]) -> list[MoleculeHit]:
@@ -159,7 +140,6 @@ def join_compounds(
     doc_id: str,
     molecules: list[MoleculeHit],
     catalog: list[CatalogRow],
-    activities: list[ActivityRow],
 ) -> list[LogicalCompound]:
     compounds: dict[str, LogicalCompound] = {}
     del doc_id  # reserved for future doc-specific policy
@@ -225,8 +205,7 @@ def join_compounds(
             continue
         if catalog and re.match(r"^[IVX]+$", key) and any(c.label.startswith("I-") for c in catalog):
             # Prefer catalog I-n library over roman scaffolds on CN115-like docs
-            if not any(a.example_or_label == key or a.smi == mol.smi for a in activities):
-                continue
+            continue
         upsert(
             key,
             label=label or key,
@@ -241,29 +220,6 @@ def join_compounds(
         if label and mol.smi and not mol.markush:
             existing = smi_to_labeled.get(mol.smi)
             smi_to_labeled[mol.smi] = key if not existing or existing == key else ""
-
-    for act in activities:
-        targets: list[str] = []
-        lab = act.example_or_label
-        if act.kind in ("ic50", "viability", "synergy") and re.match(r"^\d+$", lab):
-            i_label = f"I-{lab}"
-            targets.append(i_label)
-            upsert(i_label, label=i_label, pages=[act.page], example_no=lab)
-        elif lab in compounds:
-            targets.append(lab)
-        elif act.smi:
-            for k, c in compounds.items():
-                if c.smi and (c.smi == act.smi or act.smi.startswith(c.smi[:40])):
-                    targets.append(k)
-        if not targets and lab not in ("control", "clopidogrel"):
-            upsert(lab, label=lab, smi=act.smi, pages=[act.page])
-            targets.append(lab)
-        for t in targets:
-            upsert(t, activity_rows=[asdict(act)], pages=[act.page])
-            if act.smi and not compounds[t].smi:
-                compounds[t].smi = act.smi
-            if re.match(r"^I-(\d+)$", t):
-                compounds[t].example_no = compounds[t].example_no or t.split("-", 1)[1]
 
     # local_context is filled by Phase 2a LLM linking (enrich), not tag-truncated snippets.
     for _key, c in compounds.items():
@@ -311,5 +267,5 @@ def build_logical_compounds(pages_tree_doc: dict[str, Any], doc_id: str) -> list
     molecules = extract_molecules(pages)
     catalog = extract_catalog_tables(pages)
     # Bioactivity is extracted later by the dedicated LLM table stage.
-    compounds = join_compounds(doc_id, molecules, catalog, [])
+    compounds = join_compounds(doc_id, molecules, catalog)
     return select_library_compounds(doc_id, compounds)

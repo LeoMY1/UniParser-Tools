@@ -15,7 +15,6 @@ from uniparser_agent.chemistry.enrich import (
     parse_enrich_response,
 )
 from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
-from uniparser_agent.chemistry.extract import extract_from_pages_tree
 from uniparser_agent.chemistry.jobspec import JobSpec
 from uniparser_agent.chemistry.join import LogicalCompound, build_logical_compounds
 from uniparser_agent.chemistry.link_evidence import merge_links, parse_link_response
@@ -26,7 +25,7 @@ from uniparser_agent.chemistry.patent_chunks import (
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree
 from uniparser_agent.chemistry.store import ChemistryStore
 from uniparser_agent.chemistry.text_units import TextUnit, build_text_units
-from uniparser_agent.chemistry.validate import build_markush_record, validate_smiles
+from uniparser_agent.chemistry.validate import validate_smiles
 from uniparser_agent.parse.service import load_pages_tree
 
 
@@ -40,26 +39,11 @@ def test_load_pages_tree() -> None:
     assert "pages_tree" in doc
 
 
-def test_extract_molecules_and_reactions() -> None:
-    doc = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    molecules, reactions = extract_from_pages_tree(doc)
-    assert len(molecules) == 3
-    assert len(reactions) == 1
-    assert reactions[0].reactants == "CCO"
-    assert reactions[0].conditions == "DCM"
-
-
 def test_validate_smiles() -> None:
     record = validate_smiles("CCO")
     assert record is not None
     assert record.inchikey
     assert validate_smiles("not-a-smiles") is None
-
-
-def test_markush_hash_stable() -> None:
-    a = build_markush_record("*C*", "caption")
-    b = build_markush_record("*C*", "caption")
-    assert a.content_hash == b.content_hash
 
 
 def test_build_logical_compounds_from_catalog() -> None:
@@ -569,7 +553,7 @@ def db_path(tmp_path: Path) -> Path:
 
 
 def test_ingest_skip_enrich(db_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     summary = ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,
@@ -650,7 +634,7 @@ def test_ingest_with_mock_enrich(db_path: Path, monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(pipe, "enrich_compounds", wrapped)
 
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     summary = ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,
@@ -666,7 +650,7 @@ def test_ingest_with_mock_enrich(db_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_export_csv_two_tables(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,
@@ -688,7 +672,7 @@ def test_export_csv_two_tables(db_path: Path, tmp_path: Path) -> None:
 
 
 def test_reingest_replaces_compounds(db_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,

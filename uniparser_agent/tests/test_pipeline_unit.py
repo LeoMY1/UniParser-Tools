@@ -19,28 +19,31 @@ def db_path(tmp_path: Path) -> Path:
     return tmp_path / "test.db"
 
 
-def test_ingest_molecules_only_profile(db_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+def test_ingest_compounds(db_path: Path, tmp_path: Path) -> None:
+    jobspec = JobSpec(db_path=db_path)
+    structure_dir = tmp_path / "structure"
     summary = ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,
         doc_id="fixture-doc",
         source=str(CATALOG_FIXTURE),
         db_path=db_path,
+        patent_output_dir=structure_dir,
         skip_enrich=True,
     )
     assert summary.doc_id == "fixture-doc"
     assert summary.n_compounds >= 2
-    assert summary.n_reactions == 0
-
+    assert Path(summary.patent_structure_path) == structure_dir / "patent_structure.json"
+    assert Path(summary.patent_structure_path).exists()
+    assert Path(summary.patent_basic_info_path) == structure_dir / "patent_basic_info.json"
+    assert Path(summary.patent_basic_info_path).exists()
     with ChemistryStore(db_path) as store:
         stats = store.get_document_stats("fixture-doc")
         assert stats["compounds"] == summary.n_compounds
-        assert stats["reactions"] == 0
 
 
 def test_export_csv(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     ingest_pages_tree(
         CATALOG_FIXTURE,
         jobspec=jobspec,
@@ -57,7 +60,7 @@ def test_export_csv(db_path: Path, tmp_path: Path) -> None:
 
 
 def test_export_library_csv(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec.from_profile("molecules_only", db_path=db_path)
+    jobspec = JobSpec(db_path=db_path)
     for doc_id in ("doc-a", "doc-b"):
         ingest_pages_tree(
             CATALOG_FIXTURE,
