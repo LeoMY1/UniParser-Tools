@@ -12,8 +12,8 @@ UniParser Agent 是基于 UniParser 的文档处理包，提供统一的命令�
 所有生成型命令都使用独立输出目录；目标目录已存在时会创建带数字后缀的同级目录，
 不会删除已有结果。
 
-安装方式、配置说明、命令参数、处理流程和输出格式，请参阅
-[pdf2vqa 完整文档](pdf2vqa/README.md)。
+安装方式、配置说明、命令参数、处理流程和输出格式，请参阅对应文档：
 
-- [PDF2Translate 文档](pdf2translate/README_cn.md)
+- [PDF2VQA 文档](pdf2vqa/README.md)
+- [PDF2Translate 文档](pdf2translate/README.md)
 - [Chemistry 文档](chemistry/README.md)
