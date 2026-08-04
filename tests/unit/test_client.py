@@ -300,6 +300,16 @@ class TestSubmissionPayloads:
         assert payload["model_version"] == "v1.3"
         assert session.calls[0][2]["timeout"] == (2, 3)
 
+    def test_empty_token_preserves_deterministic_token_compatibility(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession()
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        client.trigger_file(str(path), token="", sync=False)
+
+        assert session.calls[0][2]["data"]["token"] == client.to_token(str(path))
+
     def test_trigger_snip_sends_latest_form_fields(self, tmp_path) -> None:
         path = tmp_path / "snip.png"
         Image.new("RGB", (2, 2), "white").save(path)
@@ -435,6 +445,28 @@ class TestTOSUpload:
 
         assert "FAKE_BEARER" not in result["description"]
         assert "?<redacted>" in result["description"]
+
+    def test_upload_http_error_is_not_misclassified_as_success(self, tmp_path) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        link = {
+            "filename": "document.pdf",
+            "upload_url": "https://tos.example.com/upload?X-Tos-Signature=FAKE_BEARER",
+            "source_url": "tos://bucket/document.pdf",
+        }
+        session = FakeSession(
+            responses=[
+                FakeResponse(payload={"files": [link]}),
+                FakeResponse(status_code=503, payload=None, text="non-JSON TOS error", reason="Service Unavailable"),
+            ]
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.upload_files_to_tos([str(path)])
+
+        assert result["status"] == "error"
+        assert result["upload"]["http_status"] == 503
+        assert result["files"] == []
 
     def test_upload_count_mismatch_does_not_return_presigned_urls(self, tmp_path) -> None:
         path = tmp_path / "document.pdf"

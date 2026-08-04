@@ -58,7 +58,7 @@ def item2format_(item: SemanticItem, item_format: FormatFlag):
                         s += "\\includegraphics[width=0.5\\textwidth]{}"
                 elif PATH_RE.match(item.source):
                     if item_format == FormatFlag.Markdown:
-                        s += f"![{item.type}]({item.source})"
+                        s += f"![{item.type}](<{item.source}>)"
                     elif item_format == FormatFlag.Html:
                         s += f"<img src='{item.source}' alt='{item.type}'/>"
                     elif item_format == FormatFlag.Latex:
@@ -1042,7 +1042,10 @@ class ExpressionResult(SemanticItem):
 
     @property
     def latex(self):
-        return self._df_for_format(FormatFlag.Latex).style.hide(axis="index").to_latex()
+        df = self._df_for_format(FormatFlag.Latex)
+        if df.shape[-1] == 0:
+            return ""
+        return df.style.hide(axis="index").to_latex()
 
     @property
     def html(self):
@@ -1125,6 +1128,16 @@ class TabularResult(SemanticItem):
         df = df[df.astype(bool).sum(axis=1) > 0]  # remove empty 'blacksapce' rows
         return df
 
+    def _safe_df_for_format(self, item_format: FormatFlag) -> pd.DataFrame:
+        try:
+            return self._df_for_format(item_format)
+        except Exception:
+            get_root_logger().warning(
+                f"{self.token} {self.page} {self.block} {self.type} "
+                f"convert html to {item_format} dataframe error: {repr(self.structure)}"
+            )
+            return self.df
+
     @functools.cached_property
     def df(self) -> pd.DataFrame:
         try:
@@ -1147,11 +1160,17 @@ class TabularResult(SemanticItem):
 
     @property
     def markdown(self):
-        return self._df_for_format(FormatFlag.Markdown).to_markdown(index=False, disable_numparse=True)
+        df = self._safe_df_for_format(FormatFlag.Markdown)
+        if df.shape[-1] == 0:
+            return ""
+        return df.to_markdown(index=False, disable_numparse=True)
 
     @property
     def latex(self):
-        return self._df_for_format(FormatFlag.Latex).style.hide(axis="index").to_latex()
+        df = self._safe_df_for_format(FormatFlag.Latex)
+        if df.shape[-1] == 0:
+            return ""
+        return df.style.hide(axis="index").to_latex()
 
     @property
     def html(self):
@@ -1221,6 +1240,8 @@ class ChartResult(SemanticItem):
 
     @property
     def latex(self):
+        if self.df.shape[-1] == 0:
+            return ""
         return self.df.style.hide(axis="index").format(escape="latex").to_latex()
 
     @property

@@ -200,7 +200,7 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
 
 
-**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests ([Important notes](./references/notes.md)); PDF URLs must be publicly accessible. Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
+**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests; PDF URLs must be publicly accessible. Parsing can be inaccurate, so verify critical content against the source. Results are retained for only 24 hours—fetch and save them promptly. See [Important notes](./references/notes.md). Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
 
 ## Advanced
 

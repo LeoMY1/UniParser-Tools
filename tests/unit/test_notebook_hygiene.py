@@ -43,3 +43,13 @@ def test_callback_pattern_uses_release_signature_contract() -> None:
     assert '"checksum":' not in content
     assert "X-UniParser-Signature" in content
     assert "request.get_data(cache=True)" in content
+
+
+def test_customer_docs_include_result_retention_notice() -> None:
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / "skills" / "UniParser-Tools" / "SKILL.md").read_text(encoding="utf-8")
+    notes = (REPO_ROOT / "skills" / "UniParser-Tools" / "references" / "notes.md").read_text(encoding="utf-8")
+
+    assert "24 小时" in readme
+    assert "retained for only 24 hours" in skill
+    assert "retained for only **24 hours**" in notes

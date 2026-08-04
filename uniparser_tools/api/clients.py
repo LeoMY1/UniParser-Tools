@@ -172,6 +172,8 @@ class UniParserClient:
         return self.sync_request_timeout if sync else self.request_timeout
 
     def _trigger_token(self, seed: str, token: Optional[str], server_generated_token: bool) -> Optional[str]:
+        if token == "":
+            token = None
         if token is None and not server_generated_token:
             token = self.to_token(seed)
         if token is not None:
