@@ -16,7 +16,7 @@ class VQALLMClient:
         model: str | None = None,
         timeout: float | None = None,
         max_tokens: int | None = None,
-        enable_thinking: bool = False,
+        enable_thinking: bool | None = None,
         extra_body: dict[str, Any] | None = None,
         config: LLMConfig | None = None,
     ) -> None:
