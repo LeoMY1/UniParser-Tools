@@ -69,5 +69,8 @@ deploy
 # env
 .env
 
+# uv project lock files (generated locally; CI installs with pip)
+uv.lock
+
 *.bak
 .cursor/
