@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from uniparser_agent.llm import LLMConfig
-from uniparser_agent.output_dir import replace_output_dir, resolve_output_dir
+from uniparser_agent.output_dir import create_unique_output_dir, resolve_output_dir
 from uniparser_agent.parse.api_client import resolve_input
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file
@@ -39,7 +39,6 @@ def run_vqa_pipeline(
     answer_pdf: str | None = None,
     pages_tree_path: str | None = None,
     output_dir: str | None = None,
-    overwrite: bool = False,
     strict_title_match: bool = False,
     llm_config: LLMConfig | None = None,
     llm_client: VQALLMClient | None = None,
@@ -75,19 +74,18 @@ def run_vqa_pipeline(
         assert input_path is not None
         resolve_input(input_path)
 
-    target = _resolve_output_dir(output_dir)
-    with replace_output_dir(target, overwrite=overwrite) as out:
-        return _run_vqa_pipeline_in_dir(
-            out=out,
-            started=started,
-            input_path=input_path,
-            pages_tree_bytes=pages_tree_bytes,
-            question_pdf=question_pdf,
-            answer_path=answer_path,
-            strict_title_match=strict_title_match,
-            llm_config=llm_config,
-            llm_client=llm_client,
-        )
+    out = create_unique_output_dir(_resolve_output_dir(output_dir))
+    return _run_vqa_pipeline_in_dir(
+        out=out,
+        started=started,
+        input_path=input_path,
+        pages_tree_bytes=pages_tree_bytes,
+        question_pdf=question_pdf,
+        answer_path=answer_path,
+        strict_title_match=strict_title_match,
+        llm_config=llm_config,
+        llm_client=llm_client,
+    )
 
 
 def _run_vqa_pipeline_in_dir(
@@ -125,7 +123,7 @@ def _run_vqa_pipeline_in_dir(
             )
             parse_source = str(merged_pdf_path)
 
-        parse_result = parse_document(parse_source, output_dir=str(parse_dir), overwrite=True)
+        parse_result = parse_document(parse_source, output_dir=str(parse_dir))
         tree_path = Path(parse_result["pages_tree_path"])
         if answer_path is not None:
             assert question_pdf is not None and merged_pdf_path is not None

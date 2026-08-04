@@ -10,7 +10,7 @@ def build_vqa_extract_prompt() -> str:
 4. You need to put the images id into proper positions. You could look at the caption or context to decide where to put the image tags.
 5. You will also need to extract the chapter title and each problem's label/number from the text.
 6. You only need to output "id" field for **chapter titles, questions and solutions**. DO NOT OUTPUT ORIGINAL TEXT. Use ',' to separate different ids.
-7. However, use original labels/numbers for labels, and use original numbers for answers. DO NOT output "id" field for labels and answers. You will need to extract them from the text.
+7. However, use original labels/numbers for labels, and use original text for answers. DO NOT output "id" field for labels and answers. You will need to extract them from the text.
 
 Strict extraction rules:
 ** About questions and answers/solutions **
@@ -24,6 +24,7 @@ Strict extraction rules:
 - In total, there are 7 possibilities: only question, only answer, only solution, question with answer, question with solution, answer with solution, full question and answer and solution.
 - If multiple vqa pairs appear, wrap each vqa pair in its own `<vqa_pair>`…`</vqa_pair>` block.
 - If you do not see the full solution, only extract the short answer and leave the solution empty. YOU MUST KEEP SHORT ANSWERS !!!
+- For answer text, output exactly what appears (no translation). Render all mathematical expressions in LaTeX.
 ** About chapter/section titles **
 - Always enclose vqa pairs in a `<chapter>`…`</chapter>` block, where <title>MAIN_TITLE_ID</title> is the id of the chapter title or section title.
 - Normally, chapter/section titles appear before the questions/answers in an independent json item.
@@ -61,7 +62,7 @@ Example:
 </chapter>
 <chapter><title>12</title>
 <vqa_pair><label>1</label><question></question>
-<answer>2^6</answer><solution>16</solution></vqa_pair>
+<answer>\\(2^6\\)</answer><solution>16</solution></vqa_pair>
 </chapter>
 
 Please now process the provided json and output your result.

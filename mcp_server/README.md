@@ -14,12 +14,14 @@
 
 | 参数 | 说明 |
 |------|------|
-| `output_dir` | 可选；默认 `~/Uni-Parser-Skill/<stem>/` |
-| `overwrite` | 输出目录已存在时是否覆盖 |
+| `output_dir` | 可选的首选目录；默认 `~/Uni-Parser-Skill/<stem>/`；已存在时自动使用同级 `<name>_1`、`<name>_2` 等新目录 |
 | `async_mode` | `sync=false` 提交后轮询直至完成 |
 | `textual` … `molecule` | 7 个语义字段，默认 scientific-paper preset |
 
 成功返回 JSON（Pydantic）：`markdown_path`、`pages_tree_path`、`content_preview`（默认 2000 字）、`message` 等。
+调用方应以返回的 `output_dir` 为准；服务不会复用或删除已有目录。
+
+> 出于安全原因，根目录、HOME、当前工作目录及 Git 元数据目录不能作为首选输出目录。
 
 健康检查、版本查询、按 token 手动恢复请使用 CLI：`uniparser health`、`uniparser version`、`uniparser fetch`。
 
@@ -78,3 +80,6 @@ uv run pytest tests/ -v
 ```
 
 `UNIPARSER_BASE_URL` 可省略（默认云服务）；本地自托管时设置为 `http://127.0.0.1:40001` 等。
+
+同步解析使用 `UniParserClient.sync_request_timeout`，轮询和结果获取使用
+`request_timeout`；二者均为客户端 HTTP 超时，与服务端解析预算相互独立。

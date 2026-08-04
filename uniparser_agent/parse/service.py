@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.output_dir import default_parse_output_dir, replace_output_dir, resolve_output_dir
+from uniparser_agent.output_dir import (
+    create_unique_output_dir,
+    default_parse_output_dir,
+    resolve_output_dir,
+)
 from uniparser_agent.parse.api_client import UniParserApiClient, resolve_input
 from uniparser_agent.parse.config import get_api_key, get_base_url
 from uniparser_agent.parse.storage import (
@@ -22,15 +26,15 @@ def parse_document(
     input_path: str,
     *,
     output_dir: str | None = None,
-    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Parse with scientific-paper defaults via HTTP API (no OpenCV)."""
     kind, source_stem, path = resolve_input(input_path)
-    default_out = default_parse_output_dir(source_stem) if output_dir is None else Path(output_dir)
-    out = resolve_output_dir(output_dir, default=default_out)
+    default_out = default_parse_output_dir(source_stem)
+    preferred = resolve_output_dir(output_dir, default=default_out)
     client = make_client()
 
-    with replace_output_dir(out, overwrite=overwrite):
+    try:
+        out = create_unique_output_dir(preferred)
         if kind == "file":
             trigger = client.trigger_file(str(path))
             input_type = "file"
@@ -67,6 +71,10 @@ def parse_document(
             "source": input_path,
             "trigger_meta_path": str(meta_path),
         }
+    finally:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
 
 def load_pages_tree(pages_tree_path: str | Path) -> dict[str, Any]:

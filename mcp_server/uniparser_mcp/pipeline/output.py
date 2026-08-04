@@ -3,30 +3,28 @@
 from __future__ import annotations
 
 import json
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from uniparser_mcp.config import get_output_root
+from uniparser_tools.common.output_dir import create_unique_output_dir
 
 
 def default_output_dir(source_stem: str) -> Path:
-    return (get_output_root() / source_stem).expanduser().resolve()
+    return get_output_root() / source_stem
+
+
+def _ensure_output_dir(out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
 
 
 def resolve_output_dir(
     source_stem: str,
     output_dir: str | None,
-    *,
-    overwrite: bool,
-) -> tuple[Path, str | None]:
-    out = Path(output_dir).expanduser().resolve() if output_dir else default_output_dir(source_stem)
-    if out.exists() and not overwrite:
-        return out, "DIR_EXISTS"
-    if out.exists() and overwrite:
-        shutil.rmtree(out)
-    return out, None
+) -> Path:
+    preferred = Path(output_dir).expanduser() if output_dir else default_output_dir(source_stem)
+    return create_unique_output_dir(preferred)
 
 
 def write_trigger_meta(
@@ -37,7 +35,7 @@ def write_trigger_meta(
     input_value: str,
     trigger_kwargs: dict | None = None,
 ) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_output_dir(out_dir)
     meta_path = out_dir / "trigger_meta.json"
     payload: dict[str, Any] = {
         "token": token,
@@ -52,7 +50,7 @@ def write_trigger_meta(
 
 
 def save_stage_error(out_dir: Path, filename: str, payload: dict) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_output_dir(out_dir)
     (out_dir / filename).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -63,7 +61,7 @@ def save_parse_results(
     pages_tree: dict,
     formatted: dict,
 ) -> dict[str, Any]:
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_output_dir(out_dir)
     stem = source_stem or "document"
 
     pages_tree_path = out_dir / "pages_tree.json"

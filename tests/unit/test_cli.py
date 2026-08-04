@@ -150,6 +150,9 @@ class TestParseCommand:
         monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
+        out.mkdir()
+        (out / "keep.txt").write_text("keep", encoding="utf-8")
+        actual_out = tmp_path / "out_1"
         result = runner.invoke(
             cli,
             ["--json", "parse", str(pdf), "-o", str(out)],
@@ -159,13 +162,15 @@ class TestParseCommand:
         assert "Parsing... paper.pdf" in result.stderr
         payload = json.loads(result.stdout)
         assert payload["token"] == "tok-parse-1"
-        assert (out / "trigger_meta.json").is_file()
-        meta = json.loads((out / "trigger_meta.json").read_text(encoding="utf-8"))
+        assert Path(payload["output_dir"]) == actual_out
+        assert (out / "keep.txt").read_text(encoding="utf-8") == "keep"
+        assert (actual_out / "trigger_meta.json").is_file()
+        meta = json.loads((actual_out / "trigger_meta.json").read_text(encoding="utf-8"))
         assert meta["token"] == "tok-parse-1"
         assert meta["trigger_kwargs"]["textual"] == "ocr-hq"
         assert meta["trigger_kwargs"]["sync"] is True
         assert "preset" not in meta
-        assert (out / "paper.md").is_file()
+        assert (actual_out / "paper.md").is_file()
 
     def test_parse_default_trigger_kwargs(
         self,
@@ -261,6 +266,9 @@ class TestFetchCommand:
         monkeypatch.setattr("uniparser_tools.cli.commands.fetch.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "fetch-out"
+        out.mkdir()
+        (out / "keep.txt").write_text("keep", encoding="utf-8")
+        actual_out = tmp_path / "fetch-out_1"
         result = runner.invoke(
             cli,
             ["--json", "fetch", "--token", "abcdef123456", "-o", str(out)],
@@ -271,7 +279,9 @@ class TestFetchCommand:
         payload = json.loads(result.stdout)
         assert payload["token"] == "abcdef123456"
         assert payload["fetched_by_token"] is True
-        assert (out / "token_abcdef12.md").is_file()
+        assert Path(payload["output_dir"]) == actual_out
+        assert (out / "keep.txt").read_text(encoding="utf-8") == "keep"
+        assert (actual_out / "token_abcdef12.md").is_file()
 
 
 class TestHealthVersion:
@@ -332,12 +342,14 @@ class TestHelp:
         assert "--async" in result.stdout
         assert "--textual" in result.stdout
         assert "--molecule" in result.stdout
+        assert "--overwrite" not in result.stdout
         assert "--verbose" not in result.stdout
 
     def test_fetch_help(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["fetch", "--help"])
         assert result.exit_code == 0
         assert "--token" in result.stdout
+        assert "--overwrite" not in result.stdout
 
 
 class TestAuthCommand:

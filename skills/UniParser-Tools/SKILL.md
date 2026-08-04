@@ -96,7 +96,6 @@ Optional flags:
 ```bash
 uniparser parse "./paper.pdf" -o "./results"
 uniparser parse "./paper.pdf" --async
-uniparser parse "./paper.pdf" --overwrite
 ```
 
 Recovery (existing server job—see **Common issues**):
@@ -107,7 +106,7 @@ uniparser fetch --token "TASK_TOKEN_FROM_PRIOR_RUN"
 
 Token sources: stdout JSON from a prior `uniparser --json parse …`, `trigger_meta.json` under the output directory, or the `token` field in a failed parse stderr JSON.
 
-**Default output for** `fetch` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). To write into the same directory as a prior `parse`, pass `-o` explicitly (e.g. `-o ~/Uni-Parser-Skill/paper/`).
+**Default output for** `fetch` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). Passing a prior `parse` directory with `-o` treats it only as the preferred path; because that directory already exists, `fetch` writes to an available sibling such as `paper_1`. Always use the returned `output_dir`.
 
 **Default output for** `parse` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/<source_stem>/`
 
@@ -182,7 +181,10 @@ uniparser parse paper.pdf --json    # wrong
 | `trigger_meta_path` | Path to `trigger_meta.json`              |
 
 
-**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `DIR_EXISTS`, `PARSE_ERROR`.
+If the preferred output directory already exists, the CLI creates an available sibling such as
+`results_1` or `results_2`. Existing paths are never reused or deleted; use the returned `output_dir`.
+
+**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `PARSE_ERROR`.
 
 ## Common issues
 
@@ -192,7 +194,6 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
-| `DIR_EXISTS`                                                             | Output directory already exists                                                 | Ask user; re-run with `--overwrite` if they agree                                                                                                             |
 | `Token is duplicated`                                                    | Job for this API key + exact input already exists                               | Do **not** re-run `uniparser parse`. Read `token` from stderr JSON or `trigger_meta.json`; run `uniparser fetch --token TOKEN`                                |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
 | `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
@@ -220,5 +221,3 @@ Optional MCP server setup is in the [UniParser-Tools GitHub repo](https://github
 | Layout types    | [layout-types.md](./references/layout-types.md)   |
 | Utilities       | [utilities.md](./references/utilities.md)         |
 | Important notes | [notes.md](./references/notes.md)                 |
-
-

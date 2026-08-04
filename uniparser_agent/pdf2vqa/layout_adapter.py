@@ -13,10 +13,65 @@ from uniparser_agent.pdf2vqa.image_export import (
 )
 
 
-SKIP_TYPES = frozenset({"hline", "pageheader", "pagefooter", "pagenumber"})
+SKIP_TYPES = frozenset({"hline", "pagebar", "pageheader", "pagefooter", "pagenote", "pagenumber", "watermark"})
 TEXT_TYPES = frozenset({"paragraph", "title", "documenttitle"})
-CAPTION_TYPES = frozenset({"figurecaption", "imagecaption"})
+CAPTION_TYPES = frozenset(
+    {
+        "algorithmcaption",
+        "expressioncaption",
+        "figurecaption",
+        "imagecaption",
+        "tablecaption",
+    }
+)
 IMAGE_TYPES = frozenset({"figure", "image", "chart", "table", "molecule", "figuregroup", "imagegroup"})
+
+
+def _format_inline(content: str, content_type: str) -> str:
+    normalized_type = content_type.strip().lower()
+    if normalized_type in {"equation", "equationinline"}:
+        if content.startswith(("$", r"\(", r"\[")):
+            return content
+        return f"${content}$"
+    if normalized_type == "molecule":
+        return content if content.startswith("`") else f"`{content}`"
+    return content
+
+
+def _inline_contents(block: dict[str, Any]) -> str:
+    contents = block.get("contents")
+    if not isinstance(contents, list) or not contents:
+        return ""
+    types = block.get("types")
+    if not isinstance(types, list) or len(types) != len(contents):
+        types = ["text"] * len(contents)
+    return "".join(_format_inline(str(content), str(content_type)) for content, content_type in zip(contents, types))
+
+
+def _table_text(block: dict[str, Any]) -> str:
+    structure = block.get("structure") or block.get("html") or ""
+    placeholders = block.get("placeholders")
+    contents = block.get("contents")
+    types = block.get("types")
+    if (
+        isinstance(structure, str)
+        and isinstance(placeholders, list)
+        and isinstance(contents, list)
+        and len(placeholders) == len(contents)
+    ):
+        if not isinstance(types, list) or len(types) != len(contents):
+            types = ["text"] * len(contents)
+        for placeholder, content, content_type in zip(
+            reversed(placeholders),
+            reversed(contents),
+            reversed(types),
+        ):
+            structure = structure.replace(
+                str(placeholder),
+                _format_inline(str(content), str(content_type)),
+            )
+        return structure.strip()
+    return _inline_contents(block)
 
 
 def _block_text(block: dict[str, Any]) -> str:
@@ -27,7 +82,17 @@ def _block_text(block: dict[str, Any]) -> str:
             if latex.startswith("$$") or latex.startswith("$"):
                 return latex
             return f"$$\n{latex}\n$$"
-        return (block.get("text") or "").strip()
+    if btype == "table":
+        table_text = _table_text(block)
+        if table_text:
+            return table_text
+    inline_text = _inline_contents(block)
+    if inline_text:
+        return inline_text.strip()
+    if btype == "molecule":
+        molecule_text = block.get("esmi") or block.get("smi") or block.get("caption")
+        if isinstance(molecule_text, str) and molecule_text.strip():
+            return f"`{molecule_text.strip()}`"
     return (block.get("text") or "").strip()
 
 
@@ -46,7 +111,7 @@ def _caption_from_group(block: dict[str, Any]) -> list[str]:
             continue
         ctype = (child.get("type") or "").strip().lower()
         if ctype in CAPTION_TYPES:
-            text = (child.get("text") or "").strip()
+            text = _block_text(child)
             if text:
                 captions.append(text)
     return captions
@@ -132,6 +197,11 @@ def pages_tree_to_content_list(
                     continue
             if btype in {"figuregroup", "imagegroup"}:
                 continue
+
+        if btype == "table" and text:
+            content.append({"id": next_id, "type": "table", "table_body": text})
+            next_id += 1
+            continue
 
         if btype in TEXT_TYPES or text:
             if not text:

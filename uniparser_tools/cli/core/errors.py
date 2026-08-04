@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 
 def emit_json_stderr(payload: dict) -> None:
@@ -26,22 +25,6 @@ def missing_token_error() -> int:
             "error": {
                 "code": "MISSING_TOKEN",
                 "message": "--token is required. Use the token from a prior successful parse trigger response.",
-            },
-        }
-    )
-    return 1
-
-
-def dir_exists_error(output_dir: Path) -> int:
-    emit_json_stderr(
-        {
-            "ok": False,
-            "error": {
-                "code": "DIR_EXISTS",
-                "message": (
-                    f"Output directory already exists: {output_dir}. Re-run with --overwrite if you want to replace it."
-                ),
-                "output_dir": str(output_dir),
             },
         }
     )

@@ -58,6 +58,22 @@ pip install -e .
 
 > **说明：** 仅执行 `pip install -r requirements.txt` **不会**注册 `uniparser` 命令；SDK 开发用前者即可，CLI 必须执行 `pip install -e .`。
 
+开发和运行测试时，请安装测试依赖：
+
+```bash
+pip install -e ".[test]"
+```
+
+当 `.env` 中配置了 `UNIPARSER_API_KEY` 时，完整测试会连接真实服务，并分别
+通过本地 PDF、公开 HTTPS PDF 和图片 snip 提交 3 次计费解析：
+
+```bash
+python -m pytest -q
+```
+
+若 `.env` 不在当前仓库，可通过 `UNIPARSER_DOTENV_PATH=/path/to/.env`
+显式指定。
+
 安装后验证：
 
 ```bash
@@ -105,7 +121,33 @@ import os
 parser = UniParserClient(
     host="https://uniparser.dp.tech/",
     api_key=os.getenv("UNIPARSER_API_KEY"),
+    request_timeout=(10, 60),  # 普通请求：连接/读取超时
+    sync_request_timeout=(10, 1860),  # 同步解析请求：连接/读取超时
+    upload_request_timeout=(60, 300),  # TOS 上传：socket/响应超时
 )
+```
+
+`request_timeout` 用于健康检查、结果获取和异步任务提交；`sync_request_timeout`
+只用于 `sync=True` 的解析请求；`upload_request_timeout` 用于 TOS 文件内容上传。
+它们是客户端 HTTP 超时，不等同于服务端解析预算。
+客户端可作为上下文管理器使用，以及时关闭连接池：
+
+```python
+with UniParserClient(host=host, api_key=api_key) as parser:
+    result = parser.version()
+```
+
+`version()` 会原样返回 `release/v1.3` 的模型路由信息，包括
+`default_version`、`backend_versions`，以及后端声明的 `capabilities`；
+可据此选择 `trigger_*()` 的 `model_version`。`get_constants()` 返回服务端
+当前的 `LayoutType`、解析/格式枚举和 token 规则。`health()`、`version()`
+和 `get_constants()` 也都支持单次 `http_timeout=`。
+
+```python
+service = parser.version()
+default_model = service["default_version"]
+capabilities = service["backend_versions"][default_model].get("capabilities", {})
+constants = parser.get_constants()
 ```
 
 ## 解析配置：7 个语义类 + 2 个枚举
@@ -142,6 +184,54 @@ parser = UniParserClient(
 | `2` | `OCRHighQuality` | 高质 OCR，支持行内公式 |
 | `3` | `DigitalExported` | 从数字原生 PDF 直接抽取文字 |
 
+### 提交任务的通用参数
+
+三个提交入口已与 `release/v1.3` 对齐。`trigger_file`、`trigger_snip` 和
+`trigger_url` 都支持以下参数：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `timeout` | `1800` | 服务端解析预算（秒），不是 HTTP 超时 |
+| `http_timeout` | `None` | 仅覆盖本次请求的客户端 HTTP 超时 |
+| `inplace_update` | `False` | 是否允许更新同 token 的已有任务 |
+| `preset_layout` | `None` | 预设版面；可传 JSON 字符串或 Python 列表 |
+| `model_version` | `None` | 指定服务端 `/version` 返回的模型版本 |
+| `server_generated_token` | `False` | token 为空时交给服务端生成；默认保留历史确定性 token |
+| `callback_url` / `callback_secret` | `None` | 异步任务完成回调及其验证密钥 |
+
+`padding_snip` 只适用于文件和图片入口；`proxy` 只适用于 URL 入口。URL
+入口支持服务端接受的 HTTP(S) 以及 S3、OSS、TOS 对象地址。`preset_layout`
+在三个入口中都会按服务端契约编码成 JSON 字符串。
+
+```python
+result = parser.trigger_url(
+    "tos://bucket/document.pdf",
+    sync=False,
+    model_version="v1.3",
+    preset_layout=[[{"type": "textual", "bbox": [0, 0, 100, 30]}]],
+    server_generated_token=True,
+)
+token = result["token"]
+```
+
+### TOS 预签名上传
+
+本地文件可以先上传到 TOS，再把返回的 `source_url` 交给 `trigger_url`。
+上传与解析刻意分成两步，调用上传助手不会自动启动计费解析：
+
+```python
+uploaded = parser.upload_files_to_tos(["./large-document.pdf"])
+source_url = uploaded["files"][0]["source_url"]
+result = parser.trigger_url(source_url, server_generated_token=True)
+```
+
+如需自行执行上传，可调用 `request_tos_upload_links()` 获取预签名 `PUT`
+地址。该地址是短期 bearer credential，不应记录到日志或转发给其他服务。
+客户端向预签名地址上传时不会携带 UniParser API Key；高层
+`upload_files_to_tos()` 完成上传后也不会在返回值中保留 `upload_url`。
+可通过客户端的 `upload_request_timeout=` 或单次调用的 `http_timeout=`
+调整上传超时。
+
 ## 快速开始
 
 > ‼️‼️‼️ 以下仅为代码功能示例，具体运行代码请参考 `playground/*.ipynb` ‼️‼️‼️
@@ -166,7 +256,7 @@ from uniparser_tools.common.constant import ParseMode, ParseModeTextual
 
 # 科学文献解析模式（推荐默认值）
 result = parser.trigger_file(
-    pdf_path="./example.pdf",
+    file_path="./example.pdf",
     textual=ParseModeTextual.OCRHighQuality,  # high quality
     equation=ParseMode.OCRHighQuality,  # high quality
     table=ParseMode.OCRHighQuality,  # high quality
@@ -187,14 +277,15 @@ if result["status"] == "success":
 
 | 开关 | 默认 | 说明 |
 |------|------|------|
-| `content` | `True` | 返回全文纯/富文本，适合 LLM |
+| `content` | `False` | 返回全文纯/富文本，适合 LLM |
 | `objects` | `False` | JSON 语义块列表，适合语义分析 |
 | `pages_dict` | `False` | 按页组织的原始解析布局 |
 | `pages_tree` | `False` | 带父子关系的嵌套树，适合复杂分析 |
-| `return_half` | `False` | 解析进行中即取已完成部分 |
 | `molecule_source` | `False` | 返回分子原始源（SMILES/mol 等） |
 
 同一 token 可复用，多次获取不同组合不会重复计费。
+两个结果接口都可用 `http_timeout=` 覆盖单次读取超时，适合包含大量对象或
+Base64 源的大文档。
 
 #### 输出格式（`FormatFlag`，仅作用于 `content` / `objects` 中的文本字段）
 
@@ -222,6 +313,46 @@ if result["status"] == "success":
     print(result["content"])
 ```
 
+如需 MinerU 兼容结构，可直接调用第三方格式结果接口：
+
+```python
+from uniparser_tools.common.constant import ThirdPartyFormatter
+
+result = parser.get_third_party_output(
+    token,
+    formatter=ThirdPartyFormatter.MinerU,
+)
+```
+
+`dict2obj()` / `build_item()` 已对齐 `release/v1.3` 的结果模型，包括
+文本块的 `contents + types` 行内公式/分子表示、分子的 `esmi` 字段，以及
+完整 HTML 表格的 span 升级。服务端未来增加未知字段时，转换器会忽略未知
+字段，而不是让已有客户代码因构造参数不匹配而崩溃。
+
+### 账户与用量（只读）
+
+解析客户端提供 `account` 命名空间，使用同一连接池和 API Key：
+
+```python
+profile = parser.account.get_current_user()
+balance = parser.account.get_balance()
+summary = parser.account.get_usage_summary(period="current_month")
+usage = parser.account.list_usage_records(page=1, size=20)
+transactions = parser.account.list_balance_transactions(page=1, size=20)
+```
+
+也可以独立创建只读账户客户端：
+
+```python
+from uniparser_tools.api.account import UniParserAccountClient
+
+with UniParserAccountClient(host=host, api_key=api_key) as account:
+    print(account.get_balance())
+```
+
+该封装不提供注册、资料更新、API Key 管理、充值或管理员写操作。用量明细
+遵循服务端当前契约，只返回最近 14 天并分页；`size` 的服务端上限为 100。
+
 ### 4. 使用异步回调 (Callbacks)
 
 UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定地址。这对于长耗时任务非常有用，无需轮询结果。
@@ -229,7 +360,7 @@ UniParser 支持在异步任务完成后通过 HTTP POST 回调结果到指定�
 ```python
 # 提交带回调地址的异步解析任务
 result = parser.trigger_file(
-    pdf_path="./example.pdf",
+    file_path="./example.pdf",
     sync=False,  # 必须为 False 才能触发异步回调
     callback_url="https://your-server.com/api/callback",
     callback_secret="your-shared-secret",  # 用于校验回调内容的签名
@@ -247,7 +378,15 @@ if result["status"] == "success":
     print(f"异步任务已提交，完成后将回调到指定地址。Token: {token}")
 ```
 
-回调请求的 Payload 将包含 `checksum` 和 `content`。你可以使用 `callback_secret` 对 `content` 进行 HMAC-SHA256 签名校验，以确保内容未被篡改。
+`release/v1.3` 的回调 body 是原始 JSON 结果，不再包成
+`{"checksum": ..., "content": ...}`。服务端对实际收到的 body bytes 使用
+`callback_secret` 计算 HMAC-SHA256，并在
+`X-UniParser-Signature: sha256=<hex>` 中发送签名；接收方必须在解析 JSON
+之前，对原始 body bytes 验签。`Idempotency-Key` 可用于去重，
+`X-UniParser-Callback-Attempt` 表示当前重试次数。
+
+`callback_url` 仅允许搭配 `sync=False` 使用，且必须与 `callback_secret`
+同时提供；部署方还可能对回调 host 配置 allowlist。
 
 ### 5. 解析图片文件
 
@@ -352,10 +491,11 @@ token = result["token"]
 
 | 字段 | 出现场景 | 说明 |
 |------|------|------|
-| `status` | 始终存在 | `"success"` / `"error"`（见 `StatusFlag`） |
+| `status` | 任务响应或错误响应 | `"success"` / `"error"`（见 `StatusFlag`）；`version` 等信息接口不保证该字段 |
 | `token` | 触发/查询类接口 | 本次任务的 token，出错也会带上以便追溯 |
-| `description` | 错误时 | 业务层错误原因，通常取自 `ErrorFlag`（如 `Token_Invalid`、`File_Size_Exceeded`、`Domain_Not_Allowed`…）或本地 traceback |
-| `message` | 错误时 | 服务端返回的原始报文（非 JSON 时才填充） |
+| `description` | 错误时 | 服务端业务错误，或不含本地 traceback 的网络错误摘要 |
+| `message` | 错误时 | 客户端请求阶段说明；非 JSON 响应会额外保留在 `body` |
+| `http_status` | HTTP 4xx/5xx 时 | 原始 HTTP 状态码，同时保留服务端 JSON 错误体 |
 
 > 直接调用 REST API（curl / 自研客户端）时才需要关注 `401/403/429/…` 等原始 HTTP 状态码，详见各部署实例 `<host>/api` 上的 Authentication 章节。
 
@@ -436,6 +576,8 @@ uv run python -m uniparser_mcp
 | -------------------- | --------------------------------- |
 | `UNIPARSER_API_KEY`  | 必填                                |
 | `UNIPARSER_BASE_URL` | 可选，默认 `https://uniparser.dp.tech` |
+
+
 
 
 ### 接入 Cursor / Claude Code

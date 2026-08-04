@@ -15,10 +15,15 @@
    import hashlib
 
 
-   def verify_callback(content, checksum, secret):
-       expected = hmac.new(secret.encode(), content.encode(), hashlib.sha256).hexdigest()
-       return hmac.compare_digest(expected, checksum)
+   def verify_callback(raw_body: bytes, signature: str, secret: str) -> bool:
+       if not signature.startswith("sha256="):
+           return False
+       expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+       return hmac.compare_digest(expected, signature[len("sha256=") :])
    ```
+   Read `raw_body` before JSON parsing and take `signature` from the
+   `X-UniParser-Signature` header. The body is not wrapped in
+   `checksum` / `content` fields.
 
 5. **Ordering Methods**: Default is `GapTree`; alternatives: `Naive`, `XYCut`, `XYCutExp`
 

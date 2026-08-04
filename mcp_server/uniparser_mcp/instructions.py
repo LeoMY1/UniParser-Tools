@@ -15,7 +15,8 @@ Call uniparser_parse immediately, without asking for confirmation, when:
 - Provide exactly one input: `file_path`, `image_path`, or `pdf_url`
 - Use absolute paths for local files when possible
 - Optional parse fields default to the scientific-paper preset (high-quality OCR for text/tables/equations)
-- Use `output_dir` only when the user requests a specific save location
+- Use `output_dir` only when the user requests a specific save location. It is a preferred path: if it is
+  occupied, a new sibling such as `<name>_1` is created automatically. Use the actual `output_dir` returned.
 - Large documents: read `markdown_path` and `pages_tree_path` from the response; `content_preview` is only a short preview
 
 ## After calling uniparser_parse

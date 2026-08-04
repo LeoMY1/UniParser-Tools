@@ -32,9 +32,11 @@ class ParseRequest(BaseModel):
     pdf_url: str | None = Field(default=None, description="Publicly accessible PDF URL.")
     output_dir: str | None = Field(
         default=None,
-        description="Output directory. Default: ~/Uni-Parser-Skill/<source_stem>/.",
+        description=(
+            "Preferred output directory. If occupied, an available suffixed sibling is created. "
+            "Default: ~/Uni-Parser-Skill/<source_stem>/."
+        ),
     )
-    overwrite: bool = Field(default=False, description="Replace the output directory if it exists.")
     async_mode: bool = Field(
         default=False,
         description="Submit with sync=false, then poll until the job completes.",

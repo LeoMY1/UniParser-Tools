@@ -58,3 +58,27 @@ def test_success_parse_writes_trigger_meta(tmp_path: Path):
     assert result.ok is True
     assert result.trigger_meta_path is not None
     assert Path(result.trigger_meta_path).is_file()
+
+
+def test_existing_output_is_preserved_and_result_uses_suffixed_sibling(tmp_path: Path):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    (existing / "keep.txt").write_text("keep", encoding="utf-8")
+
+    client = MagicMock()
+    client.trigger_file.return_value = {"status": "success", "token": "tok789"}
+    client.get_result.side_effect = [
+        {"status": "success"},
+        {"status": "success", "pages_tree": {}},
+    ]
+    client.get_formatted.return_value = {"status": "success", "content": "# New"}
+    req = ParseRequest(file_path=str(pdf), output_dir=str(existing))
+    result = asyncio.run(run_parse(client, req))
+
+    assert result.ok is True
+    assert Path(result.output_dir) == tmp_path / "existing_1"
+    assert (existing / "keep.txt").read_text(encoding="utf-8") == "keep"
+    assert Path(result.markdown_path).read_text(encoding="utf-8") == "# New"
+    client.trigger_file.assert_called_once()

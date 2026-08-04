@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from tests.utils import make_reaction_dict
+from uniparser_tools.common.constant import LayoutType
 from uniparser_tools.common.dataclass import (
     ChartResult,
     EquationResult,
@@ -85,6 +86,36 @@ def test_build_item_strips_pages_key() -> None:
     item = build_item(block)
     assert isinstance(item, TextualResult)
     assert not hasattr(item, "pages")
+
+
+def test_build_item_tolerates_new_and_unknown_result_fields() -> None:
+    block = {
+        **BASE_BLOCK,
+        "text": "Yield \\(x^2\\) from `CCO`",
+        "bboxes": [],
+        "contents": ["Yield ", "x^2", " from ", "CCO"],
+        "types": ["text", "equationinline", "text", "molecule"],
+        "release_v1_3_extra": "future-compatible",
+    }
+    item = build_item(block)
+    assert isinstance(item, TextualResult)
+    assert item.markdown == "Yield $x^2$ from `CCO`"
+    assert not hasattr(item, "release_v1_3_extra")
+
+
+def test_build_item_upgrades_full_html_table_spans() -> None:
+    block = {
+        **BASE_BLOCK,
+        "type": "table",
+        "placeholders": [],
+        "contents": [],
+        "structure": "<table><tr><td>value \\(x^2\\)</td></tr></table>",
+    }
+    item = build_item(block)
+    assert isinstance(item, TabularResult)
+    assert item.placeholders
+    assert LayoutType.EquationInline in item.types
+    assert "$x^2$" in item.markdown
 
 
 def test_dict2obj_returns_nested_list() -> None:

@@ -182,8 +182,7 @@ uniparser parse https://example.com/paper.pdf
 
 | 选项 | 说明 |
 |------|------|
-| `-o` / `--output-dir DIR` | 指定输出目录（默认 `~/Uni-Parser-Skill/<文件名>/`） |
-| `--overwrite` | 输出目录已存在时，先清空再写入 |
+| `-o` / `--output-dir DIR` | 首选输出目录（默认 `~/Uni-Parser-Skill/<文件名>/`）；已存在时自动使用同级后缀目录 |
 | `--async` | 异步提交任务（适合较大文档） |
 
 ### 解析配置（7 类语义）
@@ -216,7 +215,7 @@ uniparser parse paper.pdf --molecule disable
 uniparser parse paper.pdf --textual digital --table ocr-fast --molecule disable
 
 # 与输出目录、异步组合
-uniparser parse paper.pdf -o ./results/ --overwrite --async
+uniparser parse paper.pdf -o ./results/ --async
 ```
 
 `trigger_meta.json` 会记录本次实际提交的 `trigger_kwargs`，便于复现配置。
@@ -264,7 +263,7 @@ Trigger meta: /Users/you/Uni-Parser-Skill/paper/trigger_meta.json
 #### 指定输出目录与解析参数
 
 ```bash
-uniparser parse paper.pdf -o ./out/paper --overwrite --textual digital --molecule disable
+uniparser parse paper.pdf -o ./out/paper --textual digital --molecule disable
 ```
 
 `trigger_meta.json` 中 `trigger_kwargs` 会反映覆盖项，例如：
@@ -302,15 +301,20 @@ uniparser parse /no/such/file.pdf
 {"ok": false, "error": {"code": "INPUT_ERROR", "message": "File not found: /no/such/file.pdf"}}
 ```
 
-输出目录已存在且未加 `--overwrite` 时：
+输出目录已存在时，旧目录保持不变，并自动创建第一个可用的同级后缀目录：
 
 ```bash
 uniparser parse paper.pdf -o ./out/paper
 ```
 
-```json
-{"ok": false, "error": {"code": "DIR_EXISTS", "message": "Output directory already exists: ...", "output_dir": "..."}}
+```text
+./out/paper    # 已有结果，不修改
+./out/paper_1  # 本次实际输出；若也存在则继续使用 paper_2
 ```
+
+请以成功结果中的 `output_dir` 为准。程序不会复用或删除任何已有目录。
+
+> 出于安全原因，根目录、HOME、当前工作目录及 Git 元数据目录不能作为首选输出目录。
 
 > 说明：成功信息在 stdout；进度 `Parsing...` 与部分路径提示在 stderr；错误统一为 stderr 单行 JSON。
 
@@ -341,8 +345,7 @@ token 可在上次 `parse` 输出目录的 `trigger_meta.json` 中找到。
 
 | 选项 | 说明 |
 |------|------|
-| `-o` / `--output-dir DIR` | 指定输出目录（默认 `~/Uni-Parser-Skill/token_<前8位>/`） |
-| `--overwrite` | 输出目录已存在时，先清空再写入 |
+| `-o` / `--output-dir DIR` | 首选输出目录（默认 `~/Uni-Parser-Skill/token_<前8位>/`）；已存在时自动使用同级后缀目录 |
 
 ```bash
 uniparser fetch --token abcdef1234567890 -o ./out/
@@ -444,9 +447,9 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 检查 `parse` 后的文件路径是否正确（建议使用绝对路径）。
 
-**提示输出目录已存在**
+**指定的输出目录已存在**
 
-加上 `--overwrite`，或换用 `-o` 指定新目录。
+无需额外参数。程序会自动创建同级后缀目录（例如 `paper_1`），并在结果中返回实际路径。
 
 **命令 `uniparser` 找不到**
 

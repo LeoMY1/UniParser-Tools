@@ -147,10 +147,9 @@ uniparser-agent vqa [OPTIONS] [INPUT_PATH]
 | 参数                    | 用途                     |
 | --------------------- | ---------------------- |
 | `INPUT_PATH`          | 本地 PDF、图片或公开 PDF URL   |
-| `-o` / `--output-dir` | 输出目录；默认 `./vqa_out`    |
+| `-o` / `--output-dir` | 首选输出目录；默认 `./vqa_out`；已存在时自动使用同级后缀目录 |
 | `--answer-pdf`        | 输入独立答案册 PDF            |
 | `--pages-tree`        | 复用已有 `pages_tree.json` |
-| `--overwrite`         | 删除并重建已存在的输出目录          |
 | `--json`              | 在终端输出机器可读的运行摘要         |
 
 
@@ -303,15 +302,13 @@ vqa_out/
 
 不可以。双文档模式要求题册和答案册都是本地 PDF。单文档模式支持公开 PDF URL。
 
-### 为什么输出目录已存在时报错？
+### 输出目录已存在时会怎样？
 
-程序默认避免覆盖已有结果。确认可以删除旧目录后，添加 `--overwrite`。
+程序不会报错、复用或删除旧目录，而是自动创建第一个可用的同级目录。例如 `vqa_out`
+已存在时使用 `vqa_out_1`，两者都存在时使用 `vqa_out_2`。请以运行结果中的
+`output_dir` 为准；失败任务的部分产物也保留在本次新目录中，便于排查。
 
-```bash
-uv run uniparser-agent vqa /path/to/exam.pdf \
-  -o ./vqa_out \
-  --overwrite
-```
+> 出于安全原因，根目录、HOME、当前工作目录及 Git 元数据目录不能作为首选输出目录。
 
 
 
