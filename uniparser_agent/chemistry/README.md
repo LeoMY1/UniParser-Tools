@@ -10,6 +10,7 @@
 - （可选）用大模型为每个化合物写简要说明，并整理活性字段
 - 结果写入本地 **SQLite**，也可导出 **CSV**
 - 已有 UniParser 的 `pages_tree.json` 时，可跳过解析、直接入库
+- 针对 CN 化学专利，可从语义树的说明书中生成 **Markush 通式结构分析表**，并把 UniParser 原始结构图嵌入 Excel
 
 典型流程：
 
@@ -65,6 +66,18 @@ uv run uniparser-agent run /path/to/patent.pdf --doc-id CN115974847A
 uv run uniparser-agent ingest /path/to/pages_tree.json --doc-id CN115974847A
 ```
 
+### 生成 Markush 通式结构分析表
+
+```bash
+uv run uniparser-agent patent-general-formulas /path/to/pages_tree.json \
+  --doc-id CN115974847A \
+  --output-dir /path/to/output
+```
+
+该流程在说明书范围内按 UniParser 的 `molecule + markush=true` 建立通式清单，并按原始
+`smi` 精确去重；供大模型分析的上下文只来自“说明书 → 发明内容”，固定按约 12,000
+字符切块、重叠 800 字符。`--skip-llm` 可只生成清单、原始结构图和待补充文本的 Excel。
+
 ### 先不调大模型（更快、省费用）
 
 ```bash
@@ -90,6 +103,7 @@ uv run uniparser-agent export CN115974847A --db /path/to/chemistry.db
 | 解析结果（仅 `run`） | `~/Uni-Parser-Skill/<文件名>/` | `-o` / `--output-dir` |
 | CSV（单文档） | `./exports/<DOC_ID>/` | `--out` |
 | CSV（全库） | `./exports/library/` | `--out` |
+| Markush 通式表 | 解析目录中的 `general_formula_analysis.xlsx` | `patent-general-formulas --output-dir` |
 
 `show` / `export` 默认也读 `~/.uniparser-agent/chemistry.db`。自定义库路径后请始终加相同的 `--db`。
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from uniparser_agent.chemistry.config import default_db_path
 from uniparser_agent.chemistry.enrich import enrich_compounds
+from uniparser_agent.chemistry.general_formula import write_general_formula_outputs
 from uniparser_agent.chemistry.jobspec import JobSpec
 from uniparser_agent.chemistry.join import build_logical_compounds
 from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
@@ -45,6 +46,8 @@ def ingest_pages_tree(
 
     patent_structure_path = ""
     patent_basic_info_path = ""
+    general_formula_analysis_path = ""
+    general_formula_excel_path = ""
     if patent_output_dir is not None:
         artifact_dir = Path(patent_output_dir).expanduser().resolve()
         patent_structure = build_patent_structure(pages_tree_doc, resolved_doc_id)
@@ -62,6 +65,15 @@ def ingest_pages_tree(
                 artifact_dir / "patent_basic_info.json",
             )
         )
+        general_formula_outputs = write_general_formula_outputs(
+            resolver,
+            resolved_doc_id,
+            artifact_dir,
+            llm_config=llm_config,
+            skip_llm=llm_config is None,
+        )
+        general_formula_analysis_path = str(general_formula_outputs.analysis_path)
+        general_formula_excel_path = str(general_formula_outputs.excel_path)
 
     compounds = build_logical_compounds(pages_tree_doc, resolved_doc_id)
     compounds = enrich_compounds(
@@ -85,6 +97,8 @@ def ingest_pages_tree(
         )
     summary.patent_structure_path = patent_structure_path
     summary.patent_basic_info_path = patent_basic_info_path
+    summary.general_formula_analysis_path = general_formula_analysis_path
+    summary.general_formula_excel_path = general_formula_excel_path
     return summary
 
 
@@ -124,4 +138,6 @@ def run_full_pipeline(
         "db_path": str(jobspec.db_path),
         "patent_structure_path": summary.patent_structure_path,
         "patent_basic_info_path": summary.patent_basic_info_path,
+        "general_formula_analysis_path": summary.general_formula_analysis_path,
+        "general_formula_excel_path": summary.general_formula_excel_path,
     }

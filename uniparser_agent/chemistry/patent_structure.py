@@ -340,8 +340,18 @@ class BlockResolver:
                 unique_refs.append(ref)
         return unique_refs
 
-    def resolve(self, node_id: str) -> list[dict[str, Any]]:
-        """Return filtered blocks for a node in original pages_tree array order."""
+    def resolve(
+        self,
+        node_id: str,
+        *,
+        include_locations: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return filtered blocks for a node in original pages_tree array order.
+
+        ``include_locations=True`` keeps the same navigation entry point while
+        attaching the stable ``page_index + block_index + block`` locator used
+        by downstream evidence extraction.
+        """
         try:
             node = self._nodes[node_id]
         except KeyError as exc:
@@ -362,7 +372,19 @@ class BlockResolver:
                 raise ValueError(f"Block validation failed at ({page_index}, {block_index})")
             normalized = _normalize_value(block)
             if normalized is not _DROP:
-                blocks.append(normalized)
+                if include_locations:
+                    blocks.append(
+                        {
+                            "locator": {
+                                "page_index": page_index,
+                                "block_index": block_index,
+                                "block": block.get("block"),
+                            },
+                            "content": normalized,
+                        }
+                    )
+                else:
+                    blocks.append(normalized)
         return blocks
 
 

@@ -58,6 +58,8 @@ class IngestSummary:
     doc_id: str
     patent_structure_path: str = ""
     patent_basic_info_path: str = ""
+    general_formula_analysis_path: str = ""
+    general_formula_excel_path: str = ""
     n_compounds: int = 0
     n_unique_compounds: int = 0
     n_markush: int = 0

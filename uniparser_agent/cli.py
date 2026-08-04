@@ -8,6 +8,7 @@ import typer
 
 from uniparser_agent.chemistry.config import default_db_path
 from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
+from uniparser_agent.chemistry.general_formula import write_general_formula_outputs
 from uniparser_agent.chemistry.jobspec import JobSpec
 from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
 from uniparser_agent.chemistry.patent_structure import BlockResolver, build_patent_structure, write_patent_structure
@@ -138,6 +139,88 @@ def patent_basic_info_cmd(
     typer.echo(f"Patent basic information: {basic_info_path}")
 
 
+@app.command("patent-general-formulas")
+def patent_general_formulas_cmd(
+    pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
+    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Patent document identifier."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Output directory; defaults to the pages_tree.json directory.",
+    ),
+    skip_llm: bool = typer.Option(
+        False,
+        "--skip-llm",
+        help="Build the Markush inventory/images/Excel without LLM text analysis.",
+    ),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="LLM API key.", envvar=[]),
+    base_url: Optional[str] = typer.Option(None, "--base-url", help="LLM base URL."),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name."),
+    enable_thinking: bool = typer.Option(
+        False,
+        "--enable-thinking/--no-enable-thinking",
+        help="Pass chat_template_kwargs.enable_thinking for Qwen-compatible servers.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Build the V2 CN-patent Markush general-formula analysis table."""
+    pages_path = Path(pages_tree_path).expanduser().resolve()
+    pages_tree_doc = load_pages_tree(pages_path)
+    resolved_doc_id = (doc_id or pages_path.parent.name).strip() or pages_path.parent.name
+    target_dir = Path(output_dir).expanduser().resolve() if output_dir else pages_path.parent
+    semantic_tree_path = target_dir / "patent_structure.json"
+    if not semantic_tree_path.exists():
+        semantic_tree_path = pages_path.parent / "patent_structure.json"
+    if semantic_tree_path.exists():
+        patent_structure = json.loads(semantic_tree_path.read_text(encoding="utf-8"))
+    else:
+        patent_structure = build_patent_structure(pages_tree_doc, resolved_doc_id)
+    resolver = BlockResolver(pages_tree_doc, patent_structure)
+
+    llm_config = None
+    if not skip_llm:
+        try:
+            llm_config = resolve_llm_config(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                enable_thinking=enable_thinking,
+            )
+        except ValueError:
+            skip_llm = True
+    outputs = write_general_formula_outputs(
+        resolver,
+        resolved_doc_id,
+        target_dir,
+        llm_config=llm_config,
+        skip_llm=skip_llm,
+    )
+    payload = {
+        "doc_id": resolved_doc_id,
+        "formula_count": outputs.formula_count,
+        "occurrence_count": outputs.occurrence_count,
+        "image_count": outputs.image_count,
+        "chunk_count": outputs.chunk_count,
+        "llm_call_count": outputs.llm_call_count,
+        "inventory_path": str(outputs.inventory_path),
+        "context_chunks_path": str(outputs.context_chunks_path),
+        "analysis_path": str(outputs.analysis_path),
+        "excel_path": str(outputs.excel_path),
+        "summary_path": str(outputs.summary_path),
+        "skip_llm": skip_llm,
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"General formula analysis: {outputs.analysis_path}")
+    typer.echo(f"General formula Excel: {outputs.excel_path}")
+    typer.echo(
+        f"Markush formulas: {outputs.formula_count}; occurrences: {outputs.occurrence_count}; "
+        f"images: {outputs.image_count}; chunks: {outputs.chunk_count}; LLM calls: {outputs.llm_call_count}"
+    )
+
+
 @app.command("ingest")
 def ingest_cmd(
     pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
@@ -194,6 +277,8 @@ def ingest_cmd(
         "n_enriched": summary.n_enriched,
         "patent_structure_path": summary.patent_structure_path,
         "patent_basic_info_path": summary.patent_basic_info_path,
+        "general_formula_analysis_path": summary.general_formula_analysis_path,
+        "general_formula_excel_path": summary.general_formula_excel_path,
         "skip_enrich": skip_enrich,
     }
     if json_output:
@@ -258,6 +343,8 @@ def run_cmd(
         "markdown_path": result["parse"]["markdown_path"],
         "patent_structure_path": result["patent_structure_path"],
         "patent_basic_info_path": result["patent_basic_info_path"],
+        "general_formula_analysis_path": result["general_formula_analysis_path"],
+        "general_formula_excel_path": result["general_formula_excel_path"],
         "n_compounds": summary.n_compounds,
         "n_unique_compounds": summary.n_unique_compounds,
         "n_markush": summary.n_markush,
@@ -272,6 +359,8 @@ def run_cmd(
     typer.echo(f"Pages tree: {payload['pages_tree_path']}")
     typer.echo(f"Patent structure: {payload['patent_structure_path']}")
     typer.echo(f"Patent basic information: {payload['patent_basic_info_path']}")
+    typer.echo(f"General formula analysis: {payload['general_formula_analysis_path']}")
+    typer.echo(f"General formula Excel: {payload['general_formula_excel_path']}")
     typer.echo(f"Database: {payload['db_path']}")
     _print_summary(payload)
 

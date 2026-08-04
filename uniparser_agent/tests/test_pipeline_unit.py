@@ -37,6 +37,10 @@ def test_ingest_compounds(db_path: Path, tmp_path: Path) -> None:
     assert Path(summary.patent_structure_path).exists()
     assert Path(summary.patent_basic_info_path) == structure_dir / "patent_basic_info.json"
     assert Path(summary.patent_basic_info_path).exists()
+    assert Path(summary.general_formula_analysis_path) == structure_dir / "general_formula_analysis.json"
+    assert Path(summary.general_formula_analysis_path).exists()
+    assert Path(summary.general_formula_excel_path) == structure_dir / "general_formula_analysis.xlsx"
+    assert Path(summary.general_formula_excel_path).exists()
     with ChemistryStore(db_path) as store:
         stats = store.get_document_stats("fixture-doc")
         assert stats["compounds"] == summary.n_compounds

@@ -180,6 +180,19 @@ def test_resolver_filters_noise_and_fields_but_keeps_nested_chemistry() -> None:
     assert "bbox" in document["pages_tree"][1][2]
 
 
+def test_resolver_can_attach_stable_locations_without_a_second_read_path() -> None:
+    document = _cn_patent_fixture()
+    structure = build_patent_structure(document, "CN123456789A")
+    resolver = BlockResolver(document, structure)
+
+    located = resolver.resolve("claims", include_locations=True)
+
+    assert located[0]["locator"] == {"page_index": 1, "block_index": 2, "block": 12}
+    assert located[0]["content"]["text"] == "1. 一种式(I)化合物。"
+    assert "bbox" not in located[0]["content"]
+    assert not hasattr(resolver, "resolve_raw")
+
+
 def test_refs_cover_every_top_level_block_once_without_source_ref() -> None:
     document = _cn_patent_fixture()
     structure = build_patent_structure(document, "CN123456789A")
