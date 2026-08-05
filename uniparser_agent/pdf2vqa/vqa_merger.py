@@ -146,7 +146,8 @@ def jsonl_to_md(jsonl_path: str | Path, md_path: str | Path) -> Path:
             data = json.loads(line)
             outfile.write(f"### Question {data['label']}\n\n")
             outfile.write(f"{data['question']}\n\n")
-            outfile.write(f"**Answer:** {data['answer']}\n\n")
+            outfile.write("**Answer:**\n\n")
+            outfile.write(f"{data['answer']}\n\n")
             if data.get("solution"):
                 outfile.write(f"**Solution:**\n\n{data['solution']}\n\n")
             outfile.write("---\n\n")
