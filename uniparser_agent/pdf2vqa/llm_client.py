@@ -16,6 +16,7 @@ class VQALLMClient:
         model: str | None = None,
         timeout: float | None = None,
         max_tokens: int | None = None,
+        temperature: float | None = None,
         enable_thinking: bool | None = None,
         extra_body: dict[str, Any] | None = None,
         config: LLMConfig | None = None,
@@ -27,6 +28,7 @@ class VQALLMClient:
             model=model,
             timeout=timeout,
             max_tokens=max_tokens,
+            temperature=temperature,
             enable_thinking=enable_thinking,
             extra_body=extra_body,
         )
@@ -50,6 +52,10 @@ class VQALLMClient:
     @property
     def max_tokens(self) -> int:
         return self._llm.max_tokens
+
+    @property
+    def temperature(self) -> float | None:
+        return self._llm.temperature
 
     @property
     def enable_thinking(self) -> bool:

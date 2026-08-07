@@ -93,36 +93,6 @@ def _id_to_text(input_ids: str, content_list: list[dict[str, Any]], image_prefix
     return _join_content_blocks(blocks)
 
 
-def _decode_answer_text(text: str) -> str:
-    """Decode only the line-break syntax defined by the answer protocol."""
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
-    return text.strip()
-
-
-def _normalize_answer_markdown(text: str) -> str:
-    """Put display-math segments on independent Markdown blocks."""
-    parts = text.split("$$")
-    if len(parts) % 2 == 0:
-        raise ValueError("Unbalanced display-math delimiters in answer")
-
-    blocks: list[str] = []
-    for index, part in enumerate(parts):
-        part = part.strip()
-        if not part:
-            continue
-        if index % 2 == 0:
-            blocks.append(part)
-        else:
-            blocks.append(f"$$\n{part}\n$$")
-    return "\n\n".join(blocks)
-
-
-def normalize_answer(text: str) -> str:
-    """Normalize an answer without interpreting LaTeX escape sequences."""
-    return _normalize_answer_markdown(_decode_answer_text(text))
-
-
 def parse_llm_response(
     response: str,
     content_list: list[dict[str, Any]],
@@ -148,7 +118,7 @@ def parse_llm_response(
             qa_list.append(
                 {
                     "question": (_id_to_text(q_match.group(1).strip(), content_list, image_prefix) if q_match else ""),
-                    "answer": normalize_answer(a_match.group(1)) if a_match else "",
+                    "answer": a_match.group(1).strip() if a_match else "",
                     "solution": (_id_to_text(s_match.group(1).strip(), content_list, image_prefix) if s_match else ""),
                     "label": label_match.group(1).strip(),
                     "chapter_title": chapter_title,

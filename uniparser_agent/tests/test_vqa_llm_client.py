@@ -31,6 +31,13 @@ def test_preserves_enable_thinking_from_pipeline_config() -> None:
     }
 
 
+def test_temperature_is_forwarded() -> None:
+    client = VQALLMClient(config=_config(enable_thinking=True), temperature=0.0)
+
+    assert client.temperature == 0.0
+    assert client.meta()["temperature"] == 0.0
+
+
 def test_explicit_enable_thinking_override_still_wins() -> None:
     client = VQALLMClient(
         config=_config(enable_thinking=True),
@@ -46,6 +53,7 @@ def test_vqa_cli_enable_thinking_reaches_pipeline_client(
     def fake_run_vqa_pipeline(**kwargs: object) -> dict[str, bool]:
         config = kwargs["llm_config"]
         assert isinstance(config, LLMConfig)
+        assert config.temperature == 0.0
         client = VQALLMClient(config=config)
         return {"enable_thinking": client.enable_thinking}
 

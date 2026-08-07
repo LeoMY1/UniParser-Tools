@@ -21,6 +21,7 @@ class OpenAICompatLLM:
         model: str | None = None,
         timeout: float | None = None,
         max_tokens: int | None = None,
+        temperature: float | None = None,
         enable_thinking: bool | None = None,
         extra_body: dict[str, Any] | None = None,
     ) -> None:
@@ -31,6 +32,7 @@ class OpenAICompatLLM:
             model=model,
             timeout=timeout,
             max_tokens=max_tokens,
+            temperature=temperature,
             enable_thinking=enable_thinking,
             extra_body=extra_body,
         )
@@ -61,6 +63,10 @@ class OpenAICompatLLM:
         return self.config.max_tokens
 
     @property
+    def temperature(self) -> float | None:
+        return self.config.temperature
+
+    @property
     def enable_thinking(self) -> bool:
         return self.config.enable_thinking
 
@@ -76,6 +82,8 @@ class OpenAICompatLLM:
         extra = self.config.resolved_extra_body()
         if extra is not None:
             kwargs["extra_body"] = extra
+        if self.config.temperature is not None:
+            kwargs["temperature"] = self.config.temperature
         response = self._client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         if content is None:

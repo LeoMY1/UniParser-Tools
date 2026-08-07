@@ -22,6 +22,7 @@ class LLMConfig:
     max_tokens: int = 81920
     enable_thinking: bool = False
     extra_body: dict[str, Any] | None = None
+    temperature: float | None = None
 
     def resolved_extra_body(self) -> dict[str, Any] | None:
         """Return request ``extra_body``, applying Qwen thinking kwargs when needed."""
@@ -39,6 +40,7 @@ class LLMConfig:
             "model": self.model,
             "timeout": self.timeout,
             "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
             "enable_thinking": self.enable_thinking,
             "extra_body": self.resolved_extra_body(),
         }
@@ -55,6 +57,7 @@ def resolve_llm_config(
     model: str | None = None,
     timeout: float | None = None,
     max_tokens: int | None = None,
+    temperature: float | None = None,
     enable_thinking: bool | None = None,
     extra_body: dict[str, Any] | None = None,
     config: LLMConfig | None = None,
@@ -76,6 +79,8 @@ def resolve_llm_config(
             overrides["timeout"] = timeout
         if max_tokens is not None:
             overrides["max_tokens"] = max_tokens
+        if temperature is not None:
+            overrides["temperature"] = temperature
         if enable_thinking is not None:
             overrides["enable_thinking"] = enable_thinking
         if extra_body is not None:
@@ -88,6 +93,7 @@ def resolve_llm_config(
             model=(model if model is not None else _env("OPENAI_MODEL")),
             timeout=3600.0 if timeout is None else timeout,
             max_tokens=81920 if max_tokens is None else max_tokens,
+            temperature=temperature,
             enable_thinking=False if enable_thinking is None else enable_thinking,
             extra_body=extra_body,
         )
