@@ -24,6 +24,7 @@ Strict extraction rules:
 - In total, there are 7 possibilities: only question, only answer, only solution, question with answer, question with solution, answer with solution, full question and answer and solution.
 - If multiple vqa pairs appear, wrap each vqa pair in its own `<vqa_pair>`…`</vqa_pair>` block.
 - If you do not see the full solution, only extract the short answer and leave the solution empty. YOU MUST KEEP SHORT ANSWERS !!!
+- For answer text, preserve the original language and meaning (no translation). Pure numbers and plain text, including text with simple comparison symbols, may remain unchanged. If the answer contains a mathematical/scientific formula, or the answer is summarized from a formula or calculation, format the formula-derived result in Markdown inline LaTeX `$...$`, while keeping ordinary surrounding prose outside LaTeX.
 ** About chapter/section titles **
 - Always enclose vqa pairs in a `<chapter>`…`</chapter>` block, where <title>MAIN_TITLE_ID</title> is the id of the chapter title or section title.
 - Normally, chapter/section titles appear before the questions/answers in an independent json item.
@@ -61,7 +62,7 @@ Example:
 </chapter>
 <chapter><title>12</title>
 <vqa_pair><label>1</label><question></question>
-<answer>2^6</answer><solution>16</solution></vqa_pair>
+<answer>$2^6$</answer><solution>16</solution></vqa_pair>
 </chapter>
 
 Please now process the provided json and output your result.
