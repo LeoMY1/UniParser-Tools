@@ -1,5 +1,3 @@
-import pytest
-
 from uniparser_agent.pdf2vqa.output_parser import parse_llm_response
 
 
@@ -38,7 +36,7 @@ def test_selected_blocks_are_separated_for_markdown_rendering() -> None:
     )
 
 
-def test_answer_protocol_decodes_breaks_and_normalizes_display_math() -> None:
+def test_answer_is_returned_as_direct_llm_text() -> None:
     response = (
         "<chapter><title></title>"
         "<vqa_pair><label>1</label><question></question>"
@@ -49,10 +47,10 @@ def test_answer_protocol_decodes_breaks_and_normalizes_display_math() -> None:
 
     parsed = parse_llm_response(response, [])
 
-    assert parsed[0]["answer"] == "计算结果：\n\n$$\nE = mc^2\n$$\n\n完成"
+    assert parsed[0]["answer"] == r"计算结果：<br/>$$<br/>E = mc^2<br/>$$<br>完成"
 
 
-def test_answer_normalization_preserves_latex_backslashes_and_literal_backslash_n() -> None:
+def test_answer_preserves_latex_backslashes_and_literal_backslash_n() -> None:
     response = (
         "<chapter><title></title>"
         "<vqa_pair><label>1</label><question></question>"
@@ -66,7 +64,7 @@ def test_answer_normalization_preserves_latex_backslashes_and_literal_backslash_
     assert parsed[0]["answer"] == r"$\nu + \nabla f \neq 0$\n下一行"
 
 
-def test_answer_normalization_rejects_unbalanced_display_math() -> None:
+def test_answer_preserves_unbalanced_display_math() -> None:
     response = (
         "<chapter><title></title>"
         "<vqa_pair><label>1</label><question></question>"
@@ -74,5 +72,6 @@ def test_answer_normalization_rejects_unbalanced_display_math() -> None:
         "</chapter>"
     )
 
-    with pytest.raises(ValueError, match="Unbalanced display-math delimiters in answer"):
-        parse_llm_response(response, [])
+    parsed = parse_llm_response(response, [])
+
+    assert parsed[0]["answer"] == "结果：$$x = 1"

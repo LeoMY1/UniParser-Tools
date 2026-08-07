@@ -15,6 +15,7 @@ def test_resolve_from_openai_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.api_key == "sk-env"
     assert cfg.base_url == "http://example.com/v1"
     assert cfg.model == "gpt-test"
+    assert cfg.temperature is None
     assert cfg.enable_thinking is False
 
 
@@ -46,6 +47,20 @@ def test_config_object_with_partial_override(monkeypatch: pytest.MonkeyPatch) ->
     cfg = resolve_llm_config(config=base, model="override-model")
     assert cfg.api_key == "sk-base"
     assert cfg.model == "override-model"
+
+
+def test_temperature_can_be_set_and_overridden() -> None:
+    base = LLMConfig(
+        api_key="sk-base",
+        base_url="http://base/v1",
+        model="base-model",
+        temperature=0.5,
+    )
+
+    cfg = resolve_llm_config(config=base, temperature=0.0)
+
+    assert cfg.temperature == 0.0
+    assert cfg.meta()["temperature"] == 0.0
 
 
 def test_missing_required_raises(monkeypatch: pytest.MonkeyPatch) -> None:

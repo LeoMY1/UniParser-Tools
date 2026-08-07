@@ -99,6 +99,7 @@ def vqa_cmd(
         base_url=base_url,
         model=model,
         enable_thinking=enable_thinking,
+        temperature=0.0,
     )
     result = run_vqa_pipeline(
         input_path=input_path,
@@ -131,6 +132,7 @@ def _build_llm_config(
     base_url: Optional[str],
     model: Optional[str],
     enable_thinking: bool,
+    temperature: Optional[float] = None,
 ) -> LLMConfig:
     try:
         return resolve_llm_config(
@@ -138,6 +140,7 @@ def _build_llm_config(
             base_url=base_url,
             model=model,
             enable_thinking=enable_thinking,
+            temperature=temperature,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc

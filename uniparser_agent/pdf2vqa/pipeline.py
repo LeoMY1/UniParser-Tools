@@ -11,6 +11,7 @@ from uniparser_agent.llm import LLMConfig
 from uniparser_agent.output_dir import create_unique_output_dir, resolve_output_dir
 from uniparser_agent.parse.api_client import resolve_input
 from uniparser_agent.parse.service import load_pages_tree, parse_document
+from uniparser_agent.pdf2vqa.chunking import MAX_CHUNK_TOKENS, split_text_by_tokens
 from uniparser_agent.pdf2vqa.layout_adapter import adapt_pages_tree_file
 from uniparser_agent.pdf2vqa.llm_client import VQALLMClient
 from uniparser_agent.pdf2vqa.output_parser import parse_llm_response, write_vqa_jsonl
@@ -156,11 +157,23 @@ def _run_vqa_pipeline_in_dir(
     )
     n_images = len(list(images_dir.glob("*"))) if images_dir.is_dir() else 0
 
-    llm = llm_client or VQALLMClient(config=llm_config)
-    system_prompt = build_vqa_extract_prompt()
+    llm = llm_client or VQALLMClient(config=llm_config, temperature=0.0)
+    extract_prompt = build_vqa_extract_prompt()
     user_content = json.dumps(content_list, ensure_ascii=False)
+    chunks = split_text_by_tokens(user_content, max_tokens=MAX_CHUNK_TOKENS)
     llm_started = time.time()
-    raw_response = llm.chat(system_prompt=system_prompt, user_content=user_content)
+    responses: list[str] = []
+    chunk_elapsed: list[float] = []
+    for chunk in chunks:
+        chunk_started = time.time()
+        responses.append(
+            llm.chat(
+                system_prompt="You are a helpful assistant",
+                user_content=f"{extract_prompt}\n{chunk}",
+            )
+        )
+        chunk_elapsed.append(time.time() - chunk_started)
+    raw_response = "\n".join(responses)
     llm_elapsed = time.time() - llm_started
 
     raw_path = out / "llm_raw_response.txt"
@@ -200,6 +213,9 @@ def _run_vqa_pipeline_in_dir(
         "n_vqa_images": n_images,
         "n_extracted": len(extracted),
         "n_merged_vqa": len(merged),
+        "llm_chunk_count": len(chunks),
+        "llm_chunk_max_tokens": MAX_CHUNK_TOKENS,
+        "llm_chunk_elapsed_sec": [round(elapsed, 2) for elapsed in chunk_elapsed],
         "llm_elapsed_sec": round(llm_elapsed, 2),
         "total_elapsed_sec": round(time.time() - started, 2),
         "paths": paths,
