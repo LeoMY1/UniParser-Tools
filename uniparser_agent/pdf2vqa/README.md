@@ -14,6 +14,7 @@
 - 输出 JSONL 和 Markdown，方便数据处理与人工检查
 - 输出 ShareGPT 格式，可用于多模态或纯文本模型训练
 - 支持复用已有 `pages_tree.json`，方便更换模型后重新抽取
+- 支持分阶段 Agent 原生推理，不需要调用外部 LLM 服务
 
 ## 安装
 
@@ -55,9 +56,9 @@ export OPENAI_MODEL="your-model"
 | 变量                   | 是否必填               | 用途                 |
 | -------------------- | ------------------ | ------------------ |
 | `UNIPARSER_API_KEY`  | 输入 PDF、图片或 URL 时必填 | 解析原始文档             |
-| `OPENAI_API_KEY`     | 必填                 | 调用问答抽取模型           |
-| `OPENAI_BASE_URL`    | 必填                 | OpenAI 兼容服务地址      |
-| `OPENAI_MODEL`       | 必填                 | 问答抽取模型名称           |
+| `OPENAI_API_KEY`     | `vqa` 模式必填         | 调用问答抽取模型           |
+| `OPENAI_BASE_URL`    | `vqa` 模式必填         | OpenAI 兼容服务地址      |
+| `OPENAI_MODEL`       | `vqa` 模式必填         | 问答抽取模型名称           |
 | `UNIPARSER_BASE_URL` | 可选                 | 自定义 UniParser 服务地址 |
 
 
@@ -137,6 +138,23 @@ uv run uniparser-agent vqa \
 
 该方式适合更换模型或重新抽取，不会再次消耗 UniParser 解析额度。
 
+### 使用当前 Agent 原生推理
+
+如果不希望调用 `OPENAI_*` 配置的外部模型，可以拆成三个阶段：
+
+```bash
+uniparser-agent vqa-prepare /path/to/exam.pdf -o ./vqa_out --json
+```
+
+当前 Agent 根据 `prepare_meta.json` 中的顺序读取 `agent_requests/chunk_NNNN.md`，并将纯 XML-like 响应写入对应的 `agent_responses/chunk_NNNN.txt`。随后执行：
+
+```bash
+uniparser-agent vqa-validate ./vqa_out --json
+uniparser-agent vqa-finalize ./vqa_out --json
+```
+
+`vqa-prepare`、`vqa-validate` 和 `vqa-finalize` 不读取 LLM API Key、地址或模型名。安装 `uniparser-agent` 后，可以使用仓库中的 [`skills/pdf2vqa`](../skills/pdf2vqa/) 让 Codex 等 Agent 直接使用当前模型完成中间推理。
+
 ## 常用参数
 
 ```text
@@ -177,6 +195,10 @@ vqa_out/
 ├── merged_vqa_pairs.md
 ├── vqa_sharegpt.json
 ├── vqa_images/
+├── agent_requests/
+├── agent_responses/
+├── prepare_meta.json
+├── response_validation.json
 ├── run_meta.json
 ├── parse/
 │   └── pages_tree.json
@@ -213,6 +235,8 @@ vqa_out/
 | `extracted_vqa.jsonl`   | 合并前的题目、答案和解析片段         |
 | `llm_content_list.json` | 送入问答抽取阶段的文档内容          |
 | `llm_raw_response.txt`  | 模型原始返回，主要用于问题排查        |
+| `prepare_meta.json`     | 分阶段请求、响应路径及解析元数据       |
+| `response_validation.json` | XML-like 格式与内容 ID 校验结果   |
 
 
 
