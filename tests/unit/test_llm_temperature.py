@@ -13,9 +13,12 @@ class _Completions:
     def __init__(self) -> None:
         self.kwargs: dict[str, Any] | None = None
 
-    def create(self, **kwargs: Any) -> SimpleNamespace:
+    def create(self, **kwargs: Any) -> list[SimpleNamespace]:
         self.kwargs = kwargs
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))])
+        return [
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="o"))]),
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="k"))]),
+        ]
 
 
 class _OpenAI:
@@ -46,6 +49,7 @@ def test_temperature_is_sent_when_configured(fake_openai: type[_OpenAI]) -> None
     assert fake_openai.instance is not None
     assert fake_openai.instance.completions.kwargs is not None
     assert fake_openai.instance.completions.kwargs["temperature"] == 0.0
+    assert fake_openai.instance.completions.kwargs["stream"] is True
 
 
 def test_temperature_is_omitted_when_unconfigured(fake_openai: type[_OpenAI]) -> None:
@@ -60,3 +64,4 @@ def test_temperature_is_omitted_when_unconfigured(fake_openai: type[_OpenAI]) ->
     assert fake_openai.instance is not None
     assert fake_openai.instance.completions.kwargs is not None
     assert "temperature" not in fake_openai.instance.completions.kwargs
+    assert fake_openai.instance.completions.kwargs["stream"] is True

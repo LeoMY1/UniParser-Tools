@@ -8,6 +8,10 @@ def test_prompt_uses_dataflow_field_contract() -> None:
     assert 'DO NOT output "id" field for labels and answers.' in prompt
     assert "YOU MUST KEEP SHORT ANSWERS" in prompt
     assert "You MUST include all images referenced in the question/answer/solution." in prompt
+    assert "Output every image id as a plain numeric id" in prompt
+    assert "Never wrap an image id in `<img>`" in prompt
+    assert "<question>157,158,159</question>" in prompt
+    assert "<question>157,<img>158</img>,159</question>" in prompt
     assert "format the formula-derived result in Markdown inline LaTeX `$...$`" in prompt
     assert "<answer>$2^6$</answer>" in prompt
     assert "<answer>3.14</answer>" in prompt

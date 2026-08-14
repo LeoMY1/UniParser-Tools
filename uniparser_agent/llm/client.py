@@ -84,9 +84,13 @@ class OpenAICompatLLM:
             kwargs["extra_body"] = extra
         if self.config.temperature is not None:
             kwargs["temperature"] = self.config.temperature
-        response = self._client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content
-        if content is None:
+        response = self._client.chat.completions.create(**kwargs, stream=True)
+        content = "".join(
+            chunk.choices[0].delta.content
+            for chunk in response
+            if chunk.choices and chunk.choices[0].delta.content is not None
+        )
+        if not content:
             raise RuntimeError("LLM returned empty content")
         return content
 

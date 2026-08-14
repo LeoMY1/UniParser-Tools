@@ -3,11 +3,11 @@ from __future__ import annotations
 
 def build_vqa_extract_prompt() -> str:
     return """
-        You are an expert in answer college-level questions. You are given a json file. Your task is to segment the content, insert images tags, and extract labels:
+        You are an expert in answer college-level questions. You are given a json file. Your task is to segment the content, position image ids, and extract labels:
 1. Every json item has an "id" field. Your main task is to output this field.
 2. You need to segment the content into multiple `<vqa_pair>`…`</vqa_pair>` blocks, each containing a question and its corresponding answer with solution.
 3. If the problem or answer/solution is not complete, omit them. An answer/solution should be considered complete as long as either the answer or solution exists.
-4. You need to put the images id into proper positions. You could look at the caption or context to decide where to put the image tags.
+4. Put referenced image ids in their proper positions among the question or solution ids. Output every image id as a plain numeric id, exactly like a text id. Never wrap an image id in `<img>`, Markdown image syntax, or any other tag.
 5. You will also need to extract the chapter title and each problem's label/number from the text.
 6. You only need to output "id" field for **chapter titles, questions and solutions**. DO NOT OUTPUT ORIGINAL TEXT. Use ',' to separate different ids.
 7. However, use original labels/numbers for labels, and use original numbers for answers. DO NOT output "id" field for labels and answers. You will need to extract them from the text.
@@ -35,6 +35,10 @@ Strict extraction rules:
 ** About figures/diagrams **
 - Whenever the question or answer/solution refers to a figure or diagram, record its "id" in question/answer/solution just like other text content.
 - You MUST include all images referenced in the question/answer/solution.
+- Example: if question text ids are `157` and `159`, and the referenced image id is `158`, output:
+  `<question>157,158,159</question>`
+  Do NOT output:
+  `<question>157,<img>158</img>,159</question>`
 
 
 If no qualifying content is found, output:

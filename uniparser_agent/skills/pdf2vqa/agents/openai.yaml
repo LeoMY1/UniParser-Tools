@@ -1,0 +1,4 @@
+interface:
+  display_name: "PDF to VQA"
+  short_description: "Extract structured VQA pairs from PDF exercises"
+  default_prompt: "Use $pdf2vqa to extract questions, answers, solutions, formulas, and referenced images from this PDF."

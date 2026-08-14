@@ -7,5 +7,7 @@ UniParser Agent 是基于 UniParser 的文档处理包，提供统一的命令�
 
 本包包含文档解析、LLM 调用和 pdf2vqa 流程所需的公共模块。
 
-安装方式、配置说明、命令参数、处理流程和输出格式，请参阅
-[pdf2vqa 完整文档](pdf2vqa/README.md)。
+安装方式、配置说明、命令参数、处理流程和输出格式，请参阅：
+
+- [pdf2vqa 完整文档](pdf2vqa/README.md)
+- [pdf2vqa Agent Skill](skills/pdf2vqa/SKILL.md)（使用前必须先安装本 \`uniparser-agent\` 项目）
