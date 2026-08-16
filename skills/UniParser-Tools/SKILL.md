@@ -77,7 +77,7 @@ $env:UNIPARSER_API_KEY="your-api-key"
 
 ### CLI reference
 
-**Pipeline:** `submit → poll get_result until success → fetch pages_tree + Markdown → save`. Default `sync=true` (trigger blocks until server done; CLI still polls and fetches). `--async` uses `sync=false` on submit only.
+**Pipeline:** local PDFs first use `request TOS upload → PUT file → trigger_url with a server-generated token`. If the TOS host is unreachable, the CLI makes one direct-upload fallback with a longer upload window and a server-generated token. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` until success, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
 
 **Input:** one positional `INPUT` per run—the CLI detects type by path suffix or `http(s)://` URL:
 
@@ -96,7 +96,10 @@ Optional flags:
 ```bash
 uniparser parse "./paper.pdf" -o "./results"
 uniparser parse "./paper.pdf" --async
+uniparser parse "./paper.pdf" --upload-mode direct
 ```
+
+Use the default `--upload-mode auto` unless TOS connectivity is known to be blocked. `direct` skips TOS; `tos` disables the direct fallback.
 
 Recovery (existing server job—see **Common issues**):
 
@@ -104,7 +107,7 @@ Recovery (existing server job—see **Common issues**):
 uniparser fetch --token "TASK_TOKEN_FROM_PRIOR_RUN"
 ```
 
-Token sources: stdout JSON from a prior `uniparser --json parse …`, `trigger_meta.json` under the output directory, or the `token` field in a failed parse stderr JSON.
+Valid recovery tokens come only from successful `uniparser --json parse …` stdout, `trigger_meta.json` written after a successful trigger, or a failed command's explicit `recoverable_token` field. Never pass `candidate_token` to `fetch`; it is diagnostic only and has not been confirmed by the service.
 
 **Default output for** `fetch` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). Passing a prior `parse` directory with `-o` treats it only as the preferred path; because that directory already exists, `fetch` writes to an available sibling such as `paper_1`. Always use the returned `output_dir`.
 
@@ -184,7 +187,9 @@ uniparser parse paper.pdf --json    # wrong
 If the preferred output directory already exists, the CLI creates an available sibling such as
 `results_1` or `results_2`. Existing paths are never reused or deleted; use the returned `output_dir`.
 
-**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `PARSE_ERROR`.
+Failure JSON may include `recoverable_token` when the service confirms an existing task. A `candidate_token` is never recoverable.
+
+**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `UPLOAD_ERROR`, `PARSE_ERROR`, `TOKEN_NOT_FOUND`.
 
 ## Common issues
 
@@ -194,13 +199,15 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
-| `Token is duplicated`                                                    | Job for this API key + exact input already exists                               | Do **not** re-run `uniparser parse`. Read `token` from stderr JSON or `trigger_meta.json`; run `uniparser fetch --token TOKEN`                                |
+| `UPLOAD_ERROR` / write timeout                                           | Both TOS-first upload and the direct fallback failed; no parse task was confirmed | Re-run `uniparser parse`; do not use `candidate_token` with `fetch`                                                                                        |
+| `Token is duplicated` + `recoverable_token`                              | The service confirmed an existing task                                          | Do **not** re-run `parse`; run `uniparser fetch --token RECOVERABLE_TOKEN`                                                                                    |
+| `TOKEN_NOT_FOUND` / `status: undefined`                                  | The service did not recognize the token after three checks                      | Stop fetching. If this came from `candidate_token`, re-run `parse`; otherwise verify that the saved token is current                                         |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
 | `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
 | `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
 
 
-**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests; PDF URLs must be publicly accessible. Parsing can be inaccurate, so verify critical content against the source. Results are retained for only 24 hours—fetch and save them promptly. See [Important notes](./references/notes.md). Save `token` from success JSON or `trigger_meta.json` for recovery after interrupt or duplicate-token errors.
+**Limits:** large PDFs may take 10–20+ minutes; public service ≤5 concurrent requests; PDF URLs must be publicly accessible. Parsing can be inaccurate, so verify critical content against the source. Results are retained for only 24 hours—fetch and save them promptly. See [Important notes](./references/notes.md). Save `token` from success JSON or `trigger_meta.json`; use an error token only when it is named `recoverable_token`.
 
 ## Advanced
 

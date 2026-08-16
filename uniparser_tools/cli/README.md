@@ -47,6 +47,8 @@ uniparser auth
 uniparser parse /path/to/report.pdf
 ```
 
+本地 PDF 默认先上传到 TOS，再通过 `trigger_url` 使用服务端生成的 token 创建任务，避免大文件直接 multipart 上传受短 socket 写入窗口影响。若当前网络无法连接 TOS，CLI 会使用更长上传窗口做一次直传回退；两条链路都只接受服务端成功响应中的 token。上传成功本身不会启动解析；只有后续 trigger 成功才会记录可恢复 token。
+
 默认把结果保存到：
 
 ```text
@@ -183,6 +185,7 @@ uniparser parse https://example.com/paper.pdf
 | 选项 | 说明 |
 |------|------|
 | `-o` / `--output-dir DIR` | 首选输出目录（默认 `~/Uni-Parser-Skill/<文件名>/`）；已存在时自动使用同级后缀目录 |
+| `--upload-mode auto|tos|direct` | 本地 PDF 上传路径；默认 `auto` 为 TOS 优先并直传回退，`direct` 跳过 TOS，`tos` 禁用回退 |
 | `--async` | 异步提交任务（适合较大文档） |
 
 ### 解析配置（7 类语义）
@@ -341,7 +344,7 @@ uniparser parse paper.pdf -o ./out/paper
 uniparser fetch --token YOUR_TOKEN
 ```
 
-token 可在上次 `parse` 输出目录的 `trigger_meta.json` 中找到。
+token 可在成功 `parse` 的 JSON 输出或 `trigger_meta.json` 中找到。失败输出只有明确标记为 `recoverable_token` 的值才能用于 `fetch`；`candidate_token` 只是本地候选值，禁止用于恢复。
 
 | 选项 | 说明 |
 |------|------|
@@ -433,7 +436,10 @@ Parsing... report.pdf
 uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['markdown_path'])"
 ```
 
-失败时仍为 **stderr 单行 JSON**（`ok: false`），见上文 parse「常见错误」；exit code 为 1。
+失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。失败 JSON 可能包含：
+
+- `recoverable_token`：服务端已确认存在，可用于 `fetch`。
+- `candidate_token`：服务端未确认，仅供诊断，不能用于 `fetch`。
 
 ---
 
@@ -458,6 +464,18 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 **解析时间较长**
 
 属正常现象；请等待 `Parsing...` 出现后保持终端不要关闭。若中断，用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
+
+**提示 `UPLOAD_ERROR` / write timeout**
+
+TOS 优先上传与一次直传回退都失败，且没有确认创建解析任务，可以重新执行 `parse`。错误中的 `candidate_token` 不能交给 `fetch`。
+
+**提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
+
+CLI 会在三次检查后停止，不会继续等待 1800 秒。若该值来自 `candidate_token`，请重新执行 `parse`；若来自历史 `trigger_meta.json`，请确认任务结果是否仍在 24 小时保留期内。
+
+**提示 `Token is duplicated`**
+
+只有失败 JSON 含 `recoverable_token` 时才运行 `uniparser fetch --token RECOVERABLE_TOKEN`。没有该字段时不要尝试恢复。
 
 ---
 

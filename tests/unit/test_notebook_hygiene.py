@@ -53,3 +53,12 @@ def test_customer_docs_include_result_retention_notice() -> None:
     assert "24 小时" in readme
     assert "retained for only 24 hours" in skill
     assert "retained for only **24 hours**" in notes
+
+
+def test_skill_only_recovers_service_confirmed_tokens() -> None:
+    skill = (REPO_ROOT / "skills" / "UniParser-Tools" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "recoverable_token" in skill
+    assert "candidate_token" in skill
+    assert "Never pass `candidate_token` to `fetch`" in skill
+    assert "the `token` field in a failed parse stderr JSON" not in skill
