@@ -555,7 +555,7 @@ export UNIPARSER_API_KEY="your-api-key"
 
 Agent 会回复 Markdown 路径，并在需要版面结构时提供 `pages_tree.json`。大文档可能耗时数分钟至十余分钟；中断或重复任务可按 Skill 说明用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
 
-CLI 解析本地 PDF 时默认先上传到 TOS，再通过 `trigger_url(server_generated_token=True)` 创建任务；TOS 不可达时会用更长上传窗口执行一次直传回退。传输失败时的 `candidate_token` 未经服务端确认，不能用于 `fetch`；只有成功输出、`trigger_meta.json` 或明确的 `recoverable_token` 才能恢复。
+CLI 解析本地 PDF 时使用 60 秒上传窗口直传，并通过 `trigger_file(server_generated_token=True)` 创建任务。传输失败时的 `candidate_token` 未经服务端确认，不能用于 `fetch`；只有成功输出、`trigger_meta.json` 或明确的 `recoverable_token` 才能恢复。
 
 Agent 实现细节、CLI 命令与错误恢复见 [SKILL.md](./skills/UniParser-Tools/SKILL.md)。
 

@@ -47,7 +47,7 @@ uniparser auth
 uniparser parse /path/to/report.pdf
 ```
 
-本地 PDF 默认先上传到 TOS，再通过 `trigger_url` 使用服务端生成的 token 创建任务，避免大文件直接 multipart 上传受短 socket 写入窗口影响。若当前网络无法连接 TOS，CLI 会使用更长上传窗口做一次直传回退；两条链路都只接受服务端成功响应中的 token。上传成功本身不会启动解析；只有后续 trigger 成功才会记录可恢复 token。
+本地 PDF 使用 multipart 直传，上传窗口为 60 秒，并要求服务端生成 token。只有服务端成功接收文件并创建任务后，CLI 才会记录可恢复 token。
 
 默认把结果保存到：
 
@@ -185,7 +185,6 @@ uniparser parse https://example.com/paper.pdf
 | 选项 | 说明 |
 |------|------|
 | `-o` / `--output-dir DIR` | 首选输出目录（默认 `~/Uni-Parser-Skill/<文件名>/`）；已存在时自动使用同级后缀目录 |
-| `--upload-mode auto|tos|direct` | 本地 PDF 上传路径；默认 `auto` 为 TOS 优先并直传回退，`direct` 跳过 TOS，`tos` 禁用回退 |
 | `--async` | 异步提交任务（适合较大文档） |
 
 ### 解析配置（7 类语义）
@@ -467,7 +466,7 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 **提示 `UPLOAD_ERROR` / write timeout**
 
-TOS 优先上传与一次直传回退都失败，且没有确认创建解析任务，可以重新执行 `parse`。错误中的 `candidate_token` 不能交给 `fetch`。
+本次直传没有确认创建解析任务，可以重新执行 `parse`。错误中的 `candidate_token` 不能交给 `fetch`。
 
 **提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
 

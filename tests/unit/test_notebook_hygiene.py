@@ -62,3 +62,5 @@ def test_skill_only_recovers_service_confirmed_tokens() -> None:
     assert "candidate_token" in skill
     assert "Never pass `candidate_token` to `fetch`" in skill
     assert "the `token` field in a failed parse stderr JSON" not in skill
+    assert "--upload-mode" not in skill
+    assert "TOS" not in skill

@@ -77,7 +77,7 @@ $env:UNIPARSER_API_KEY="your-api-key"
 
 ### CLI reference
 
-**Pipeline:** local PDFs first use `request TOS upload → PUT file → trigger_url with a server-generated token`. If the TOS host is unreachable, the CLI makes one direct-upload fallback with a longer upload window and a server-generated token. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` until success, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
+**Pipeline:** local PDFs use direct multipart upload with a 60-second upload window and a server-generated token. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` until success, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
 
 **Input:** one positional `INPUT` per run—the CLI detects type by path suffix or `http(s)://` URL:
 
@@ -96,10 +96,7 @@ Optional flags:
 ```bash
 uniparser parse "./paper.pdf" -o "./results"
 uniparser parse "./paper.pdf" --async
-uniparser parse "./paper.pdf" --upload-mode direct
 ```
-
-Use the default `--upload-mode auto` unless TOS connectivity is known to be blocked. `direct` skips TOS; `tos` disables the direct fallback.
 
 Recovery (existing server job—see **Common issues**):
 
@@ -199,7 +196,7 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
-| `UPLOAD_ERROR` / write timeout                                           | Both TOS-first upload and the direct fallback failed; no parse task was confirmed | Re-run `uniparser parse`; do not use `candidate_token` with `fetch`                                                                                        |
+| `UPLOAD_ERROR` / write timeout                                           | Direct file upload failed; no parse task was confirmed                          | Re-run `uniparser parse`; do not use `candidate_token` with `fetch`                                                                                          |
 | `Token is duplicated` + `recoverable_token`                              | The service confirmed an existing task                                          | Do **not** re-run `parse`; run `uniparser fetch --token RECOVERABLE_TOKEN`                                                                                    |
 | `TOKEN_NOT_FOUND` / `status: undefined`                                  | The service did not recognize the token after three checks                      | Stop fetching. If this came from `candidate_token`, re-run `parse`; otherwise verify that the saved token is current                                         |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
