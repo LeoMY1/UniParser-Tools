@@ -28,38 +28,9 @@ def trigger_input(
     resolved: ResolvedInput,
     *,
     trigger_kwargs: dict,
-    upload_mode: str = "auto",
 ) -> tuple[dict, str]:
     kwargs = trigger_kwargs
     if resolved.kind is InputKind.FILE:
-        upload = None
-        if upload_mode != "direct":
-            upload = client.upload_files_to_tos([str(resolved.path)])
-            if not isinstance(upload, dict):
-                upload = {
-                    "status": "error",
-                    "message": "TOS upload returned an invalid response",
-                }
-
-            if upload.get("status") == "success":
-                uploaded_files = upload.get("files")
-                uploaded_file = uploaded_files[0] if isinstance(uploaded_files, list) and uploaded_files else None
-                source_url = uploaded_file.get("source_url") if isinstance(uploaded_file, dict) else None
-                if isinstance(source_url, str) and source_url:
-                    trigger = client.trigger_url(
-                        pdf_url=source_url,
-                        server_generated_token=True,
-                        **kwargs,
-                    )
-                    return trigger, "trigger_url"
-                upload = {
-                    "status": "error",
-                    "message": "TOS upload response missing source_url",
-                }
-
-            if upload_mode == "tos":
-                return upload, "upload_tos"
-
         trigger = client.trigger_file(
             file_path=str(resolved.path),
             server_generated_token=True,
@@ -73,11 +44,7 @@ def trigger_input(
                 "status": "error",
                 "message": "Direct upload returned an invalid response",
             }
-        if trigger.get("status") != "success":
-            if upload is not None:
-                trigger["tos_upload_error"] = upload
-        stage = "trigger_file_direct" if upload_mode == "direct" else "trigger_file_fallback"
-        return trigger, stage
+        return trigger, "trigger_file"
     if resolved.kind is InputKind.IMAGE:
         trigger = client.trigger_snip(
             snip_path=str(resolved.path),
@@ -227,14 +194,13 @@ def run_parse(
     *,
     out_dir: Path,
     trigger_kwargs: dict,
-    upload_mode: str = "auto",
 ) -> dict[str, Any] | int:
     print_parsing_status(display_label_for_input(resolved))
-    trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs, upload_mode=upload_mode)
+    trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
         trigger = annotate_recoverable_duplicate(client, trigger)
         save_stage_error(out_dir, "trigger_error.json", trigger)
-        if stage in {"upload_tos", "trigger_file_direct", "trigger_file_fallback"}:
+        if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)
         return parse_error(stage, trigger)
 

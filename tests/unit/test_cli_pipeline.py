@@ -21,89 +21,41 @@ def _local_pdf(path: Path) -> ResolvedInput:
     )
 
 
-def test_local_pdf_uploads_to_tos_then_uses_server_token(tmp_path: Path) -> None:
+def test_local_pdf_uses_direct_upload_with_server_token(tmp_path: Path) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4")
     client = MagicMock()
-    client.upload_files_to_tos.return_value = {
-        "status": "success",
-        "files": [{"source_url": "tos://bucket/paper.pdf", "uploaded": True}],
-    }
-    client.trigger_url.return_value = {"status": "success", "token": "server-token"}
-
-    result, stage = trigger_input(client, _local_pdf(pdf), trigger_kwargs={"sync": True})
-
-    assert result == {"status": "success", "token": "server-token"}
-    assert stage == "trigger_url"
-    client.upload_files_to_tos.assert_called_once_with([str(pdf)])
-    client.trigger_file.assert_not_called()
-    client.trigger_url.assert_called_once_with(
-        pdf_url="tos://bucket/paper.pdf",
-        server_generated_token=True,
-        sync=True,
-    )
-
-
-def test_tos_upload_failure_falls_back_to_direct_upload(tmp_path: Path) -> None:
-    pdf = tmp_path / "paper.pdf"
-    pdf.write_bytes(b"%PDF-1.4")
-    client = MagicMock()
-    client.upload_files_to_tos.return_value = {
-        "status": "error",
-        "message": "TOS upload failed",
-    }
     client.trigger_file.return_value = {"status": "success", "token": "server-token"}
 
     result, stage = trigger_input(client, _local_pdf(pdf), trigger_kwargs={"sync": True})
 
     assert result == {"status": "success", "token": "server-token"}
-    assert stage == "trigger_file_fallback"
-    client.trigger_url.assert_not_called()
+    assert stage == "trigger_file"
     client.trigger_file.assert_called_once_with(
         file_path=str(pdf),
         server_generated_token=True,
         http_timeout=(60.0, 1860.0),
         sync=True,
     )
+    client.trigger_url.assert_not_called()
 
 
-def test_direct_upload_mode_skips_tos(tmp_path: Path) -> None:
+def test_async_local_pdf_uses_direct_upload_timeout(tmp_path: Path) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4")
     client = MagicMock()
     client.trigger_file.return_value = {"status": "success", "token": "server-token"}
 
-    result, stage = trigger_input(
-        client,
-        _local_pdf(pdf),
-        trigger_kwargs={"sync": False},
-        upload_mode="direct",
-    )
+    result, stage = trigger_input(client, _local_pdf(pdf), trigger_kwargs={"sync": False})
 
     assert result == {"status": "success", "token": "server-token"}
-    assert stage == "trigger_file_direct"
-    client.upload_files_to_tos.assert_not_called()
+    assert stage == "trigger_file"
     client.trigger_file.assert_called_once_with(
         file_path=str(pdf),
         server_generated_token=True,
         http_timeout=(60.0, 60.0),
         sync=False,
     )
-
-
-def test_tos_upload_without_source_url_falls_back_to_direct_upload(tmp_path: Path) -> None:
-    pdf = tmp_path / "paper.pdf"
-    pdf.write_bytes(b"%PDF-1.4")
-    client = MagicMock()
-    client.upload_files_to_tos.return_value = {"status": "success", "files": [{}]}
-    client.trigger_file.return_value = {"status": "error", "message": "Direct upload failed"}
-
-    result, stage = trigger_input(client, _local_pdf(pdf), trigger_kwargs={"sync": True})
-
-    assert result["status"] == "error"
-    assert result["message"] == "Direct upload failed"
-    assert result["tos_upload_error"]["message"] == "TOS upload response missing source_url"
-    assert stage == "trigger_file_fallback"
     client.trigger_url.assert_not_called()
 
 
