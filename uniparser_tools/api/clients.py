@@ -307,16 +307,19 @@ class UniParserClient:
                     data=data,
                     timeout=self._trigger_http_timeout(sync, http_timeout),
                     error_message="trigger file failed",
-                    token=token,
+                    candidate_token=token,
                 )
         except OSError as exc:
-            return {
+            result = {
                 "status": StatusFlag.Error,
-                "token": token,
                 "message": "trigger file failed",
                 "description": str(exc),
                 "error_type": type(exc).__name__,
             }
+            if token is not None:
+                result["candidate_token"] = token
+                result["candidate_token_recoverable"] = False
+            return result
 
     def trigger_snip(
         self,
@@ -377,16 +380,19 @@ class UniParserClient:
                 data=data,
                 timeout=self._trigger_http_timeout(sync, http_timeout),
                 error_message="trigger snip failed",
-                token=token,
+                candidate_token=token,
             )
         except (OSError, ValueError) as exc:
-            return {
+            result = {
                 "status": StatusFlag.Error,
-                "token": token,
                 "message": "trigger snip failed",
                 "description": str(exc),
                 "error_type": type(exc).__name__,
             }
+            if token is not None:
+                result["candidate_token"] = token
+                result["candidate_token_recoverable"] = False
+            return result
 
     def trigger_url(
         self,
@@ -444,7 +450,7 @@ class UniParserClient:
             json=data,
             timeout=self._trigger_http_timeout(sync, http_timeout),
             error_message="trigger url failed",
-            token=token,
+            candidate_token=token,
         )
 
     def request_tos_upload_links(

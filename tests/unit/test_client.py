@@ -127,7 +127,9 @@ class TestClientErrorShapes:
         result = c.trigger_file(file_path=str(p))
         assert isinstance(result, dict)
         assert result.get("status") == "error"
-        assert "token" in result
+        assert "token" not in result
+        assert result["candidate_token"] == c.to_token(str(p))
+        assert result["candidate_token_recoverable"] is False
 
 
 class TestHTTPTransport:
@@ -177,6 +179,25 @@ class TestHTTPTransport:
 
         assert result["description"] == "rate limited"
         assert result["http_status"] == 429
+
+    @pytest.mark.parametrize("status_code", [200, 409])
+    def test_trigger_error_keeps_candidate_token_separate(self, tmp_path, status_code: int) -> None:
+        path = tmp_path / "document.pdf"
+        path.write_bytes(b"%PDF-1.4 tiny")
+        session = FakeSession(
+            response=FakeResponse(
+                status_code=status_code,
+                payload={"status": "error", "description": "Token is duplicated"},
+                reason="Conflict",
+            )
+        )
+        client = UniParserClient(host="https://example.com", api_key="k", session=session)
+
+        result = client.trigger_file(str(path))
+
+        assert "token" not in result
+        assert result["candidate_token"] == client.to_token(str(path))
+        assert result["candidate_token_recoverable"] is False
 
     def test_client_context_closes_owned_session(self, monkeypatch) -> None:
         session = FakeSession()
