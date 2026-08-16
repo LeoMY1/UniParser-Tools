@@ -33,6 +33,7 @@ Require the `uniparser-agent` project to be installed and the `uniparser-agent` 
 ## Guardrails
 
 - Preserve the formal extraction prompt embedded in each request file; do not recreate or summarize it.
+- Preserve the canonical English `question_type` value required by the prompt in every VQA pair.
 - Keep question and solution fields as source content IDs. Only the answer field may contain extracted text.
 - Preserve image IDs as plain numeric IDs in their correct question or solution position.
 - Never fabricate a missing answer or solution.
