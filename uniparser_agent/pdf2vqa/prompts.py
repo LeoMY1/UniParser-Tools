@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from uniparser_agent.pdf2vqa.question_types import QUESTION_TYPES
+
 
 def build_vqa_extract_prompt() -> str:
-    return """
+    question_types = ", ".join(f"`{value}`" for value in QUESTION_TYPES)
+    return f"""
         You are an expert in answer college-level questions. You are given a json file. Your task is to segment the content, position image ids, and extract labels:
 1. Every json item has an "id" field. Your main task is to output this field.
 2. You need to segment the content into multiple `<vqa_pair>`…`</vqa_pair>` blocks, each containing a question and its corresponding answer with solution.
 3. If the problem or answer/solution is not complete, omit them. An answer/solution should be considered complete as long as either the answer or solution exists.
 4. Put referenced image ids in their proper positions among the question or solution ids. Output every image id as a plain numeric id, exactly like a text id. Never wrap an image id in `<img>`, Markdown image syntax, or any other tag.
-5. You will also need to extract the chapter title and each problem's label/number from the text.
+5. You will also need to extract the chapter title, each problem's label/number, and its question type from the text.
 6. You only need to output "id" field for **chapter titles, questions and solutions**. DO NOT OUTPUT ORIGINAL TEXT. Use ',' to separate different ids.
-7. However, use original labels/numbers for labels, and use original numbers for answers. DO NOT output "id" field for labels and answers. You will need to extract them from the text.
+7. However, use original labels/numbers for labels, one canonical English value for question types, and original numbers for answers. DO NOT output "id" field for labels, question types, or answers. You will need to extract them from the text.
 
 Strict extraction rules:
 ** About questions and answers/solutions **
@@ -18,13 +21,19 @@ Strict extraction rules:
 - If the full label is "三、16", keep only "16". If the full label is "5.4", keep only "4".
 - If there are multiple sub-questions (such as "(1)", "(a)") under one main question, always put them together in the same `<vqa_pair>`…`</vqa_pair>` block.
 - If a question and its answer/solution are contiguous, wrap them together as a single `<vqa_pair>`…`</vqa_pair>` block, e.g.:
-  `<vqa_pair><label>1</label><question>…</question><answer>…</answer><solution>…</solution></vqa_pair>`
+  `<vqa_pair><label>1</label><question_type>multiple_choice</question_type><question>…</question><answer>…</answer><solution>…</solution></vqa_pair>`
 - If a question and its answer/solution are NOT contiguous (e.g. only question; only answer and/or solution; all questions at the front and all answers/solutions at the back), wrap each question or answer/solution in a `<vqa_pair>`…`</vqa_pair>` block with the missing part left empty. For example, if only questions appear:
-  `<vqa_pair><label>1</label><question>…</question><answer></answer><solution></solution></vqa_pair>`
+  `<vqa_pair><label>1</label><question_type>multiple_choice</question_type><question>…</question><answer></answer><solution></solution></vqa_pair>`
 - In total, there are 7 possibilities: only question, only answer, only solution, question with answer, question with solution, answer with solution, full question and answer and solution.
 - If multiple vqa pairs appear, wrap each vqa pair in its own `<vqa_pair>`…`</vqa_pair>` block.
 - If you do not see the full solution, only extract the short answer and leave the solution empty. YOU MUST KEEP SHORT ANSWERS !!!
 - For answer text, preserve the original language and meaning (no translation). Pure numbers and plain text, including text with simple comparison symbols, may remain unchanged. If the answer contains a mathematical/scientific formula, or the answer is summarized from a formula or calculation, format the formula-derived result in Markdown inline LaTeX `$...$`, while keeping ordinary surrounding prose outside LaTeX.
+** About question types **
+- Output exactly one `<question_type>` for every `<vqa_pair>`, immediately after `<label>`.
+- The only allowed English values are: {question_types}.
+- Map Chinese or English source headings to the same canonical value: 判断题/True or False → `true_false`; 填空题/Fill in the Blank → `fill_in_the_blank`; 选择题/Multiple Choice → `multiple_choice`; 计算题/Calculation → `calculation`; 证明题/Proof → `proof`; all other or uncertain types → `other`.
+- Determine the type in this order: an explicit question-type heading, the question structure, then the question semantics. A mathematical formula alone does not make a question `calculation`.
+- When a question and its non-contiguous answer/solution are emitted separately, repeat the same canonical question type in both `<vqa_pair>` blocks.
 ** About chapter/section titles **
 - Always enclose vqa pairs in a `<chapter>`…`</chapter>` block, where <title>MAIN_TITLE_ID</title> is the id of the chapter title or section title.
 - Normally, chapter/section titles appear before the questions/answers in an independent json item.
@@ -46,26 +55,26 @@ If no qualifying content is found, output:
 
 Output format (all tags run together, no extra whitespace or newlines except between entries):
 <chapter><title>MAIN_TITLE_ID</title>
-<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question>QUESTION_IDS</question>
+<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question_type>QUESTION_TYPE</question_type><question>QUESTION_IDS</question>
 <answer>ANSWER(EXTRACTED FROM SOLUTION)</answer><solution>SOLUTION_IDS</solution></vqa_pair>
-<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question>QUESTION_IDS</question>
+<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question_type>QUESTION_TYPE</question_type><question>QUESTION_IDS</question>
 <answer>ANSWER(EXTRACTED FROM SOLUTION)</answer><solution></solution></vqa_pair>
 </chapter>
 <chapter><title>MAIN_TITLE_ID</title>
-<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question>QUESTION_IDS</question>
+<vqa_pair><label>LABEL(EXTRACTED FROM TEXT)</label><question_type>QUESTION_TYPE</question_type><question>QUESTION_IDS</question>
 <answer>ANSWER(EXTRACTED FROM SOLUTION)</answer><solution>SOLUTION_IDS</solution></vqa_pair>
 </chapter>
 
 
 Example:
 <chapter><title>7</title>
-<vqa_pair><label>1</label><question>2,3</question>
+<vqa_pair><label>1</label><question_type>true_false</question_type><question>2,3</question>
 <answer>Yes</answer><solution>5,6,7</solution></vqa_pair>
-<vqa_pair><label>2</label><question>8,9,10</question>
+<vqa_pair><label>2</label><question_type>multiple_choice</question_type><question>8,9,10</question>
 <answer>3.14</answer><solution></solution></vqa_pair>
 </chapter>
 <chapter><title>12</title>
-<vqa_pair><label>1</label><question></question>
+<vqa_pair><label>1</label><question_type>calculation</question_type><question></question>
 <answer>$2^6$</answer><solution>16</solution></vqa_pair>
 </chapter>
 

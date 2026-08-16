@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from uniparser_agent.pdf2vqa.question_types import normalize_question_type
+
 
 def refine_title(title: str, strict_title_match: bool = False) -> str:
     title = re.sub(r"\s+", "", title)
@@ -37,8 +39,8 @@ def merge_vqa_pairs(
     merged: list[dict[str, Any]] = []
     chapter_title = ""
     label = float("inf")
-    questions: dict[tuple[str, int], dict[str, Any]] = {}
-    answers: dict[tuple[str, int], dict[str, Any]] = {}
+    questions: dict[tuple[str, str, int], dict[str, Any]] = {}
+    answers: dict[tuple[str, str, int], dict[str, Any]] = {}
     already_complete = 0
 
     for data in question_list:
@@ -63,19 +65,24 @@ def merge_vqa_pairs(
         if data["label"] <= 0:
             continue
         if data.get("answer") or data.get("solution"):
+            data["question_type"] = normalize_question_type(data.get("question_type"), default="other")
             already_complete += 1
             merged.append(
                 {
                     "question_chapter_title": data["chapter_title"],
                     "answer_chapter_title": data["chapter_title"],
                     "label": data["label"],
+                    "question_type": data["question_type"],
                     "question": data["question"],
                     "answer": data.get("answer", ""),
                     "solution": data.get("solution", ""),
                 }
             )
         else:
-            questions[(data["chapter_title"], data["label"])] = data
+            data["question_type"] = normalize_question_type(data.get("question_type"))
+            if not data["question_type"]:
+                continue
+            questions[(data["chapter_title"], data["question_type"], data["label"])] = data
 
     chapter_title = ""
     label = float("inf")
@@ -100,7 +107,10 @@ def merge_vqa_pairs(
 
         if data["label"] <= 0:
             continue
-        key = (data["chapter_title"], data["label"])
+        data["question_type"] = normalize_question_type(data.get("question_type"))
+        if not data["question_type"]:
+            continue
+        key = (data["chapter_title"], data["question_type"], data["label"])
         existing = answers.get(key)
         if not existing:
             answers[key] = data
@@ -118,7 +128,8 @@ def merge_vqa_pairs(
             {
                 "question_chapter_title": qdata["chapter_title"],
                 "answer_chapter_title": adata["chapter_title"],
-                "label": key[1],
+                "label": key[2],
+                "question_type": key[1],
                 "question": qdata["question"],
                 "answer": adata.get("answer", ""),
                 "solution": adata.get("solution", ""),

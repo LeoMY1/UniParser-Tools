@@ -9,6 +9,8 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from uniparser_agent.pdf2vqa.question_types import normalize_question_type
+
 
 def _html_table_to_markdown(table_html: str) -> str:
     """Convert a simple HTML table so Markdown math remains renderable in cells."""
@@ -111,16 +113,26 @@ def parse_llm_response(
             a_match = re.search(r"<answer>(.*?)</answer>", pair, flags=re.DOTALL)
             s_match = re.search(r"<solution>(.*?)</solution>", pair, flags=re.DOTALL)
             label_match = re.search(r"<label>(.*?)</label>", pair, flags=re.DOTALL)
+            question_type_match = re.search(r"<question_type>(.*?)</question_type>", pair, flags=re.DOTALL)
             if not label_match:
                 continue
             if not ((q_match and label_match) or (a_match and label_match) or (s_match and label_match)):
                 continue
+            has_question = bool(q_match and q_match.group(1).strip())
+            has_answer_or_solution = bool(
+                (a_match and a_match.group(1).strip()) or (s_match and s_match.group(1).strip())
+            )
+            question_type = normalize_question_type(
+                question_type_match.group(1) if question_type_match else "",
+                default="other" if has_question and has_answer_or_solution else "",
+            )
             qa_list.append(
                 {
                     "question": (_id_to_text(q_match.group(1).strip(), content_list, image_prefix) if q_match else ""),
                     "answer": a_match.group(1).strip() if a_match else "",
                     "solution": (_id_to_text(s_match.group(1).strip(), content_list, image_prefix) if s_match else ""),
                     "label": label_match.group(1).strip(),
+                    "question_type": question_type,
                     "chapter_title": chapter_title,
                 }
             )

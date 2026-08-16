@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Sequence
 
+from uniparser_agent.pdf2vqa.question_types import QUESTION_TYPE_SET
+
 
 _CHAPTER_RE = re.compile(r"<chapter>(.*?)</chapter>", flags=re.DOTALL)
 _PAIR_RE = re.compile(r"<vqa_pair>(.*?)</vqa_pair>", flags=re.DOTALL)
@@ -179,21 +181,51 @@ def validate_vqa_responses(
                             errors=errors,
                         )
 
+                question_types = _tag_values(pair, "question_type")
+                question = _tag_values(pair, "question")
+                answer = _tag_values(pair, "answer")
+                solution = _tag_values(pair, "solution")
+                has_complete_qa = bool(
+                    question
+                    and question[0].strip()
+                    and answer
+                    and solution
+                    and (answer[0].strip() or solution[0].strip())
+                )
+                if len(question_types) != 1:
+                    issue = _issue(
+                        response_index,
+                        "invalid_question_type_count",
+                        f"Each <vqa_pair> must contain exactly one <question_type>; found {len(question_types)}.",
+                    )
+                    if not question_types and has_complete_qa:
+                        issue["message"] += " This complete pair will fall back to 'other'."
+                        warnings.append(issue)
+                    else:
+                        errors.append(issue)
+                elif question_types[0].strip() not in QUESTION_TYPE_SET:
+                    errors.append(
+                        _issue(
+                            response_index,
+                            "invalid_question_type",
+                            "<question_type> must be one of: "
+                            + ", ".join(sorted(QUESTION_TYPE_SET))
+                            + f"; found {question_types[0].strip()!r}.",
+                        )
+                    )
+
                 pair_remainder = pair
-                for tag in ("label", "question", "answer", "solution"):
+                for tag in ("label", "question_type", "question", "answer", "solution"):
                     pair_remainder = re.sub(rf"<{tag}>.*?</{tag}>", "", pair_remainder, flags=re.DOTALL)
                 if pair_remainder.strip():
                     errors.append(
                         _issue(
                             response_index,
                             "text_outside_pair_fields",
-                            "A <vqa_pair> contains text outside label/question/answer/solution fields.",
+                            "A <vqa_pair> contains text outside label/question_type/question/answer/solution fields.",
                         )
                     )
 
-                question = _tag_values(pair, "question")
-                answer = _tag_values(pair, "answer")
-                solution = _tag_values(pair, "solution")
                 if (
                     question
                     and answer

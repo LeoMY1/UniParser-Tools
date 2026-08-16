@@ -16,7 +16,7 @@
 Return either one or more chapter blocks:
 
 ```xml
-<chapter><title>7</title><vqa_pair><label>1</label><question>8,9</question><answer>$2^6$</answer><solution>10,11</solution></vqa_pair></chapter>
+<chapter><title>7</title><vqa_pair><label>1</label><question_type>calculation</question_type><question>8,9</question><answer>$2^6$</answer><solution>10,11</solution></vqa_pair></chapter>
 ```
 
 or, when the chunk contains no qualifying VQA content:
@@ -29,7 +29,9 @@ Rules enforced by validation:
 
 - Do not use Markdown code fences or surrounding explanation.
 - Each chapter has exactly one `title` and at least one `vqa_pair`.
-- Each pair has exactly one `label`, `question`, `answer`, and `solution` tag; fields may be empty when source content is missing.
+- Each pair has exactly one `label`, `question_type`, `question`, `answer`, and `solution` tag; question, answer, and solution may be empty when source content is missing.
+- `question_type` must be exactly one of `true_false`, `fill_in_the_blank`, `multiple_choice`, `calculation`, `proof`, or `other`.
+- Chinese and English source headings map to the same canonical English value. Separated question and answer/solution rows must repeat the same value.
 - `title`, `question`, and `solution` contain only comma-separated numeric IDs that exist in `llm_content_list.json`.
 - `answer` contains extracted answer text, not a content ID.
 - Image IDs use the same plain numeric representation as text IDs.
