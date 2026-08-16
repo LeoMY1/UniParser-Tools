@@ -5,8 +5,15 @@ import time
 from pathlib import Path
 from typing import Any
 
-from uniparser_tools.cli.core.defaults import PENDING_STATUSES, POLL_INTERVAL_SEC, POLL_TIMEOUT_SEC
-from uniparser_tools.cli.core.errors import parse_error
+from uniparser_tools.cli.core.defaults import (
+    DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT,
+    DIRECT_UPLOAD_REQUEST_TIMEOUT,
+    PENDING_STATUSES,
+    POLL_INTERVAL_SEC,
+    POLL_TIMEOUT_SEC,
+    UNDEFINED_MAX_POLLS,
+)
+from uniparser_tools.cli.core.errors import parse_error, token_not_found_error, upload_error
 from uniparser_tools.cli.core.input import InputKind, ResolvedInput, display_label_for_input
 from uniparser_tools.cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
 from uniparser_tools.cli.core.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
@@ -16,23 +23,82 @@ def scientific_paper_trigger_kwargs(*, sync: bool = True) -> dict:
     return resolve_trigger_kwargs(sync=sync, overrides={})
 
 
-def trigger_input(client, resolved: ResolvedInput, *, trigger_kwargs: dict) -> tuple[dict, str]:
+def trigger_input(
+    client,
+    resolved: ResolvedInput,
+    *,
+    trigger_kwargs: dict,
+    upload_mode: str = "auto",
+) -> tuple[dict, str]:
     kwargs = trigger_kwargs
     if resolved.kind is InputKind.FILE:
-        trigger = client.trigger_file(file_path=str(resolved.path), **kwargs)
-        return trigger, "trigger_file"
+        upload = None
+        if upload_mode != "direct":
+            upload = client.upload_files_to_tos([str(resolved.path)])
+            if not isinstance(upload, dict):
+                upload = {
+                    "status": "error",
+                    "message": "TOS upload returned an invalid response",
+                }
+
+            if upload.get("status") == "success":
+                uploaded_files = upload.get("files")
+                uploaded_file = uploaded_files[0] if isinstance(uploaded_files, list) and uploaded_files else None
+                source_url = uploaded_file.get("source_url") if isinstance(uploaded_file, dict) else None
+                if isinstance(source_url, str) and source_url:
+                    trigger = client.trigger_url(
+                        pdf_url=source_url,
+                        server_generated_token=True,
+                        **kwargs,
+                    )
+                    return trigger, "trigger_url"
+                upload = {
+                    "status": "error",
+                    "message": "TOS upload response missing source_url",
+                }
+
+            if upload_mode == "tos":
+                return upload, "upload_tos"
+
+        trigger = client.trigger_file(
+            file_path=str(resolved.path),
+            server_generated_token=True,
+            http_timeout=(
+                DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT if kwargs.get("sync", True) else DIRECT_UPLOAD_REQUEST_TIMEOUT
+            ),
+            **kwargs,
+        )
+        if not isinstance(trigger, dict):
+            trigger = {
+                "status": "error",
+                "message": "Direct upload returned an invalid response",
+            }
+        if trigger.get("status") != "success":
+            if upload is not None:
+                trigger["tos_upload_error"] = upload
+        stage = "trigger_file_direct" if upload_mode == "direct" else "trigger_file_fallback"
+        return trigger, stage
     if resolved.kind is InputKind.IMAGE:
-        trigger = client.trigger_snip(snip_path=str(resolved.path), **kwargs)
+        trigger = client.trigger_snip(
+            snip_path=str(resolved.path),
+            server_generated_token=True,
+            **kwargs,
+        )
         return trigger, "trigger_snip"
-    trigger = client.trigger_url(pdf_url=resolved.raw, **kwargs)
+    trigger = client.trigger_url(
+        pdf_url=resolved.raw,
+        server_generated_token=True,
+        **kwargs,
+    )
     return trigger, "trigger_url"
 
 
 def poll_until_success(client, token: str) -> dict | int:
-    deadline = time.time() + POLL_TIMEOUT_SEC
+    deadline = time.monotonic() + POLL_TIMEOUT_SEC
     last: dict[str, Any] = {}
+    undefined_polls = 0
 
-    while time.time() < deadline:
+    while time.monotonic() < deadline:
         last = client.get_result(
             token,
             content=False,
@@ -45,7 +111,14 @@ def poll_until_success(client, token: str) -> dict | int:
             return last
         if status == "error":
             return parse_error("get_result_poll", last)
-        if status in PENDING_STATUSES or status is None:
+        if status == "undefined":
+            undefined_polls += 1
+            if undefined_polls >= UNDEFINED_MAX_POLLS:
+                return token_not_found_error(token, attempts=undefined_polls)
+            time.sleep(POLL_INTERVAL_SEC)
+            continue
+        if status in PENDING_STATUSES:
+            undefined_polls = 0
             time.sleep(POLL_INTERVAL_SEC)
             continue
         return parse_error("get_result_poll", last)
@@ -80,6 +153,41 @@ def fetch_markdown(client, token: str) -> dict:
 def save_stage_error(out_dir: Path, filename: str, payload: dict) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / filename).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def annotate_recoverable_duplicate(client, trigger: dict) -> dict:
+    diagnostic = " ".join(str(trigger.get(key, "")) for key in ("message", "description")).casefold()
+    if "duplicat" not in diagnostic:
+        return trigger
+
+    candidate = trigger.get("token") or trigger.get("candidate_token")
+    if not candidate:
+        return trigger
+
+    status = None
+    for attempt in range(UNDEFINED_MAX_POLLS):
+        probe = client.get_result(
+            candidate,
+            content=False,
+            objects=False,
+            pages_dict=False,
+            pages_tree=False,
+        )
+        status = probe.get("status") if isinstance(probe, dict) else None
+        if status != "undefined" or attempt == UNDEFINED_MAX_POLLS - 1:
+            break
+        time.sleep(POLL_INTERVAL_SEC)
+    trigger["token_status"] = status
+    if status == "success" or status in PENDING_STATUSES:
+        trigger["recoverable_token"] = candidate
+        trigger.pop("candidate_token", None)
+        trigger.pop("candidate_token_recoverable", None)
+        return trigger
+
+    trigger.pop("token", None)
+    trigger["candidate_token"] = candidate
+    trigger["candidate_token_recoverable"] = False
+    return trigger
 
 
 def complete_fetch(
@@ -119,11 +227,15 @@ def run_parse(
     *,
     out_dir: Path,
     trigger_kwargs: dict,
+    upload_mode: str = "auto",
 ) -> dict[str, Any] | int:
     print_parsing_status(display_label_for_input(resolved))
-    trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
+    trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs, upload_mode=upload_mode)
     if trigger.get("status") != "success":
+        trigger = annotate_recoverable_duplicate(client, trigger)
         save_stage_error(out_dir, "trigger_error.json", trigger)
+        if stage in {"upload_tos", "trigger_file_direct", "trigger_file_fallback"}:
+            return upload_error(stage, trigger)
         return parse_error(stage, trigger)
 
     token = trigger.get("token")

@@ -26,6 +26,13 @@ def _parse_mode_option(name: str, help_text: str):
     "-o",
     help="Preferred output directory; an available suffixed sibling is used if it exists",
 )
+@click.option(
+    "--upload-mode",
+    type=click.Choice(["auto", "tos", "direct"], case_sensitive=False),
+    default="auto",
+    show_default=True,
+    help="Local PDF upload path: TOS-first auto fallback, TOS only, or direct only",
+)
 @click.option("--async", "async_mode", is_flag=True, help="Submit with sync=false and poll until success")
 @click.option(
     "--textual",
@@ -44,6 +51,7 @@ def parse_cmd(
     ctx: click.Context,
     source: str,
     output_dir: str | None,
+    upload_mode: str,
     async_mode: bool,
     textual: str | None,
     equation: str | None,
@@ -85,6 +93,7 @@ def parse_cmd(
         resolved,
         out_dir=out_dir,
         trigger_kwargs=trigger_kwargs,
+        upload_mode=upload_mode,
     )
     if isinstance(code, int):
         raise SystemExit(code)

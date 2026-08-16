@@ -31,16 +31,42 @@ def missing_token_error() -> int:
     return 1
 
 
+def _operation_error(code: str, stage: str, result: dict) -> int:
+    payload = {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": result.get("description") or result.get("message") or str(result),
+            "stage": stage,
+        },
+    }
+    if result.get("recoverable_token"):
+        payload["recoverable_token"] = result["recoverable_token"]
+    if result.get("candidate_token"):
+        payload["candidate_token"] = result["candidate_token"]
+        payload["candidate_token_recoverable"] = False
+    emit_json_stderr(payload)
+    return 1
+
+
 def parse_error(stage: str, result: dict) -> int:
+    return _operation_error("PARSE_ERROR", stage, result)
+
+
+def upload_error(stage: str, result: dict) -> int:
+    return _operation_error("UPLOAD_ERROR", stage, result)
+
+
+def token_not_found_error(token: str, *, attempts: int) -> int:
     emit_json_stderr(
         {
             "ok": False,
             "error": {
-                "code": "PARSE_ERROR",
-                "message": result.get("description") or result.get("message") or str(result),
-                "stage": stage,
+                "code": "TOKEN_NOT_FOUND",
+                "message": f"The service did not recognize this token after {attempts} checks.",
+                "stage": "get_result_poll",
             },
-            "token": result.get("token"),
+            "unrecognized_token": token,
         }
     )
     return 1

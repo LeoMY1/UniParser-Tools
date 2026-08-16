@@ -69,9 +69,12 @@ class TestCliConfig:
 
         pdf = tmp_path / "paper.pdf"
         pdf.write_bytes(b"%PDF-1.4")
+        mock_client.upload_files_to_tos.return_value = {"status": "error", "description": "stop early"}
         out = tmp_path / "out"
         result = runner.invoke(cli, ["parse", str(pdf), "-o", str(out)])
         assert result.exit_code == 1
+        mock_client.upload_files_to_tos.assert_called_once_with([str(pdf.resolve())])
+        mock_client.trigger_url.assert_not_called()
         mock_client.trigger_file.assert_called_once()
 
     def test_fetch_without_api_key(self, runner: CliRunner, env_without_api_key: None, no_config_file: None) -> None:
@@ -139,7 +142,11 @@ class TestParseCommand:
         pdf.write_bytes(b"%PDF-1.4")
 
         mock_client = MagicMock()
-        mock_client.trigger_file.return_value = {"status": "success", "token": "tok-parse-1"}
+        mock_client.upload_files_to_tos.return_value = {
+            "status": "success",
+            "files": [{"source_url": "tos://bucket/paper.pdf", "uploaded": True}],
+        }
+        mock_client.trigger_url.return_value = {"status": "success", "token": "tok-parse-1"}
         mock_client.get_result.side_effect = [
             {"status": "processing"},
             {"status": "success", "pages_tree": {}},
@@ -148,6 +155,7 @@ class TestParseCommand:
         mock_client.get_formatted.return_value = {"status": "success", "content": "# Hi"}
 
         monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+        monkeypatch.setattr("uniparser_tools.cli.core.pipeline.time.sleep", lambda _: None)
 
         out = tmp_path / "out"
         out.mkdir()
@@ -171,6 +179,10 @@ class TestParseCommand:
         assert meta["trigger_kwargs"]["sync"] is True
         assert "preset" not in meta
         assert (actual_out / "paper.md").is_file()
+        mock_client.trigger_file.assert_not_called()
+        _, trigger_kwargs = mock_client.trigger_url.call_args
+        assert trigger_kwargs["pdf_url"] == "tos://bucket/paper.pdf"
+        assert trigger_kwargs["server_generated_token"] is True
 
     def test_parse_default_trigger_kwargs(
         self,
@@ -183,7 +195,11 @@ class TestParseCommand:
         pdf.write_bytes(b"%PDF-1.4")
 
         mock_client = MagicMock()
-        mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
+        mock_client.upload_files_to_tos.return_value = {
+            "status": "success",
+            "files": [{"source_url": "tos://bucket/paper.pdf", "uploaded": True}],
+        }
+        mock_client.trigger_url.return_value = {"status": "error", "description": "stop"}
         monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
@@ -193,7 +209,8 @@ class TestParseCommand:
             env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
         )
 
-        _, call_kwargs = mock_client.trigger_file.call_args
+        _, call_kwargs = mock_client.trigger_url.call_args
+        assert call_kwargs["server_generated_token"] is True
         assert call_kwargs["sync"] is True
         assert call_kwargs["textual"] is ParseModeTextual.OCRHighQuality
         assert call_kwargs["equation"] is ParseMode.OCRHighQuality
@@ -214,7 +231,11 @@ class TestParseCommand:
         pdf.write_bytes(b"%PDF-1.4")
 
         mock_client = MagicMock()
-        mock_client.trigger_file.return_value = {"status": "error", "description": "stop"}
+        mock_client.upload_files_to_tos.return_value = {
+            "status": "success",
+            "files": [{"source_url": "tos://bucket/paper.pdf", "uploaded": True}],
+        }
+        mock_client.trigger_url.return_value = {"status": "error", "description": "stop"}
         monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
 
         out = tmp_path / "out"
@@ -224,9 +245,111 @@ class TestParseCommand:
             env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
         )
 
-        _, call_kwargs = mock_client.trigger_file.call_args
+        _, call_kwargs = mock_client.trigger_url.call_args
         assert call_kwargs["molecule"] is ParseMode.Disable
         assert call_kwargs["table"] is ParseMode.OCRHighQuality
+
+    def test_parse_transport_failure_does_not_write_recoverable_token(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        mock_client = MagicMock()
+        mock_client.upload_files_to_tos.return_value = {
+            "status": "success",
+            "files": [{"source_url": "tos://bucket/paper.pdf", "uploaded": True}],
+        }
+        mock_client.trigger_url.return_value = {
+            "status": "error",
+            "description": "The write operation timed out",
+            "candidate_token": "local-candidate",
+            "candidate_token_recoverable": False,
+        }
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+
+        out = tmp_path / "out"
+        result = runner.invoke(
+            cli,
+            ["--json", "parse", str(pdf), "-o", str(out)],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+
+        assert result.exit_code == 1
+        payload = json.loads(result.stderr.strip().splitlines()[-1])
+        assert payload["error"]["code"] == "PARSE_ERROR"
+        assert payload["candidate_token"] == "local-candidate"
+        assert payload["candidate_token_recoverable"] is False
+        assert "recoverable_token" not in payload
+        assert not (out / "trigger_meta.json").exists()
+        saved_error = json.loads((out / "trigger_error.json").read_text(encoding="utf-8"))
+        assert saved_error["candidate_token"] == "local-candidate"
+
+    def test_parse_tos_upload_failure_uses_upload_error(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        mock_client = MagicMock()
+        mock_client.upload_files_to_tos.return_value = {
+            "status": "error",
+            "description": "TOS upload failed",
+        }
+        mock_client.trigger_file.return_value = {
+            "status": "error",
+            "description": "Direct upload failed",
+        }
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+
+        result = runner.invoke(
+            cli,
+            ["--json", "parse", str(pdf), "-o", str(tmp_path / "out")],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+
+        assert result.exit_code == 1
+        payload = json.loads(result.stderr.strip().splitlines()[-1])
+        assert payload["error"]["code"] == "UPLOAD_ERROR"
+        assert payload["error"]["stage"] == "trigger_file_fallback"
+        mock_client.trigger_url.assert_not_called()
+        _, fallback_kwargs = mock_client.trigger_file.call_args
+        assert fallback_kwargs["server_generated_token"] is True
+        assert fallback_kwargs["http_timeout"] == (60.0, 1860.0)
+
+    def test_parse_direct_upload_mode_skips_tos(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("UNIPARSER_API_KEY", "test-key")
+        pdf = tmp_path / "paper.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        mock_client = MagicMock()
+        mock_client.trigger_file.return_value = {
+            "status": "error",
+            "description": "stop",
+        }
+        monkeypatch.setattr("uniparser_tools.cli.commands.parse.make_client", lambda ctx: (mock_client, None))
+
+        result = runner.invoke(
+            cli,
+            ["parse", str(pdf), "--upload-mode", "direct", "-o", str(tmp_path / "out")],
+            env={**os.environ, "UNIPARSER_API_KEY": "test-key"},
+        )
+
+        assert result.exit_code == 1
+        mock_client.upload_files_to_tos.assert_not_called()
+        _, direct_kwargs = mock_client.trigger_file.call_args
+        assert direct_kwargs["server_generated_token"] is True
+        assert direct_kwargs["http_timeout"] == (60.0, 1860.0)
 
     def test_parse_invalid_equation_mode_rejected(
         self,
@@ -339,6 +462,7 @@ class TestHelp:
         result = runner.invoke(cli, ["parse", "--help"])
         assert result.exit_code == 0
         assert "--output-dir" in result.stdout
+        assert "--upload-mode" in result.stdout
         assert "--async" in result.stdout
         assert "--textual" in result.stdout
         assert "--molecule" in result.stdout
