@@ -57,6 +57,7 @@ def test_customer_docs_include_result_retention_notice() -> None:
 
 def test_skill_only_recovers_service_confirmed_tokens() -> None:
     skill = (REPO_ROOT / "skills" / "UniParser-Tools" / "SKILL.md").read_text(encoding="utf-8")
+    notes = (REPO_ROOT / "skills" / "UniParser-Tools" / "references" / "notes.md").read_text(encoding="utf-8")
 
     assert "recoverable_token" in skill
     assert "candidate_token" in skill
@@ -64,3 +65,5 @@ def test_skill_only_recovers_service_confirmed_tokens() -> None:
     assert "the `token` field in a failed parse stderr JSON" not in skill
     assert "--upload-mode" not in skill
     assert "TOS" not in skill
+    assert '"candidate_token": "abc123..."' in notes
+    assert '"candidate_token_recoverable": False' in notes

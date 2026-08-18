@@ -213,6 +213,8 @@ For callbacks, custom `ParseMode`, or SDK examples, see [Common patterns](./refe
 Full CLI reference (flags, examples, JSON details): [CLI README](../../uniparser_tools/cli/README.md) in this repository.
 
 Optional MCP server setup is in the [UniParser-Tools GitHub repo](https://github.com/dptech-corp/UniParser-Tools); it is separate from this CLI workflow.
+Its `uniparser_parse` tool uses the same direct local-PDF upload, server-generated token, confirmed-duplicate
+recovery, and three-check `undefined` limit as the CLI.
 
 ## Reference documents
 

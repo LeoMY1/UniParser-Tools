@@ -55,14 +55,20 @@ All API methods return a dict with consistent structure:
     ...
 }
 
-# Error
+# Transport or trigger error with an unconfirmed deterministic token
 {
     "status": "error",
-    "token": "abc123...",
+    "candidate_token": "abc123...",
+    "candidate_token_recoverable": False,
     "message": "Error description",
     "description": "Detailed traceback (optional)"
 }
 ```
+
+Only a successful trigger response contains a confirmed task `token`. SDK error responses can contain a
+`candidate_token` when the caller uses the backward-compatible deterministic-token mode; do not poll or fetch it
+unless a separate service status check confirms that the task exists. CLI and MCP default to server-generated tokens;
+the CLI exposes `recoverable_token` only after confirmation, while MCP resumes a confirmed duplicate internally.
 
 ## Common Error Messages
 
