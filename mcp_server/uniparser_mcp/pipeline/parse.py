@@ -7,7 +7,14 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
-from uniparser_mcp.errors import input_error, parse_error
+from uniparser_mcp.defaults import (
+    DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT,
+    DIRECT_UPLOAD_REQUEST_TIMEOUT,
+    PENDING_STATUSES,
+    POLL_INTERVAL_SEC,
+    UNDEFINED_MAX_POLLS,
+)
+from uniparser_mcp.errors import input_error, parse_error, upload_error
 from uniparser_mcp.input import InputKind, ResolvedInput, display_label, resolve_request
 from uniparser_mcp.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
 from uniparser_mcp.pipeline.output import (
@@ -20,14 +27,7 @@ from uniparser_mcp.pipeline.poll import poll_until_success
 from uniparser_mcp.schemas import ErrorResult, ParseRequest, ParseResult
 from uniparser_mcp.tools.response import build_parse_success
 from uniparser_tools.api.clients import UniParserClient
-from uniparser_tools.common.constant import ErrorFlag, FormatFlag
-
-
-def _is_token_duplicated(trigger: dict[str, Any]) -> bool:
-    if trigger.get("status") == "success":
-        return False
-    message = str(trigger.get("message") or trigger.get("description") or "")
-    return message == ErrorFlag.Token_Duplicated or "Token is duplicated" in message
+from uniparser_tools.common.constant import FormatFlag
 
 
 async def _ctx_info(ctx: Context | None, message: str) -> None:
@@ -47,25 +47,73 @@ async def _trigger_input(
         trigger = await asyncio.to_thread(
             client.trigger_file,
             str(resolved.path),
-            token=None,
+            server_generated_token=True,
+            http_timeout=(
+                DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT
+                if trigger_kwargs.get("sync", True)
+                else DIRECT_UPLOAD_REQUEST_TIMEOUT
+            ),
             **trigger_kwargs,
         )
+        if not isinstance(trigger, dict):
+            trigger = {
+                "status": "error",
+                "message": "Direct upload returned an invalid response",
+            }
         return trigger, "trigger_file"
     if resolved.kind is InputKind.IMAGE:
         trigger = await asyncio.to_thread(
             client.trigger_snip,
             str(resolved.path),
-            token=None,
+            server_generated_token=True,
             **trigger_kwargs,
         )
         return trigger, "trigger_snip"
     trigger = await asyncio.to_thread(
         client.trigger_url,
         resolved.raw,
-        token=None,
+        server_generated_token=True,
         **trigger_kwargs,
     )
     return trigger, "trigger_url"
+
+
+async def _annotate_recoverable_duplicate(client: UniParserClient, trigger: dict[str, Any]) -> dict[str, Any]:
+    diagnostic = " ".join(str(trigger.get(key, "")) for key in ("message", "description")).casefold()
+    if "duplicat" not in diagnostic:
+        return trigger
+
+    candidate = trigger.get("token") or trigger.get("candidate_token")
+    if not candidate:
+        return trigger
+
+    status = None
+    for attempt in range(UNDEFINED_MAX_POLLS):
+        probe = await asyncio.to_thread(
+            client.get_result,
+            candidate,
+            content=False,
+            objects=False,
+            pages_dict=False,
+            pages_tree=False,
+        )
+        status = probe.get("status") if isinstance(probe, dict) else None
+        if status != "undefined" or attempt == UNDEFINED_MAX_POLLS - 1:
+            break
+        await asyncio.sleep(POLL_INTERVAL_SEC)
+
+    trigger["token_status"] = status
+    if status == "success" or status in PENDING_STATUSES:
+        trigger["recoverable_token"] = candidate
+        trigger.pop("token", None)
+        trigger.pop("candidate_token", None)
+        trigger.pop("candidate_token_recoverable", None)
+        return trigger
+
+    trigger.pop("token", None)
+    trigger["candidate_token"] = candidate
+    trigger["candidate_token_recoverable"] = False
+    return trigger
 
 
 async def _fetch_pages_tree(client: UniParserClient, token: str) -> dict[str, Any]:
@@ -156,19 +204,22 @@ async def run_parse(client: UniParserClient, req: ParseRequest, ctx: Context | N
     await _ctx_info(ctx, f"Parsing {display_label(resolved)}")
     trigger, stage = await _trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
 
-    if _is_token_duplicated(trigger):
-        token = trigger.get("token") or client.to_token(resolved.token_seed)
-        return await _complete_by_token(
-            client,
-            token,
-            resolved=resolved,
-            out_dir=out_dir,
-            ctx=ctx,
-            write_trigger_meta_file=False,
-        )
-
     if trigger.get("status") != "success":
+        trigger = await _annotate_recoverable_duplicate(client, trigger)
+        recoverable_token = trigger.get("recoverable_token")
+        if recoverable_token:
+            return await _complete_by_token(
+                client,
+                recoverable_token,
+                resolved=resolved,
+                out_dir=out_dir,
+                ctx=ctx,
+                write_trigger_meta_file=False,
+            )
+
         save_stage_error(out_dir, "trigger_error.json", trigger)
+        if stage == "trigger_file" and trigger.get("error_type"):
+            return upload_error(stage, trigger)
         return parse_error(stage, trigger)
 
     token = trigger.get("token")

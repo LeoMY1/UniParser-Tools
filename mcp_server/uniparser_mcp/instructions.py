@@ -21,5 +21,7 @@ Call uniparser_parse immediately, without asking for confirmation, when:
 
 ## After calling uniparser_parse
 
-Always include the `message` field from the tool response in your reply to the user.
+On success, always include the `message` field from the tool response in your reply to the user.
+On failure, report `error.message`. Never pass `candidate_token` to another request or to `uniparser fetch`;
+it has not been confirmed by the service. Stop retrying when the error code is `TOKEN_NOT_FOUND`.
 """
