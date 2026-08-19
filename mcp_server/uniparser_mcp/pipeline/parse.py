@@ -7,7 +7,11 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
-from uniparser_mcp.errors import input_error, parse_error
+from uniparser_mcp.defaults import (
+    DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT,
+    DIRECT_UPLOAD_REQUEST_TIMEOUT,
+)
+from uniparser_mcp.errors import input_error, parse_error, upload_error
 from uniparser_mcp.input import InputKind, ResolvedInput, display_label, resolve_request
 from uniparser_mcp.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
 from uniparser_mcp.pipeline.output import (
@@ -20,14 +24,7 @@ from uniparser_mcp.pipeline.poll import poll_until_success
 from uniparser_mcp.schemas import ErrorResult, ParseRequest, ParseResult
 from uniparser_mcp.tools.response import build_parse_success
 from uniparser_tools.api.clients import UniParserClient
-from uniparser_tools.common.constant import ErrorFlag, FormatFlag
-
-
-def _is_token_duplicated(trigger: dict[str, Any]) -> bool:
-    if trigger.get("status") == "success":
-        return False
-    message = str(trigger.get("message") or trigger.get("description") or "")
-    return message == ErrorFlag.Token_Duplicated or "Token is duplicated" in message
+from uniparser_tools.common.constant import FormatFlag
 
 
 async def _ctx_info(ctx: Context | None, message: str) -> None:
@@ -48,14 +45,26 @@ async def _trigger_input(
             client.trigger_file,
             str(resolved.path),
             token=None,
+            server_generated_token=True,
+            http_timeout=(
+                DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT
+                if trigger_kwargs.get("sync", True)
+                else DIRECT_UPLOAD_REQUEST_TIMEOUT
+            ),
             **trigger_kwargs,
         )
+        if not isinstance(trigger, dict):
+            trigger = {
+                "status": "error",
+                "message": "Direct upload returned an invalid response",
+            }
         return trigger, "trigger_file"
     if resolved.kind is InputKind.IMAGE:
         trigger = await asyncio.to_thread(
             client.trigger_snip,
             str(resolved.path),
             token=None,
+            server_generated_token=True,
             **trigger_kwargs,
         )
         return trigger, "trigger_snip"
@@ -63,6 +72,7 @@ async def _trigger_input(
         client.trigger_url,
         resolved.raw,
         token=None,
+        server_generated_token=True,
         **trigger_kwargs,
     )
     return trigger, "trigger_url"
@@ -156,19 +166,10 @@ async def run_parse(client: UniParserClient, req: ParseRequest, ctx: Context | N
     await _ctx_info(ctx, f"Parsing {display_label(resolved)}")
     trigger, stage = await _trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
 
-    if _is_token_duplicated(trigger):
-        token = trigger.get("token") or client.to_token(resolved.token_seed)
-        return await _complete_by_token(
-            client,
-            token,
-            resolved=resolved,
-            out_dir=out_dir,
-            ctx=ctx,
-            write_trigger_meta_file=False,
-        )
-
     if trigger.get("status") != "success":
         save_stage_error(out_dir, "trigger_error.json", trigger)
+        if stage == "trigger_file" and trigger.get("error_type"):
+            return upload_error(stage, trigger)
         return parse_error(stage, trigger)
 
     token = trigger.get("token")

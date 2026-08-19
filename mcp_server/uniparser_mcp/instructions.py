@@ -21,5 +21,8 @@ Call uniparser_parse immediately, without asking for confirmation, when:
 
 ## After calling uniparser_parse
 
-Always include the `message` field from the tool response in your reply to the user.
+On success, always include the `message` field from the tool response in your reply to the user.
+On failure, report `error.message`. Never poll a token from a failed trigger; it is diagnostic only. Only a
+token returned with `status=success` may be polled. Do not attempt recovery from a failed trigger.
+Stop retrying when the error code is `TOKEN_NOT_FOUND`.
 """
