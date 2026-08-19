@@ -81,7 +81,7 @@ def test_ingest_pages_tree_writes_only_v2_patent_artifacts(tmp_path: Path) -> No
         assert Path(result[key]).is_file()
 
     structure = json.loads(Path(result["patent_structure_path"]).read_text(encoding="utf-8"))
-    assert structure["schema_version"] == "2.1"
+    assert structure["schema_version"] == "2.2"
     assert [node["node_id"] for node in structure["tree"]["children"]] == [
         "front_matter",
         "claims",

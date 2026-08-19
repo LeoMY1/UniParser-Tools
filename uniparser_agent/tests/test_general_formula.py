@@ -13,7 +13,7 @@ from uniparser_agent.chemistry.general_formula import (
     CHUNK_TARGET_CHARS,
     ContextUnit,
     analyze_general_formulas,
-    build_invention_context_units,
+    build_description_context_units,
     build_markush_inventory,
     chunk_context_units,
     write_general_formula_outputs,
@@ -140,17 +140,18 @@ def test_markush_candidates_without_smi_are_kept_separately() -> None:
     assert [formula.smi for formula in formulas[-2:]] == ["", ""]
 
 
-def test_context_is_only_invention_summary_and_chunks_overlap() -> None:
+def test_context_covers_complete_description_and_chunks_overlap() -> None:
     resolver = _resolver()
     formulas = build_markush_inventory(resolver, "CN-fixture")
-    units = build_invention_context_units(resolver, formulas)
+    units = build_description_context_units(resolver, formulas)
     context = "\n".join(unit.text for unit in units)
 
     assert "R1选自氢" in context
     assert "[FORMULA formula_id=F001" in context
     assert "[FORMULA formula_id=F002" in context
-    assert "F003" not in context
-    assert "实施例1" not in context
+    assert "[FORMULA formula_id=F003" in context
+    assert "实施例1" in context
+    assert "1. 一种式(I)化合物" not in context
 
     chunks = chunk_context_units(units, target_chars=160, overlap_chars=30)
     assert len(chunks) > 1
@@ -183,7 +184,7 @@ def test_one_oversized_block_uses_the_same_12000_800_chunk_rule() -> None:
 def test_chunk_llm_results_merge_by_formula_id_without_asking_llm_for_smiles() -> None:
     resolver = _resolver()
     formulas = build_markush_inventory(resolver, "CN-fixture")
-    units = build_invention_context_units(resolver, formulas)
+    units = build_description_context_units(resolver, formulas)
     chunks = chunk_context_units(units, target_chars=180, overlap_chars=40)
     prompts: list[dict] = []
 

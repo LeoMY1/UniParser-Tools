@@ -120,7 +120,7 @@ def test_build_cn_patent_structure_has_fixed_depth_and_block_locations() -> None
     structure = build_patent_structure(document, "CN123456789A")
     nodes = _nodes_by_type(structure)
 
-    assert structure["schema_version"] == "2.1"
+    assert structure["schema_version"] == "2.2"
     assert structure["patent_format"] == "CN"
     assert structure["source"]["sha256"] == pages_tree_sha256(document)
     assert [page["node_type"] for page in structure["page_map"]] == [
@@ -134,11 +134,7 @@ def test_build_cn_patent_structure_has_fixed_depth_and_block_locations() -> None
     assert (nodes["claims"]["page_start"], nodes["claims"]["page_end"]) == (2, 3)
     assert (nodes["description"]["page_start"], nodes["description"]["page_end"]) == (4, 5)
     assert nodes["claims"]["children"] == []
-    assert [child["node_type"] for child in nodes["description"]["children"]] == [
-        "invention_summary",
-        "detailed_description",
-    ]
-    assert all(child["children"] == [] for child in nodes["description"]["children"])
+    assert nodes["description"]["children"] == []
     assert [(ref["page_index"], ref["block_index"]) for ref in nodes["claims"]["block_refs"]] == [
         (1, 0),
         (1, 1),
@@ -148,56 +144,30 @@ def test_build_cn_patent_structure_has_fixed_depth_and_block_locations() -> None
     ]
 
 
-def test_description_keeps_only_two_prechunk_children_and_parent_remainder() -> None:
+def test_description_keeps_every_block_in_reading_order_without_chapter_children() -> None:
     structure = build_patent_structure(_cn_patent_fixture(), "CN123456789A")
     nodes = _nodes_by_type(structure)
 
-    assert {ref["block"] for ref in nodes["invention_summary"]["block_refs"]} == {36, 37}
-    assert {ref["block"] for ref in nodes["detailed_description"]["block_refs"]} == {40, 41}
-    assert {ref["block"] for ref in nodes["description"]["block_refs"]} == {
+    assert [ref["block"] for ref in nodes["description"]["block_refs"]] == [
         10,
         31,
         32,
         33,
         34,
         35,
+        36,
+        37,
         38,
         39,
+        40,
+        41,
         50,
         51,
         52,
         53,
-    }
-    assert nodes["invention_summary"]["heading_ref"]["block"] == 36
-    assert nodes["detailed_description"]["heading_ref"]["block"] == 40
-
-
-def test_description_supports_summary_and_detail_aliases() -> None:
-    document = _cn_patent_fixture()
-    document["pages_tree"][3][6]["type"] = "title"
-    document["pages_tree"][3][6]["text"] = "发明概要"
-    document["pages_tree"][3][10]["type"] = "paragraph"
-    document["pages_tree"][3][10]["text"] = "[0023] 发明详述"
-
-    nodes = _nodes_by_type(build_patent_structure(document, "CN123456789A"))
-
-    assert nodes["invention_summary"]["heading_ref"]["block"] == 36
-    assert nodes["detailed_description"]["heading_ref"]["block"] == 40
-
-
-def test_description_uses_minimal_implicit_boundaries_without_heading() -> None:
-    document = _cn_patent_fixture()
-    document["pages_tree"][3][6]["text"] = "[0017] 现有技术仍然存在不足。"
-    document["pages_tree"][3][7]["text"] = "[0018] 因此，本发明提供下式(1)的化合物。"
-    document["pages_tree"][3][8]["type"] = "paragraph"
-    document["pages_tree"][3][8]["text"] = "[0175] 本发明的化合物可以根据以下方案和实施例的方法使用合适的材料制备。"
-
-    nodes = _nodes_by_type(build_patent_structure(document, "CN123456789A"))
-
-    assert {ref["block"] for ref in nodes["invention_summary"]["block_refs"]} == {37}
-    assert nodes["invention_summary"]["heading_ref"] is None
-    assert 38 in {ref["block"] for ref in nodes["detailed_description"]["block_refs"]}
-    assert nodes["detailed_description"]["heading_ref"] is None
+    ]
+    assert nodes["description"]["heading_ref"]["block"] == 31
+    assert nodes["description"]["children"] == []
 
 
 def test_resolver_filters_noise_and_fields_but_keeps_nested_chemistry() -> None:

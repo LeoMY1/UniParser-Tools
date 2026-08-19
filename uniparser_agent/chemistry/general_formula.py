@@ -17,9 +17,9 @@ from uniparser_agent.chemistry.patent_structure import BlockResolver
 from uniparser_agent.llm import LLMConfig, OpenAICompatLLM, resolve_llm_config
 
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
 TABLE_NAME = "general_formula_analysis"
-CONTEXT_NODE_ID = "description.invention_summary"
+CONTEXT_NODE_ID = "description"
 CHUNK_TARGET_CHARS = 12_000
 CHUNK_OVERLAP_CHARS = 800
 
@@ -51,7 +51,7 @@ _TEXT_TYPES = frozenset(
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 
-GENERAL_FORMULA_SYSTEM_PROMPT = """You extract Markush general-formula facts from the invention-summary section of a chemistry patent.
+GENERAL_FORMULA_SYSTEM_PROMPT = """You extract Markush general-formula facts from the description section of a chemistry patent.
 Return STRICT JSON only, without markdown fences:
 {
   "results": [
@@ -70,7 +70,7 @@ Return STRICT JSON only, without markdown fences:
   ]
 }
 Rules:
-- Use only the supplied invention-summary context chunk.
+- Use only the supplied description context chunk.
 - Treat any structure notation from UniParser as read-only evidence.
 - Never generate, repair, normalize, or return SMILES.
 - Return a formula only when the chunk contains supporting evidence for it.
@@ -78,7 +78,7 @@ Rules:
 - Preserve general, preferred, and more-preferred definition levels when present.
 - Include R/Ar/X variables and m/n parameters in definition_fragments.
 - evidence_unit_ids must be selected from allowed_unit_ids.
-- Do not extract examples or claims.
+- Claims are outside the supplied context. Do not invent specific example compounds that are not in the supplied formula inventory.
 """
 
 
@@ -95,7 +95,6 @@ class FormulaOccurrence:
     label: str | None
     source: str | None
     confidence: float
-    in_invention_summary: bool
 
     @property
     def location_key(self) -> tuple[int, int, int]:
@@ -262,10 +261,6 @@ def _located_blocks(resolver: BlockResolver, node_id: str) -> list[dict[str, Any
 def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[MarkushFormula]:
     """Collect and raw-SMI deduplicate all ``markush=true`` molecules in description."""
     description = _located_blocks(resolver, "description")
-    summary_keys = {
-        (int(item["locator"]["page_index"]), int(item["locator"]["block_index"]))
-        for item in _located_blocks(resolver, CONTEXT_NODE_ID)
-    }
     by_dedup_key: dict[str, MarkushFormula] = {}
 
     for located in description:
@@ -286,7 +281,6 @@ def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[Markus
                 label=_label_for_molecule(node, ancestors),
                 source=node.get("source") if isinstance(node.get("source"), str) else None,
                 confidence=float(node.get("conf") or 0.0),
-                in_invention_summary=(page_index, block_index) in summary_keys,
             )
             dedup_key = (
                 f"smi:{smi}"
@@ -308,7 +302,6 @@ def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[Markus
                 labels,
                 key=lambda occurrence: (
                     _label_score(occurrence.label),
-                    int(occurrence.in_invention_summary),
                     -occurrence.page_index,
                     -occurrence.block_index,
                 ),
@@ -330,11 +323,11 @@ def _table_text(value: Any) -> str:
     return _normalized_text(html.unescape(_HTML_TAG_RE.sub(" ", value)))
 
 
-def build_invention_context_units(
+def build_description_context_units(
     resolver: BlockResolver,
     formulas: list[MarkushFormula],
 ) -> list[ContextUnit]:
-    """Build compact text/structure-anchor units from invention-summary only."""
+    """Build compact text/structure-anchor units from the complete description."""
     formula_by_smi = {formula.smi: formula for formula in formulas if formula.smi}
     formula_by_occurrence = {
         (
@@ -708,7 +701,6 @@ def write_structure_images(
             (occurrence for occurrence in formula.occurrences if occurrence.source),
             key=lambda occurrence: (
                 -_label_score(occurrence.label),
-                -int(occurrence.in_invention_summary),
                 -_source_area(occurrence.source),
                 -occurrence.confidence,
                 occurrence.page_index,
@@ -767,7 +759,7 @@ def write_general_formula_outputs(
     target_dir.mkdir(parents=True, exist_ok=True)
     formulas = build_markush_inventory(resolver, doc_id)
     image_meta = write_structure_images(formulas, target_dir / "structure_images")
-    units = build_invention_context_units(resolver, formulas)
+    units = build_description_context_units(resolver, formulas)
     chunks = chunk_context_units(units)
     rows, llm_meta = analyze_general_formulas(
         doc_id,

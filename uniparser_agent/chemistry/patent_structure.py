@@ -9,49 +9,20 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "2.1"
+SCHEMA_VERSION = "2.2"
 PATENT_FORMAT = "CN"
 FILTER_POLICY_VERSION = "chem_patent_filter_v1"
 
 EXCLUDED_BLOCK_TYPES = frozenset({"hline", "pagebar", "pageheader", "pagenumber", "watermark"})
 EXCLUDED_BLOCK_FIELDS = frozenset({"bbox", "bboxes", "direction", "hidden", "page_size", "token"})
 
-_PARAGRAPH_NUMBER_RE = re.compile(r"^\s*[\[【](?:\d{1,6})[\]】]\s*")
 _CN_PUBLICATION_RE = re.compile(r"\bCN\s*\d{6,}\s*[A-Z]?\b", re.IGNORECASE)
 _DROP = object()
-
-_INVENTION_SUMMARY_TITLES = (
-    "发明内容",
-    "发明概要",
-    "发明概述",
-    "发明的概要",
-    "发明目的",
-    "技术方案",
-)
-_DETAILED_DESCRIPTION_TITLES = (
-    "具体实施方式",
-    "具体实施例",
-    "发明详述",
-    "发明的详细说明",
-    "实施发明的方式",
-    "合成方案",
-    "制备方案",
-    "一般合成方法",
-    "通用方案",
-    "实施例",
-    "制备例",
-)
-_INVENTION_SUMMARY_STOP_TITLES = ("附图说明", "附图简要说明")
 
 _TOP_LEVEL_TITLES = {
     "front_matter": "首页",
     "claims": "权利要求书",
     "description": "说明书",
-}
-
-_DESCRIPTION_NODE_TITLES = {
-    "invention_summary": "发明内容",
-    "detailed_description": "具体实施方式",
 }
 
 
@@ -98,63 +69,6 @@ def _compact_text(text: str) -> str:
     return re.sub(r"[\s:：。．、]+", "", text)
 
 
-def _paragraph_body(block: dict[str, Any]) -> str:
-    return _PARAGRAPH_NUMBER_RE.sub("", _normalized_text(block), count=1).strip()
-
-
-def _matches_standalone_title(block: dict[str, Any], aliases: tuple[str, ...]) -> bool:
-    block_type = str(block.get("type") or "")
-    if block_type not in {"title", "paragraph"}:
-        return False
-    compact = _compact_text(_paragraph_body(block))
-    if not compact:
-        return False
-    for alias in aliases:
-        normalized_alias = _compact_text(alias)
-        if compact == normalized_alias:
-            return True
-        if block_type == "title" and compact.startswith(normalized_alias) and len(compact) <= 80:
-            return True
-    return False
-
-
-def _description_heading(block: dict[str, Any]) -> str | None:
-    if _matches_standalone_title(block, _INVENTION_SUMMARY_TITLES):
-        return "invention_summary"
-    if _matches_standalone_title(block, _DETAILED_DESCRIPTION_TITLES):
-        return "detailed_description"
-    return None
-
-
-def _is_invention_summary_stop(block: dict[str, Any]) -> bool:
-    return _matches_standalone_title(block, _INVENTION_SUMMARY_STOP_TITLES)
-
-
-def _is_implicit_invention_summary_start(block: dict[str, Any]) -> bool:
-    if str(block.get("type") or "") != "paragraph":
-        return False
-    body = _paragraph_body(block)
-    return bool(
-        re.match(
-            r"^(?:因此[，,]?)?(?:本发明|本公开|本申请)(?:提供|提出|公开|旨在)"
-            r"|^为(?:了解决|解决)上述"
-            r"|^在(?:一个|一)方面[，,]?(?:本发明|本公开|本申请)"
-            r"|^根据(?:本发明|本公开|本申请)",
-            body,
-        )
-    )
-
-
-def _is_implicit_detailed_description_start(block: dict[str, Any]) -> bool:
-    if str(block.get("type") or "") != "paragraph":
-        return False
-    body = _paragraph_body(block)
-    if re.match(r"^(?:本发明)?化合物的制备方法", body):
-        return True
-    prefix = body[:260]
-    return "本发明" in prefix[:80] and "以下方案" in prefix and "制备" in prefix
-
-
 def _page_section(page: list[dict[str, Any]], page_index: int, previous: str | None) -> str:
     if page_index == 0:
         return "front_matter"
@@ -173,14 +87,6 @@ def _page_section(page: list[dict[str, Any]], page_index: int, previous: str | N
     if any("说明书" in text for text in title_texts):
         return "description"
     return previous if previous in _TOP_LEVEL_TITLES else "description"
-
-
-def _is_description_drawing_page(page: list[dict[str, Any]]) -> bool:
-    return any(
-        "说明书附图" in _compact_text(_normalized_text(block))
-        for block in page
-        if str(block.get("type") or "") in {"pageheader", "title"}
-    )
 
 
 def _top_level_heading(block: dict[str, Any], section_type: str) -> bool:
@@ -229,16 +135,9 @@ def build_patent_structure(pages_tree_doc: dict[str, Any], doc_id: str) -> dict[
         raise ValueError("Invalid pages_tree document: each page must be a list")
 
     top_nodes = {node_type: _new_node(node_type, node_type, title) for node_type, title in _TOP_LEVEL_TITLES.items()}
-    description_nodes = {
-        node_type: _new_node(f"description.{node_type}", node_type, title)
-        for node_type, title in _DESCRIPTION_NODE_TITLES.items()
-    }
-    top_nodes["description"]["children"] = list(description_nodes.values())
-
     page_map: list[dict[str, Any]] = []
     warnings: list[str] = []
     current_page_section: str | None = None
-    description_entries: list[tuple[dict[str, Any], dict[str, Any], bool]] = []
 
     for page_index, raw_page in enumerate(pages):
         page = [block for block in raw_page if isinstance(block, dict)]
@@ -253,96 +152,14 @@ def build_patent_structure(pages_tree_doc: dict[str, Any], doc_id: str) -> dict[
             }
         )
         top_node = top_nodes[current_page_section]
-        drawing_page = current_page_section == "description" and _is_description_drawing_page(page)
 
         for block_index, raw_block in enumerate(raw_page):
             if not isinstance(raw_block, dict):
                 continue
             ref = _block_ref(raw_block, page_index, block_index)
-
-            if current_page_section == "description":
-                description_entries.append((ref, raw_block, drawing_page))
-                if top_node["heading_ref"] is None and _top_level_heading(raw_block, "description"):
-                    top_node["heading_ref"] = ref
-                continue
-
             _append_ref(top_node, ref)
             if top_node["heading_ref"] is None and _top_level_heading(raw_block, current_page_section):
                 top_node["heading_ref"] = ref
-
-    explicit_summary_start = next(
-        (
-            index
-            for index, (_, block, drawing_page) in enumerate(description_entries)
-            if not drawing_page and _description_heading(block) == "invention_summary"
-        ),
-        None,
-    )
-    explicit_detailed_start = next(
-        (
-            index
-            for index, (_, block, drawing_page) in enumerate(description_entries)
-            if not drawing_page and _description_heading(block) == "detailed_description"
-        ),
-        None,
-    )
-    implicit_detailed_start = next(
-        (
-            index
-            for index, (_, block, drawing_page) in enumerate(description_entries)
-            if not drawing_page and _is_implicit_detailed_description_start(block)
-        ),
-        None,
-    )
-    detailed_candidates = [index for index in (explicit_detailed_start, implicit_detailed_start) if index is not None]
-    detailed_start = min(detailed_candidates) if detailed_candidates else None
-
-    summary_start = explicit_summary_start
-    if summary_start is None:
-        summary_start = next(
-            (
-                index
-                for index, (_, block, drawing_page) in enumerate(description_entries)
-                if not drawing_page
-                and (detailed_start is None or index < detailed_start)
-                and _is_implicit_invention_summary_start(block)
-            ),
-            None,
-        )
-    if summary_start is not None and detailed_start is not None and summary_start >= detailed_start:
-        summary_start = None
-
-    summary_stop = None
-    if summary_start is not None:
-        summary_stop = next(
-            (
-                index
-                for index, (_, block, drawing_page) in enumerate(description_entries)
-                if index > summary_start and not drawing_page and _is_invention_summary_stop(block)
-            ),
-            None,
-        )
-    summary_end_candidates = [index for index in (summary_stop, detailed_start) if index is not None]
-    summary_end = min(summary_end_candidates) if summary_end_candidates else None
-
-    for index, (ref, block, drawing_page) in enumerate(description_entries):
-        if (
-            not drawing_page
-            and summary_start is not None
-            and index >= summary_start
-            and (summary_end is None or index < summary_end)
-        ):
-            node = description_nodes["invention_summary"]
-            _append_ref(node, ref)
-            if index == summary_start and _description_heading(block) == "invention_summary":
-                node["heading_ref"] = ref
-        elif not drawing_page and detailed_start is not None and index >= detailed_start:
-            node = description_nodes["detailed_description"]
-            _append_ref(node, ref)
-            if index == detailed_start and _description_heading(block) == "detailed_description":
-                node["heading_ref"] = ref
-        else:
-            _append_ref(top_nodes["description"], ref)
 
     for node in top_nodes.values():
         _finalize_node(node)
@@ -369,7 +186,7 @@ def build_patent_structure(pages_tree_doc: dict[str, Any], doc_id: str) -> dict[
         "schema_version": SCHEMA_VERSION,
         "doc_id": doc_id,
         "patent_format": PATENT_FORMAT,
-        "format_profile": "cn_patent_semantic_index_v2_1",
+        "format_profile": "cn_patent_semantic_index_v2_2",
         "source": {
             "filename": pages_tree_doc.get("filename", ""),
             "token": pages_tree_doc.get("token", ""),

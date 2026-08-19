@@ -1,7 +1,7 @@
 """Chemistry document library: extract, store, and export."""
 
 from uniparser_agent.chemistry.general_formula import (
-    build_invention_context_units,
+    build_description_context_units,
     build_markush_inventory,
     chunk_context_units,
     write_general_formula_outputs,
@@ -17,7 +17,7 @@ from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipel
 
 __all__ = [
     "BlockResolver",
-    "build_invention_context_units",
+    "build_description_context_units",
     "build_markush_inventory",
     "build_patent_basic_info_table",
     "build_patent_structure",
