@@ -13,6 +13,7 @@ RequestTimeout = float | tuple[float, float | None]
 
 DEFAULT_REQUEST_TIMEOUT: RequestTimeout = (10.0, 60.0)
 DEFAULT_SYNC_REQUEST_TIMEOUT: RequestTimeout = (10.0, 1860.0)
+DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT: RequestTimeout = (60.0, 1860.0)
 
 
 def _redact_url_queries(value: str) -> str:

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.parse.api_client import PENDING_STATUSES, UniParserApiClient
+from uniparser_agent.parse.api_client import PENDING_STATUSES, UNDEFINED_MAX_POLLS, UniParserApiClient
 
 
 POLL_INTERVAL_SEC = 3
@@ -70,16 +70,31 @@ def save_parse_results(
 
 
 def poll_until_success(client: UniParserApiClient, token: str) -> dict[str, Any]:
-    deadline = time.time() + POLL_TIMEOUT_SEC
+    deadline = time.monotonic() + POLL_TIMEOUT_SEC
     last: dict[str, Any] = {}
-    while time.time() < deadline:
+    undefined_polls = 0
+    while time.monotonic() < deadline:
         last = client.get_result(token, pages_tree=False)
         status = last.get("status")
         if status == "success":
             return last
         if status == "error":
             return last
-        if status in PENDING_STATUSES or status is None:
+        if status == "undefined":
+            undefined_polls += 1
+            if undefined_polls >= UNDEFINED_MAX_POLLS:
+                return {
+                    "status": "error",
+                    "error_code": "TOKEN_NOT_FOUND",
+                    "description": (f"The service did not recognize this token after {undefined_polls} checks."),
+                    "token": token,
+                    "attempts": undefined_polls,
+                    "last_status": status,
+                }
+            time.sleep(POLL_INTERVAL_SEC)
+            continue
+        if status in PENDING_STATUSES:
+            undefined_polls = 0
             time.sleep(POLL_INTERVAL_SEC)
             continue
         return last

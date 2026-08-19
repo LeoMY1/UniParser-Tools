@@ -16,6 +16,7 @@ from uniparser_agent.parse.storage import (
     save_stage_error,
     write_trigger_meta,
 )
+from uniparser_agent.parse.transport import DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT
 
 
 def make_client() -> UniParserApiClient:
@@ -36,16 +37,22 @@ def parse_document(
     try:
         out = create_unique_output_dir(preferred)
         if kind == "file":
-            trigger = client.trigger_file(str(path))
+            trigger = client.trigger_file(
+                str(path),
+                server_generated_token=True,
+                http_timeout=DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT,
+            )
             input_type = "file"
         elif kind == "image":
-            trigger = client.trigger_snip(str(path))
+            trigger = client.trigger_snip(str(path), server_generated_token=True)
             input_type = "image"
         else:
-            trigger = client.trigger_url(input_path)
+            trigger = client.trigger_url(input_path, server_generated_token=True)
             input_type = "url"
 
         if trigger.get("status") != "success":
+            if input_type == "file" and trigger.get("error_type"):
+                trigger.setdefault("error_code", "UPLOAD_ERROR")
             save_stage_error(out, "trigger_error.json", trigger)
             raise RuntimeError(trigger.get("message") or trigger.get("description") or "trigger failed")
 

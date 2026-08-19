@@ -20,7 +20,8 @@ from uniparser_agent.parse.transport import (
 )
 
 
-PENDING_STATUSES = frozenset({"undefined", "waiting", "processing"})
+PENDING_STATUSES = frozenset({"waiting", "processing"})
+UNDEFINED_MAX_POLLS = 3
 IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"})
 
 

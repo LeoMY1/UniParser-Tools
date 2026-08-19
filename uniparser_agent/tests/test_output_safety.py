@@ -13,7 +13,7 @@ from uniparser_agent.pdf2vqa.pipeline import run_vqa_pipeline
 
 
 class _TriggerFailureClient:
-    def trigger_url(self, _url: str) -> dict[str, str]:
+    def trigger_url(self, _url: str, **_kwargs: object) -> dict[str, str]:
         return {"status": "error", "message": "trigger failed"}
 
 
