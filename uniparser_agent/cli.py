@@ -6,14 +6,10 @@ from typing import Any, Optional
 
 import typer
 
-from uniparser_agent.chemistry.config import default_db_path
-from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
 from uniparser_agent.chemistry.general_formula import write_general_formula_outputs
-from uniparser_agent.chemistry.jobspec import JobSpec
 from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
 from uniparser_agent.chemistry.patent_structure import BlockResolver, build_patent_structure, write_patent_structure
 from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
-from uniparser_agent.chemistry.store import ChemistryStore
 from uniparser_agent.llm import LLMConfig, resolve_llm_config
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 from uniparser_agent.pdf2translate.pipeline import run_translate_pipeline
@@ -27,25 +23,9 @@ from uniparser_agent.pdf2vqa.staging import (
 
 app = typer.Typer(
     name="uniparser-agent",
-    help="UniParser agent: chemistry library, exam VQA, and PDF translation.",
+    help="UniParser agent: CN chemistry patents, exam VQA, and PDF translation.",
     no_args_is_help=True,
 )
-
-
-def _missing_doc_message(doc_id: str, db_path: Path, store: ChemistryStore) -> str:
-    known = store.list_doc_ids()
-    lines = [
-        f"Document not found: {doc_id}",
-        f"Database used: {db_path}",
-        "If you passed --db when running ingest/run, pass the same --db to show/export (or set UNIPARSER_AGENT_DB).",
-    ]
-    if known:
-        preview = ", ".join(known[:20])
-        extra = f" … (+{len(known) - 20} more)" if len(known) > 20 else ""
-        lines.append(f"Documents in this database: {preview}{extra}")
-    else:
-        lines.append("This database has no documents yet.")
-    return "\n".join(lines)
 
 
 @app.command("parse")
@@ -229,13 +209,17 @@ def patent_general_formulas_cmd(
 @app.command("ingest")
 def ingest_cmd(
     pages_tree_path: str = typer.Argument(..., help="Path to pages_tree.json."),
-    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
-    db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
-    source: Optional[str] = typer.Option(None, "--source", help="Original source path or URL."),
-    skip_enrich: bool = typer.Option(
+    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Patent document identifier."),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "-o",
+        "--output-dir",
+        help="Artifact directory; defaults to the pages_tree.json directory.",
+    ),
+    skip_llm: bool = typer.Option(
         False,
-        "--skip-enrich",
-        help="Skip Strategy A LLM enrichment; store rule-joined fields only.",
+        "--skip-llm",
+        help="Build the Markush inventory/images/Excel without LLM text analysis.",
     ),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="LLM API key (overrides OPENAI_API_KEY).", envvar=[]),
     base_url: Optional[str] = typer.Option(None, "--base-url", help="LLM base URL (overrides OPENAI_BASE_URL)."),
@@ -247,10 +231,9 @@ def ingest_cmd(
     ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """Ingest molecule library from an existing pages_tree.json (Strategy A enrich)."""
-    jobspec = JobSpec(db_path=Path(db) if db else default_db_path())
+    """Create the supported V2 CN-patent artifacts from pages_tree.json."""
     llm_config = None
-    if not skip_enrich:
+    if not skip_llm:
         try:
             llm_config = resolve_llm_config(
                 api_key=api_key,
@@ -259,54 +242,34 @@ def ingest_cmd(
                 enable_thinking=enable_thinking,
             )
         except ValueError:
-            # Missing OPENAI_* → rule-only ingest (same as --skip-enrich)
-            skip_enrich = True
-    summary = ingest_pages_tree(
+            skip_llm = True
+    payload = ingest_pages_tree(
         pages_tree_path,
-        jobspec=jobspec,
         doc_id=doc_id,
-        source=source,
-        patent_output_dir=Path(pages_tree_path).expanduser().resolve().parent,
-        db_path=jobspec.db_path,
-        skip_enrich=skip_enrich,
+        output_dir=output_dir,
+        skip_llm=skip_llm,
         llm_config=llm_config,
     )
-    payload = {
-        "doc_id": summary.doc_id,
-        "db_path": str(jobspec.db_path),
-        "n_compounds": summary.n_compounds,
-        "n_unique_compounds": summary.n_unique_compounds,
-        "n_markush": summary.n_markush,
-        "n_invalid": summary.n_invalid,
-        "n_with_activities": summary.n_with_activities,
-        "n_enriched": summary.n_enriched,
-        "patent_structure_path": summary.patent_structure_path,
-        "patent_basic_info_path": summary.patent_basic_info_path,
-        "general_formula_analysis_path": summary.general_formula_analysis_path,
-        "general_formula_excel_path": summary.general_formula_excel_path,
-        "skip_enrich": skip_enrich,
-    }
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
         return
-    _print_summary(payload)
+    _print_patent_summary(payload)
 
 
 @app.command("run")
 def run_cmd(
     input_path: str = typer.Argument(..., help="Local PDF/image path or public PDF URL."),
-    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Document identifier."),
+    doc_id: Optional[str] = typer.Option(None, "--doc-id", help="Patent document identifier."),
     output_dir: Optional[str] = typer.Option(
         None,
         "-o",
         "--output-dir",
         help="Preferred parse output directory; a suffixed sibling is used if occupied.",
     ),
-    db: Optional[str] = typer.Option(None, "--db", help="SQLite database path."),
-    skip_enrich: bool = typer.Option(
+    skip_llm: bool = typer.Option(
         False,
-        "--skip-enrich",
-        help="Skip Strategy A LLM enrichment; store rule-joined fields only.",
+        "--skip-llm",
+        help="Build the Markush inventory/images/Excel without LLM text analysis.",
     ),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="LLM API key (overrides OPENAI_API_KEY).", envvar=[]),
     base_url: Optional[str] = typer.Option(None, "--base-url", help="LLM base URL (overrides OPENAI_BASE_URL)."),
@@ -318,10 +281,9 @@ def run_cmd(
     ),
     json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """Parse a document and ingest into the molecule library."""
-    jobspec = JobSpec(db_path=Path(db) if db else default_db_path())
+    """Parse a document and create the supported V2 CN-patent artifacts."""
     llm_config = None
-    if not skip_enrich:
+    if not skip_llm:
         try:
             llm_config = resolve_llm_config(
                 api_key=api_key,
@@ -330,77 +292,18 @@ def run_cmd(
                 enable_thinking=enable_thinking,
             )
         except ValueError:
-            skip_enrich = True
-    result = run_full_pipeline(
+            skip_llm = True
+    payload = run_full_pipeline(
         input_path,
-        jobspec=jobspec,
         doc_id=doc_id,
         output_dir=output_dir,
-        db_path=jobspec.db_path,
-        skip_enrich=skip_enrich,
+        skip_llm=skip_llm,
         llm_config=llm_config,
     )
-    summary = result["ingest"]
-    payload = {
-        "doc_id": summary.doc_id,
-        "db_path": result["db_path"],
-        "pages_tree_path": result["parse"]["pages_tree_path"],
-        "markdown_path": result["parse"]["markdown_path"],
-        "patent_structure_path": result["patent_structure_path"],
-        "patent_basic_info_path": result["patent_basic_info_path"],
-        "general_formula_analysis_path": result["general_formula_analysis_path"],
-        "general_formula_excel_path": result["general_formula_excel_path"],
-        "n_compounds": summary.n_compounds,
-        "n_unique_compounds": summary.n_unique_compounds,
-        "n_markush": summary.n_markush,
-        "n_invalid": summary.n_invalid,
-        "n_with_activities": summary.n_with_activities,
-        "n_enriched": summary.n_enriched,
-        "skip_enrich": skip_enrich,
-    }
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
         return
-    typer.echo(f"Pages tree: {payload['pages_tree_path']}")
-    typer.echo(f"Patent structure: {payload['patent_structure_path']}")
-    typer.echo(f"Patent basic information: {payload['patent_basic_info_path']}")
-    typer.echo(f"General formula analysis: {payload['general_formula_analysis_path']}")
-    typer.echo(f"General formula Excel: {payload['general_formula_excel_path']}")
-    typer.echo(f"Database: {payload['db_path']}")
-    _print_summary(payload)
-
-
-@app.command("show")
-def show_cmd(
-    doc_id: str = typer.Argument(..., help="Document identifier."),
-    db: Optional[str] = typer.Option(
-        None,
-        "--db",
-        help="SQLite database path (must match the --db used by run/ingest).",
-    ),
-    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
-) -> None:
-    """Show ingest statistics for a document."""
-    db_path = Path(db).expanduser().resolve() if db else default_db_path()
-    with ChemistryStore(db_path) as store:
-        try:
-            stats = store.get_document_stats(doc_id)
-        except KeyError:
-            typer.secho(_missing_doc_message(doc_id, db_path, store), fg=typer.colors.RED, err=True)
-            raise typer.Exit(code=1)
-    if json_output:
-        typer.echo(json.dumps(stats, ensure_ascii=False, indent=2))
-        return
-    typer.echo(f"Database: {db_path}")
-    typer.echo(f"doc_id: {stats['doc_id']}")
-    typer.echo(f"source: {stats['source']}")
-    typer.echo(f"parsed_at: {stats['parsed_at']}")
-    typer.echo(f"compounds: {stats['compounds']}")
-    typer.echo(f"unique_compounds: {stats['unique_compounds']}")
-    typer.echo(f"invalid: {stats['invalid']}")
-    typer.echo(f"markush: {stats['markush']}")
-    typer.echo(f"with_activities: {stats['with_activities']}")
-    typer.echo(f"enriched: {stats['enriched']}")
+    _print_patent_summary(payload)
 
 
 def _validate_vqa_source_options(
@@ -706,66 +609,6 @@ def translate_cmd(
         typer.echo(f"Layout debug: {paths['layout_debug_pdf']}")
 
 
-@app.command("export")
-def export_cmd(
-    doc_id: Optional[str] = typer.Argument(None, help="Document identifier. Omit when using --all."),
-    out: Optional[str] = typer.Option(None, "--out", help="Export directory."),
-    db: Optional[str] = typer.Option(
-        None,
-        "--db",
-        help="SQLite database path (must match the --db used by run/ingest).",
-    ),
-    all_docs: bool = typer.Option(False, "--all", help="Export the full library across all documents."),
-    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
-) -> None:
-    """Export library data to CSV (one document or the full library)."""
-    if all_docs and doc_id:
-        raise typer.BadParameter("Use either DOC_ID or --all, not both.")
-    if not all_docs and not doc_id:
-        raise typer.BadParameter("Provide DOC_ID or pass --all to export the full library.")
-
-    db_path = Path(db).expanduser().resolve() if db else default_db_path()
-    with ChemistryStore(db_path) as store:
-        if all_docs:
-            out_dir = Path(out).expanduser().resolve() if out else Path.cwd() / "exports" / "library"
-            paths = export_library_csv(store, out_dir)
-            payload: dict[str, Any] = {
-                "mode": "library",
-                "db_path": str(db_path),
-                "out_dir": str(out_dir),
-                "stats": store.get_library_stats(),
-                "files": paths,
-            }
-        else:
-            assert doc_id is not None
-            if doc_id not in store.list_doc_ids():
-                typer.secho(_missing_doc_message(doc_id, db_path, store), fg=typer.colors.RED, err=True)
-                raise typer.Exit(code=1)
-            out_dir = Path(out).expanduser().resolve() if out else Path.cwd() / "exports" / doc_id
-            paths = export_doc_csv(store, doc_id, out_dir)
-            payload = {
-                "mode": "document",
-                "doc_id": doc_id,
-                "db_path": str(db_path),
-                "out_dir": str(out_dir),
-                "files": paths,
-            }
-
-    if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-        return
-
-    if all_docs:
-        stats = payload["stats"]
-        typer.echo(f"Database: {payload['db_path']}")
-        typer.echo(f"documents: {stats['documents']}")
-        typer.echo(f"compounds: {stats['compounds']}")
-    else:
-        typer.echo(f"Database: {payload['db_path']}")
-    for name, path in paths.items():
-        typer.echo(f"{name}: {path}")
-
-
 def _build_llm_config(
     *,
     api_key: Optional[str],
@@ -786,18 +629,22 @@ def _build_llm_config(
         raise typer.BadParameter(str(exc)) from exc
 
 
-def _print_summary(payload: dict) -> None:
+def _print_patent_summary(payload: dict[str, Any]) -> None:
     typer.echo(f"doc_id: {payload['doc_id']}")
-    typer.echo(f"compounds: {payload['n_compounds']}")
-    typer.echo(f"unique_compounds: {payload['n_unique_compounds']}")
-    typer.echo(f"markush: {payload['n_markush']}")
-    typer.echo(f"invalid: {payload['n_invalid']}")
-    if "n_with_activities" in payload:
-        typer.echo(f"with_activities: {payload['n_with_activities']}")
-    if "n_enriched" in payload:
-        typer.echo(f"enriched: {payload['n_enriched']}")
-    if "skip_enrich" in payload:
-        typer.echo(f"skip_enrich: {payload['skip_enrich']}")
+    typer.echo(f"Pages tree: {payload['pages_tree_path']}")
+    if payload.get("markdown_path"):
+        typer.echo(f"Markdown: {payload['markdown_path']}")
+    typer.echo(f"Patent structure: {payload['patent_structure_path']}")
+    typer.echo(f"Patent basic information: {payload['patent_basic_info_path']}")
+    typer.echo(f"General formula analysis: {payload['general_formula_analysis_path']}")
+    typer.echo(f"General formula Excel: {payload['general_formula_excel_path']}")
+    typer.echo(
+        "General formulas: "
+        f"{payload['formula_count']}; occurrences: {payload['formula_occurrence_count']}; "
+        f"images: {payload['formula_image_count']}; chunks: {payload['formula_context_chunk_count']}; "
+        f"LLM calls: {payload['formula_llm_call_count']}"
+    )
+    typer.echo(f"skip_llm: {payload['skip_llm']}")
 
 
 def main() -> None:

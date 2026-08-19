@@ -1,96 +1,140 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+from typer.main import get_command
 
-from uniparser_agent.chemistry.export_csv import export_doc_csv, export_library_csv
-from uniparser_agent.chemistry.jobspec import JobSpec
-from uniparser_agent.chemistry.pipeline import ingest_pages_tree
-from uniparser_agent.chemistry.store import ChemistryStore
-
-
-FIXTURE = Path(__file__).parent / "fixtures" / "minimal_pages_tree.json"
-CATALOG_FIXTURE = Path(__file__).parent / "fixtures" / "chemistry_catalog_pages_tree.json"
+from uniparser_agent.chemistry.pipeline import ingest_pages_tree, run_full_pipeline
+from uniparser_agent.cli import app
 
 
-@pytest.fixture()
-def db_path(tmp_path: Path) -> Path:
-    return tmp_path / "test.db"
+def _block(block_type: str, text: str = "", **extra: object) -> dict:
+    return {
+        "type": block_type,
+        "text": text,
+        "block": extra.pop("block", 1),
+        **extra,
+    }
 
 
-def test_ingest_compounds(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec(db_path=db_path)
-    structure_dir = tmp_path / "structure"
-    summary = ingest_pages_tree(
-        CATALOG_FIXTURE,
-        jobspec=jobspec,
-        doc_id="fixture-doc",
-        source=str(CATALOG_FIXTURE),
-        db_path=db_path,
-        patent_output_dir=structure_dir,
-        skip_enrich=True,
+def _write_cn_pages_tree(path: Path) -> Path:
+    document = {
+        "filename": "CN123456789A.pdf",
+        "pages_tree": [
+            [
+                _block("documenttitle", "CN 123456789 A", block=1),
+                _block("keyvalue", "(54)发明名称测试化合物", block=2),
+                _block("keyvalue", "(57)摘要\n测试摘要。", block=3),
+            ],
+            [
+                _block("pageheader", "权利要求书", block=4),
+                _block("paragraph", "1. 一种式I化合物。", block=5),
+            ],
+            [
+                _block("pageheader", "说明书", block=6),
+                _block("title", "发明内容", block=7),
+                _block("paragraph", "本发明提供式(I)化合物，其中R为烷基。", block=8),
+                _block(
+                    "molecule",
+                    "",
+                    block=9,
+                    order=3,
+                    smi="*c1ccccc1",
+                    markush=True,
+                    conf=0.99,
+                ),
+                _block("title", "具体实施方式", block=10),
+                _block("paragraph", "以下结合实施例进一步说明。", block=11),
+            ],
+        ],
+    }
+    path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_ingest_pages_tree_writes_only_v2_patent_artifacts(tmp_path: Path) -> None:
+    pages_tree_path = _write_cn_pages_tree(tmp_path / "pages_tree.json")
+    output_dir = tmp_path / "artifacts"
+
+    result = ingest_pages_tree(
+        pages_tree_path,
+        doc_id="CN123456789A",
+        output_dir=output_dir,
+        skip_llm=True,
     )
-    assert summary.doc_id == "fixture-doc"
-    assert summary.n_compounds >= 2
-    assert Path(summary.patent_structure_path) == structure_dir / "patent_structure.json"
-    assert Path(summary.patent_structure_path).exists()
-    assert Path(summary.patent_basic_info_path) == structure_dir / "patent_basic_info.json"
-    assert Path(summary.patent_basic_info_path).exists()
-    assert Path(summary.general_formula_analysis_path) == structure_dir / "general_formula_analysis.json"
-    assert Path(summary.general_formula_analysis_path).exists()
-    assert Path(summary.general_formula_excel_path) == structure_dir / "general_formula_analysis.xlsx"
-    assert Path(summary.general_formula_excel_path).exists()
-    with ChemistryStore(db_path) as store:
-        stats = store.get_document_stats("fixture-doc")
-        assert stats["compounds"] == summary.n_compounds
+
+    assert result["doc_id"] == "CN123456789A"
+    assert result["formula_count"] == 1
+    assert result["formula_occurrence_count"] == 1
+    assert result["formula_llm_call_count"] == 0
+    for key in (
+        "patent_structure_path",
+        "patent_basic_info_path",
+        "general_formula_inventory_path",
+        "general_formula_context_chunks_path",
+        "general_formula_analysis_path",
+        "general_formula_excel_path",
+        "general_formula_summary_path",
+    ):
+        assert Path(result[key]).is_file()
+
+    structure = json.loads(Path(result["patent_structure_path"]).read_text(encoding="utf-8"))
+    assert structure["schema_version"] == "2.1"
+    assert [node["node_id"] for node in structure["tree"]["children"]] == [
+        "front_matter",
+        "claims",
+        "description",
+    ]
+    assert not list(tmp_path.rglob("*.db"))
+    assert not list(tmp_path.rglob("*.csv"))
 
 
-def test_export_csv(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec(db_path=db_path)
-    ingest_pages_tree(
-        CATALOG_FIXTURE,
-        jobspec=jobspec,
-        doc_id="fixture-doc",
-        source=str(CATALOG_FIXTURE),
-        db_path=db_path,
-        skip_enrich=True,
+def test_run_full_pipeline_parses_then_uses_new_chain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parse_dir = tmp_path / "parsed"
+    parse_dir.mkdir()
+    pages_tree_path = _write_cn_pages_tree(parse_dir / "pages_tree.json")
+
+    def fake_parse_document(input_path: str, *, output_dir: str | None = None) -> dict:
+        assert input_path == "patent.pdf"
+        assert output_dir == str(parse_dir)
+        return {
+            "source_stem": "patent",
+            "output_dir": str(parse_dir),
+            "pages_tree_path": str(pages_tree_path),
+            "markdown_path": str(parse_dir / "patent.md"),
+            "token": "token",
+            "input_type": "file",
+        }
+
+    monkeypatch.setattr(
+        "uniparser_agent.chemistry.pipeline.parse_document",
+        fake_parse_document,
     )
-    with ChemistryStore(db_path) as store:
-        paths = export_doc_csv(store, "fixture-doc", tmp_path / "out")
-    assert Path(paths["compounds"]).exists()
-    assert Path(paths["documents"]).exists()
-    assert "reactions" not in paths
+
+    result = run_full_pipeline(
+        "patent.pdf",
+        doc_id="CN123456789A",
+        output_dir=str(parse_dir),
+        skip_llm=True,
+    )
+
+    assert result["pages_tree_path"] == str(pages_tree_path)
+    assert result["markdown_path"] == str(parse_dir / "patent.md")
+    assert result["formula_count"] == 1
+    assert result["skip_llm"] is True
 
 
-def test_export_library_csv(db_path: Path, tmp_path: Path) -> None:
-    jobspec = JobSpec(db_path=db_path)
-    for doc_id in ("doc-a", "doc-b"):
-        ingest_pages_tree(
-            CATALOG_FIXTURE,
-            jobspec=jobspec,
-            doc_id=doc_id,
-            source=str(CATALOG_FIXTURE),
-            db_path=db_path,
-            skip_enrich=True,
-        )
-    with ChemistryStore(db_path) as store:
-        stats = store.get_library_stats()
-        assert stats["documents"] == 2
-        expected_compounds = stats["compounds"]
-        paths = export_library_csv(store, tmp_path / "library")
+def test_cli_does_not_expose_legacy_chemistry_chain() -> None:
+    command = get_command(app)
+    assert command.commands is not None
+    assert {"show", "export"}.isdisjoint(command.commands)
 
-    assert Path(paths["documents"]).exists()
-    assert Path(paths["compounds"]).exists()
-    assert set(paths.keys()) == {"documents", "compounds"}
-
-    import csv
-
-    with (tmp_path / "library" / "compounds.csv").open(encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
-    assert len(rows) == expected_compounds
-    assert {"doc_id", "role", "semantic_summary", "activities_json", "enrich_json"} <= set(rows[0])
-    # Full-library export preserves the document-level row from each document.
-    ethanol = [r for r in rows if r.get("canonical_smiles") == "CCO" or r.get("smi") == "CCO"]
-    assert len(ethanol) == 2
-    assert {r["doc_id"] for r in ethanol} == {"doc-a", "doc-b"}
+    ingest = command.commands["ingest"]
+    parameter_names = {parameter.name for parameter in ingest.params}
+    assert "skip_llm" in parameter_names
+    assert {"db", "skip_enrich"}.isdisjoint(parameter_names)

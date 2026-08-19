@@ -1,20 +1,17 @@
+"""CN chemistry-patent extraction pipeline built on semantic navigation."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from uniparser_agent.chemistry.config import default_db_path
-from uniparser_agent.chemistry.enrich import enrich_compounds
 from uniparser_agent.chemistry.general_formula import write_general_formula_outputs
-from uniparser_agent.chemistry.jobspec import JobSpec
-from uniparser_agent.chemistry.join import build_logical_compounds
 from uniparser_agent.chemistry.patent_basic_info import write_patent_basic_info
 from uniparser_agent.chemistry.patent_structure import (
     BlockResolver,
     build_patent_structure,
     write_patent_structure_payload,
 )
-from uniparser_agent.chemistry.store import ChemistryStore, IngestSummary
 from uniparser_agent.llm import LLMConfig
 from uniparser_agent.parse.service import load_pages_tree, parse_document
 
@@ -23,121 +20,101 @@ def _resolve_doc_id(doc_id: str | None, fallback: str) -> str:
     return (doc_id or fallback).strip() or fallback
 
 
+def _write_patent_artifacts(
+    pages_tree_doc: dict[str, Any],
+    *,
+    doc_id: str,
+    output_dir: Path,
+    llm_config: LLMConfig | None,
+    skip_llm: bool,
+) -> dict[str, Any]:
+    """Build every currently supported V2 patent artifact from one pages tree."""
+    patent_structure = build_patent_structure(pages_tree_doc, doc_id)
+    resolver = BlockResolver(pages_tree_doc, patent_structure)
+    patent_structure_path = write_patent_structure_payload(
+        patent_structure,
+        output_dir / "patent_structure.json",
+    )
+    patent_basic_info_path = write_patent_basic_info(
+        resolver,
+        doc_id,
+        output_dir / "patent_basic_info.json",
+    )
+    formulas = write_general_formula_outputs(
+        resolver,
+        doc_id,
+        output_dir,
+        llm_config=llm_config,
+        skip_llm=skip_llm,
+    )
+    return {
+        "doc_id": doc_id,
+        "patent_format": "CN",
+        "output_dir": str(output_dir),
+        "patent_structure_path": str(patent_structure_path),
+        "patent_basic_info_path": str(patent_basic_info_path),
+        "general_formula_inventory_path": str(formulas.inventory_path),
+        "general_formula_context_chunks_path": str(formulas.context_chunks_path),
+        "general_formula_analysis_path": str(formulas.analysis_path),
+        "general_formula_excel_path": str(formulas.excel_path),
+        "general_formula_summary_path": str(formulas.summary_path),
+        "formula_count": formulas.formula_count,
+        "formula_occurrence_count": formulas.occurrence_count,
+        "formula_image_count": formulas.image_count,
+        "formula_context_chunk_count": formulas.chunk_count,
+        "formula_llm_call_count": formulas.llm_call_count,
+        "skip_llm": skip_llm,
+    }
+
+
 def ingest_pages_tree(
     pages_tree_path: str | Path,
     *,
-    jobspec: JobSpec,
     doc_id: str | None = None,
-    source: str | None = None,
-    markdown_path: str | None = None,
-    output_dir: str | None = None,
-    patent_output_dir: str | Path | None = None,
-    token: str = "",
-    db_path: Path | None = None,
-    skip_enrich: bool = False,
+    output_dir: str | Path | None = None,
+    skip_llm: bool = False,
     llm_config: LLMConfig | None = None,
-) -> IngestSummary:
+) -> dict[str, Any]:
+    """Create V2 CN-patent artifacts from an existing `pages_tree.json`."""
     path = Path(pages_tree_path).expanduser().resolve()
     pages_tree_doc = load_pages_tree(path)
     resolved_doc_id = _resolve_doc_id(doc_id, path.parent.name)
-    jobspec.doc_id = resolved_doc_id
-    jobspec.source = source or str(path)
-    jobspec.db_path = db_path or jobspec.db_path or default_db_path()
-
-    patent_structure_path = ""
-    patent_basic_info_path = ""
-    general_formula_analysis_path = ""
-    general_formula_excel_path = ""
-    if patent_output_dir is not None:
-        artifact_dir = Path(patent_output_dir).expanduser().resolve()
-        patent_structure = build_patent_structure(pages_tree_doc, resolved_doc_id)
-        resolver = BlockResolver(pages_tree_doc, patent_structure)
-        patent_structure_path = str(
-            write_patent_structure_payload(
-                patent_structure,
-                artifact_dir / "patent_structure.json",
-            )
-        )
-        patent_basic_info_path = str(
-            write_patent_basic_info(
-                resolver,
-                resolved_doc_id,
-                artifact_dir / "patent_basic_info.json",
-            )
-        )
-        general_formula_outputs = write_general_formula_outputs(
-            resolver,
-            resolved_doc_id,
-            artifact_dir,
-            llm_config=llm_config,
-            skip_llm=llm_config is None,
-        )
-        general_formula_analysis_path = str(general_formula_outputs.analysis_path)
-        general_formula_excel_path = str(general_formula_outputs.excel_path)
-
-    compounds = build_logical_compounds(pages_tree_doc, resolved_doc_id)
-    compounds = enrich_compounds(
-        resolved_doc_id,
-        compounds,
-        pages_tree_doc=pages_tree_doc,
+    target_dir = Path(output_dir).expanduser().resolve() if output_dir else path.parent
+    result = _write_patent_artifacts(
+        pages_tree_doc,
+        doc_id=resolved_doc_id,
+        output_dir=target_dir,
         llm_config=llm_config,
-        skip_enrich=skip_enrich,
+        skip_llm=skip_llm,
     )
-
-    with ChemistryStore(jobspec.db_path) as store:
-        summary = store.ingest_compounds(
-            doc_id=resolved_doc_id,
-            source=jobspec.source,
-            pages_tree_path=str(path),
-            markdown_path=markdown_path,
-            output_dir=output_dir,
-            token=token,
-            jobspec=jobspec,
-            compounds=compounds,
-        )
-    summary.patent_structure_path = patent_structure_path
-    summary.patent_basic_info_path = patent_basic_info_path
-    summary.general_formula_analysis_path = general_formula_analysis_path
-    summary.general_formula_excel_path = general_formula_excel_path
-    return summary
+    result["pages_tree_path"] = str(path)
+    return result
 
 
 def run_full_pipeline(
     input_path: str,
     *,
-    jobspec: JobSpec,
     doc_id: str | None = None,
     output_dir: str | None = None,
-    db_path: Path | None = None,
-    skip_enrich: bool = False,
+    skip_llm: bool = False,
     llm_config: LLMConfig | None = None,
 ) -> dict[str, Any]:
+    """Parse a document, then create only the supported V2 patent artifacts."""
     parse_result = parse_document(input_path, output_dir=output_dir)
     resolved_doc_id = _resolve_doc_id(doc_id, parse_result["source_stem"])
-    jobspec.doc_id = resolved_doc_id
-    jobspec.source = input_path
-    jobspec.output_dir = Path(parse_result["output_dir"])
-    jobspec.db_path = db_path or jobspec.db_path or default_db_path()
-
-    summary = ingest_pages_tree(
+    result = ingest_pages_tree(
         parse_result["pages_tree_path"],
-        jobspec=jobspec,
         doc_id=resolved_doc_id,
-        source=input_path,
-        markdown_path=parse_result.get("markdown_path"),
-        output_dir=parse_result.get("output_dir"),
-        patent_output_dir=parse_result.get("output_dir"),
-        token=parse_result.get("token", ""),
-        db_path=jobspec.db_path,
-        skip_enrich=skip_enrich,
+        output_dir=parse_result["output_dir"],
+        skip_llm=skip_llm,
         llm_config=llm_config,
     )
-    return {
-        "parse": parse_result,
-        "ingest": summary,
-        "db_path": str(jobspec.db_path),
-        "patent_structure_path": summary.patent_structure_path,
-        "patent_basic_info_path": summary.patent_basic_info_path,
-        "general_formula_analysis_path": summary.general_formula_analysis_path,
-        "general_formula_excel_path": summary.general_formula_excel_path,
-    }
+    result.update(
+        {
+            "markdown_path": parse_result.get("markdown_path", ""),
+            "token": parse_result.get("token", ""),
+            "input_type": parse_result.get("input_type", ""),
+            "source": input_path,
+        }
+    )
+    return result
