@@ -14,16 +14,12 @@ def input_error(message: str) -> ErrorResult:
 
 
 def _operation_error(code: str, stage: str, result: dict) -> ErrorResult:
-    candidate_token = result.get("candidate_token")
     return ErrorResult(
         error=ErrorDetail(
             code=code,
             message=result.get("description") or result.get("message") or str(result),
             stage=stage,
-        ),
-        recoverable_token=result.get("recoverable_token"),
-        candidate_token=candidate_token,
-        candidate_token_recoverable=False if candidate_token else None,
+        )
     )
 
 

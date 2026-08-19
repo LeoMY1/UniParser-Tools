@@ -65,7 +65,6 @@ class UniParserHTTPTransport:
         expect_json: bool = True,
         error_message: str = "request failed",
         token: Optional[str] = None,
-        candidate_token: Optional[str] = None,
         **kwargs,
     ) -> Any:
         headers = dict(kwargs.pop("headers", {}) or {})
@@ -90,9 +89,6 @@ class UniParserHTTPTransport:
             }
             if token is not None:
                 payload["token"] = token
-            if candidate_token is not None:
-                payload["candidate_token"] = candidate_token
-                payload["candidate_token_recoverable"] = False
             return payload
 
         try:
@@ -114,9 +110,6 @@ class UniParserHTTPTransport:
             result["http_status"] = response.status_code
             if token is not None:
                 result.setdefault("token", token)
-            if candidate_token is not None:
-                result.setdefault("candidate_token", candidate_token)
-                result.setdefault("candidate_token_recoverable", False)
             return result
 
         if not expect_json:
@@ -124,10 +117,6 @@ class UniParserHTTPTransport:
                 "status": "success",
                 "http_status": response.status_code,
             }
-
-        if isinstance(payload, dict) and payload.get("status") == StatusFlag.Error and candidate_token is not None:
-            payload.setdefault("candidate_token", candidate_token)
-            payload.setdefault("candidate_token_recoverable", False)
 
         if payload is not None:
             return payload
@@ -140,9 +129,6 @@ class UniParserHTTPTransport:
         }
         if token is not None:
             result["token"] = token
-        if candidate_token is not None:
-            result["candidate_token"] = candidate_token
-            result["candidate_token_recoverable"] = False
         return result
 
     def close(self) -> None:

@@ -29,8 +29,8 @@ token；同步请求使用 `(60, 1860)`，异步请求使用 `(60, 60)`，只有
 健康检查、版本查询、按 token 手动恢复请使用 CLI：`uniparser health`、`uniparser version`、`uniparser fetch`。
 
 失败返回的 `error.code` 可能为 `CONFIG_ERROR`、`INPUT_ERROR`、`UPLOAD_ERROR`、`PARSE_ERROR` 或
-`TOKEN_NOT_FOUND`。重复任务只会在服务端确认 token 存在后内部恢复；未经确认的 `candidate_token`
-仅供诊断，不能交给 `uniparser fetch`。`undefined` 最多检查三次，不会持续等待 1800 秒。
+`TOKEN_NOT_FOUND`。触发失败不会返回任务 token，也不会进入恢复流程；`undefined` 最多检查三次，
+不会持续等待 1800 秒。
 
 ## 环境变量
 

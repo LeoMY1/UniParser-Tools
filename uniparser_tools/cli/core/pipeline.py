@@ -122,41 +122,6 @@ def save_stage_error(out_dir: Path, filename: str, payload: dict) -> None:
     (out_dir / filename).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def annotate_recoverable_duplicate(client, trigger: dict) -> dict:
-    diagnostic = " ".join(str(trigger.get(key, "")) for key in ("message", "description")).casefold()
-    if "duplicat" not in diagnostic:
-        return trigger
-
-    candidate = trigger.get("token") or trigger.get("candidate_token")
-    if not candidate:
-        return trigger
-
-    status = None
-    for attempt in range(UNDEFINED_MAX_POLLS):
-        probe = client.get_result(
-            candidate,
-            content=False,
-            objects=False,
-            pages_dict=False,
-            pages_tree=False,
-        )
-        status = probe.get("status") if isinstance(probe, dict) else None
-        if status != "undefined" or attempt == UNDEFINED_MAX_POLLS - 1:
-            break
-        time.sleep(POLL_INTERVAL_SEC)
-    trigger["token_status"] = status
-    if status == "success" or status in PENDING_STATUSES:
-        trigger["recoverable_token"] = candidate
-        trigger.pop("candidate_token", None)
-        trigger.pop("candidate_token_recoverable", None)
-        return trigger
-
-    trigger.pop("token", None)
-    trigger["candidate_token"] = candidate
-    trigger["candidate_token_recoverable"] = False
-    return trigger
-
-
 def complete_fetch(
     client,
     token: str,
@@ -198,7 +163,7 @@ def run_parse(
     print_parsing_status(display_label_for_input(resolved))
     trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
-        trigger = annotate_recoverable_duplicate(client, trigger)
+        trigger.pop("token", None)
         save_stage_error(out_dir, "trigger_error.json", trigger)
         if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)

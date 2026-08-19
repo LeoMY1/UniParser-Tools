@@ -237,7 +237,7 @@ class TestParseCommand:
         assert call_kwargs["molecule"] is ParseMode.Disable
         assert call_kwargs["table"] is ParseMode.OCRHighQuality
 
-    def test_parse_transport_failure_does_not_write_recoverable_token(
+    def test_parse_transport_failure_does_not_write_task_token(
         self,
         runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
@@ -249,6 +249,7 @@ class TestParseCommand:
         mock_client = MagicMock()
         mock_client.trigger_file.return_value = {
             "status": "error",
+            "token": "must-not-leak",
             "description": "The write operation timed out",
             "error_type": "WriteTimeout",
         }
@@ -265,11 +266,11 @@ class TestParseCommand:
         payload = json.loads(result.stderr.strip().splitlines()[-1])
         assert payload["error"]["code"] == "UPLOAD_ERROR"
         assert payload["error"]["stage"] == "trigger_file"
-        assert "candidate_token" not in payload
-        assert "recoverable_token" not in payload
+        assert "token" not in payload
         assert not (out / "trigger_meta.json").exists()
         saved_error = json.loads((out / "trigger_error.json").read_text(encoding="utf-8"))
         assert saved_error["error_type"] == "WriteTimeout"
+        assert "token" not in saved_error
 
     def test_parse_direct_upload_failure_uses_upload_error(
         self,

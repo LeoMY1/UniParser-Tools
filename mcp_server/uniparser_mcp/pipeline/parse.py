@@ -10,9 +10,6 @@ from mcp.server.fastmcp import Context
 from uniparser_mcp.defaults import (
     DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT,
     DIRECT_UPLOAD_REQUEST_TIMEOUT,
-    PENDING_STATUSES,
-    POLL_INTERVAL_SEC,
-    UNDEFINED_MAX_POLLS,
 )
 from uniparser_mcp.errors import input_error, parse_error, upload_error
 from uniparser_mcp.input import InputKind, ResolvedInput, display_label, resolve_request
@@ -76,44 +73,6 @@ async def _trigger_input(
         **trigger_kwargs,
     )
     return trigger, "trigger_url"
-
-
-async def _annotate_recoverable_duplicate(client: UniParserClient, trigger: dict[str, Any]) -> dict[str, Any]:
-    diagnostic = " ".join(str(trigger.get(key, "")) for key in ("message", "description")).casefold()
-    if "duplicat" not in diagnostic:
-        return trigger
-
-    candidate = trigger.get("token") or trigger.get("candidate_token")
-    if not candidate:
-        return trigger
-
-    status = None
-    for attempt in range(UNDEFINED_MAX_POLLS):
-        probe = await asyncio.to_thread(
-            client.get_result,
-            candidate,
-            content=False,
-            objects=False,
-            pages_dict=False,
-            pages_tree=False,
-        )
-        status = probe.get("status") if isinstance(probe, dict) else None
-        if status != "undefined" or attempt == UNDEFINED_MAX_POLLS - 1:
-            break
-        await asyncio.sleep(POLL_INTERVAL_SEC)
-
-    trigger["token_status"] = status
-    if status == "success" or status in PENDING_STATUSES:
-        trigger["recoverable_token"] = candidate
-        trigger.pop("token", None)
-        trigger.pop("candidate_token", None)
-        trigger.pop("candidate_token_recoverable", None)
-        return trigger
-
-    trigger.pop("token", None)
-    trigger["candidate_token"] = candidate
-    trigger["candidate_token_recoverable"] = False
-    return trigger
 
 
 async def _fetch_pages_tree(client: UniParserClient, token: str) -> dict[str, Any]:
@@ -205,18 +164,7 @@ async def run_parse(client: UniParserClient, req: ParseRequest, ctx: Context | N
     trigger, stage = await _trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
 
     if trigger.get("status") != "success":
-        trigger = await _annotate_recoverable_duplicate(client, trigger)
-        recoverable_token = trigger.get("recoverable_token")
-        if recoverable_token:
-            return await _complete_by_token(
-                client,
-                recoverable_token,
-                resolved=resolved,
-                out_dir=out_dir,
-                ctx=ctx,
-                write_trigger_meta_file=False,
-            )
-
+        trigger.pop("token", None)
         save_stage_error(out_dir, "trigger_error.json", trigger)
         if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)

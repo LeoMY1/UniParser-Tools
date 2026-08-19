@@ -5,11 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from uniparser_tools.cli.core.input import InputKind, ResolvedInput
-from uniparser_tools.cli.core.pipeline import (
-    annotate_recoverable_duplicate,
-    poll_until_success,
-    trigger_input,
-)
+from uniparser_tools.cli.core.pipeline import poll_until_success, trigger_input
 
 
 def _local_pdf(path: Path) -> ResolvedInput:
@@ -57,43 +53,6 @@ def test_async_local_pdf_uses_direct_upload_timeout(tmp_path: Path) -> None:
         sync=False,
     )
     client.trigger_url.assert_not_called()
-
-
-def test_duplicate_candidate_becomes_recoverable_only_when_confirmed() -> None:
-    client = MagicMock()
-    client.get_result.return_value = {"status": "waiting"}
-    trigger = {
-        "status": "error",
-        "description": "Token is duplicated",
-        "candidate_token": "candidate",
-        "candidate_token_recoverable": False,
-    }
-
-    result = annotate_recoverable_duplicate(client, trigger)
-
-    assert result["recoverable_token"] == "candidate"
-    assert "candidate_token" not in result
-    assert result["token_status"] == "waiting"
-
-
-def test_duplicate_candidate_stays_unrecoverable_when_undefined(monkeypatch) -> None:
-    client = MagicMock()
-    client.get_result.return_value = {"status": "undefined"}
-    monkeypatch.setattr("uniparser_tools.cli.core.pipeline.time.sleep", lambda _: None)
-    trigger = {
-        "status": "error",
-        "description": "Token is duplicated",
-        "token": "candidate",
-    }
-
-    result = annotate_recoverable_duplicate(client, trigger)
-
-    assert "recoverable_token" not in result
-    assert "token" not in result
-    assert result["candidate_token"] == "candidate"
-    assert result["candidate_token_recoverable"] is False
-    assert result["token_status"] == "undefined"
-    assert client.get_result.call_count == 3
 
 
 def test_undefined_token_stops_after_bounded_checks(monkeypatch, capsys) -> None:

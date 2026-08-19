@@ -343,7 +343,7 @@ uniparser parse paper.pdf -o ./out/paper
 uniparser fetch --token YOUR_TOKEN
 ```
 
-token 可在成功 `parse` 的 JSON 输出或 `trigger_meta.json` 中找到。失败输出只有明确标记为 `recoverable_token` 的值才能用于 `fetch`；`candidate_token` 只是本地候选值，禁止用于恢复。
+token 只能从成功 `parse` 的 JSON 输出或 `trigger_meta.json` 中获取。失败的触发请求不会提供可用于恢复的 token。
 
 | 选项 | 说明 |
 |------|------|
@@ -435,10 +435,7 @@ Parsing... report.pdf
 uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['markdown_path'])"
 ```
 
-失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。失败 JSON 可能包含：
-
-- `recoverable_token`：服务端已确认存在，可用于 `fetch`。
-- `candidate_token`：服务端未确认，仅供诊断，不能用于 `fetch`。
+失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。触发失败时不会输出任务 token。
 
 ---
 
@@ -466,15 +463,11 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 **提示 `UPLOAD_ERROR` / write timeout**
 
-本次直传没有确认创建解析任务，可以重新执行 `parse`。错误中的 `candidate_token` 不能交给 `fetch`。
+本次直传没有成功返回服务端任务 token，不能执行 `fetch`，可以重新运行 `parse`。
 
 **提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
 
-CLI 会在三次检查后停止，不会继续等待 1800 秒。若该值来自 `candidate_token`，请重新执行 `parse`；若来自历史 `trigger_meta.json`，请确认任务结果是否仍在 24 小时保留期内。
-
-**提示 `Token is duplicated`**
-
-只有失败 JSON 含 `recoverable_token` 时才运行 `uniparser fetch --token RECOVERABLE_TOKEN`。没有该字段时不要尝试恢复。
+CLI 会在三次检查后停止，不会继续等待 1800 秒。请确认 token 来自成功输出或 `trigger_meta.json`，并检查任务结果是否仍在 24 小时保留期内。
 
 ---
 

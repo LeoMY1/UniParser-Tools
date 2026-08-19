@@ -40,11 +40,6 @@ def _operation_error(code: str, stage: str, result: dict) -> int:
             "stage": stage,
         },
     }
-    if result.get("recoverable_token"):
-        payload["recoverable_token"] = result["recoverable_token"]
-    if result.get("candidate_token"):
-        payload["candidate_token"] = result["candidate_token"]
-        payload["candidate_token_recoverable"] = False
     emit_json_stderr(payload)
     return 1
 

@@ -55,15 +55,17 @@ def test_customer_docs_include_result_retention_notice() -> None:
     assert "retained for only **24 hours**" in notes
 
 
-def test_skill_only_recovers_service_confirmed_tokens() -> None:
+def test_skill_only_uses_tokens_from_successful_triggers() -> None:
     skill = (REPO_ROOT / "skills" / "UniParser-Tools" / "SKILL.md").read_text(encoding="utf-8")
     notes = (REPO_ROOT / "skills" / "UniParser-Tools" / "references" / "notes.md").read_text(encoding="utf-8")
 
-    assert "recoverable_token" in skill
-    assert "candidate_token" in skill
-    assert "Never pass `candidate_token` to `fetch`" in skill
+    assert "A failed trigger does not provide a task token" in skill
+    assert "Save `token` only from success JSON or `trigger_meta.json`" in skill
+    assert "candidate_token" not in skill
+    assert "recoverable_token" not in skill
     assert "the `token` field in a failed parse stderr JSON" not in skill
     assert "--upload-mode" not in skill
     assert "TOS" not in skill
-    assert '"candidate_token": "abc123..."' in notes
-    assert '"candidate_token_recoverable": False' in notes
+    assert "only persist the `token` from a successful trigger response" in notes
+    assert "candidate_token" not in notes
+    assert "recoverable_token" not in notes

@@ -90,9 +90,6 @@ class ParseSuccess(BaseModel):
 class ErrorResult(BaseModel):
     ok: Literal[False] = False
     error: ErrorDetail
-    recoverable_token: str | None = None
-    candidate_token: str | None = None
-    candidate_token_recoverable: Literal[False] | None = None
     unrecognized_token: str | None = None
 
 
