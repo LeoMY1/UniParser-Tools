@@ -17,7 +17,7 @@ def test_undefined_token_stops_after_bounded_checks(monkeypatch: pytest.MonkeyPa
 
     assert result.ok is False
     assert result.error.code == "TOKEN_NOT_FOUND"
-    assert result.unrecognized_token == "missing-token"
+    assert result.error.token == "missing-token"
     assert client.get_result.call_count == 3
 
 

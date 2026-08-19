@@ -59,7 +59,7 @@ def test_skill_only_uses_tokens_from_successful_triggers() -> None:
     skill = (REPO_ROOT / "skills" / "UniParser-Tools" / "SKILL.md").read_text(encoding="utf-8")
     notes = (REPO_ROOT / "skills" / "UniParser-Tools" / "references" / "notes.md").read_text(encoding="utf-8")
 
-    assert "A failed trigger does not provide a task token" in skill
+    assert "Never use a token from a failed trigger" in skill
     assert "Save `token` only from success JSON or `trigger_meta.json`" in skill
     assert "candidate_token" not in skill
     assert "recoverable_token" not in skill

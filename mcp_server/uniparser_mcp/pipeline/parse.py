@@ -44,6 +44,7 @@ async def _trigger_input(
         trigger = await asyncio.to_thread(
             client.trigger_file,
             str(resolved.path),
+            token=None,
             server_generated_token=True,
             http_timeout=(
                 DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT
@@ -62,6 +63,7 @@ async def _trigger_input(
         trigger = await asyncio.to_thread(
             client.trigger_snip,
             str(resolved.path),
+            token=None,
             server_generated_token=True,
             **trigger_kwargs,
         )
@@ -69,6 +71,7 @@ async def _trigger_input(
     trigger = await asyncio.to_thread(
         client.trigger_url,
         resolved.raw,
+        token=None,
         server_generated_token=True,
         **trigger_kwargs,
     )
@@ -164,7 +167,6 @@ async def run_parse(client: UniParserClient, req: ParseRequest, ctx: Context | N
     trigger, stage = await _trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
 
     if trigger.get("status") != "success":
-        trigger.pop("token", None)
         save_stage_error(out_dir, "trigger_error.json", trigger)
         if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)

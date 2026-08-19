@@ -77,7 +77,7 @@ $env:UNIPARSER_API_KEY="your-api-key"
 
 ### CLI reference
 
-**Pipeline:** local PDFs use direct multipart upload with a 60-second upload window and a server-generated token. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` until success, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
+**Pipeline:** every trigger sends `token=None` with `server_generated_token=True`. Local PDFs use direct multipart upload with a 60-second upload window. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` only with the token from a successful trigger, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
 
 **Input:** one positional `INPUT` per run—the CLI detects type by path suffix or `http(s)://` URL:
 
@@ -104,7 +104,7 @@ Recovery (existing server job—see **Common issues**):
 uniparser fetch --token "TASK_TOKEN_FROM_PRIOR_RUN"
 ```
 
-Valid recovery tokens come only from successful `uniparser --json parse …` stdout or `trigger_meta.json` written after a successful trigger. A failed trigger does not provide a task token and cannot be resumed with `fetch`.
+Valid recovery tokens come only from successful `uniparser --json parse …` stdout or `trigger_meta.json` written after a successful trigger. Never use a token from a failed trigger: it is diagnostic only and cannot be resumed with `fetch`.
 
 **Default output for** `fetch` (when `-o` / `--output-dir` is omitted): `~/Uni-Parser-Skill/token_<prefix>/`, where `<prefix>` is the first 8 characters of the token (e.g. `~/Uni-Parser-Skill/token_a1b2c3d4/token_a1b2c3d4.md`). Passing a prior `parse` directory with `-o` treats it only as the preferred path; because that directory already exists, `fetch` writes to an available sibling such as `paper_1`. Always use the returned `output_dir`.
 
@@ -184,7 +184,7 @@ uniparser parse paper.pdf --json    # wrong
 If the preferred output directory already exists, the CLI creates an available sibling such as
 `results_1` or `results_2`. Existing paths are never reused or deleted; use the returned `output_dir`.
 
-Failure JSON does not contain a task token. Use `fetch` only with a token from successful parse output or `trigger_meta.json`.
+Failure JSON may carry the standard `token` field for diagnostics. Never pass that value to `fetch`; use `fetch` only with a token from successful parse output or `trigger_meta.json`.
 
 **Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `UPLOAD_ERROR`, `PARSE_ERROR`, `TOKEN_NOT_FOUND`.
 
@@ -196,7 +196,7 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | Problem                                                                  | Cause                                                                           | Solution                                                                                                                                                      |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
-| `UPLOAD_ERROR` / write timeout                                           | Direct file upload failed without returning a server task token                 | Re-run `uniparser parse`; the failed trigger cannot be resumed with `fetch`                                                                                  |
+| `UPLOAD_ERROR` / write timeout                                           | Direct file upload failed; any token in the error is diagnostic only            | Re-run `uniparser parse`; the failed trigger cannot be resumed with `fetch`                                                                                  |
 | `TOKEN_NOT_FOUND` / `status: undefined`                                  | The service did not recognize the token after three checks                      | Stop fetching; verify that the token came from successful output or `trigger_meta.json` and is still within the retention period                            |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
 | `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
@@ -212,8 +212,8 @@ For callbacks, custom `ParseMode`, or SDK examples, see [Common patterns](./refe
 Full CLI reference (flags, examples, JSON details): [CLI README](../../uniparser_tools/cli/README.md) in this repository.
 
 Optional MCP server setup is in the [UniParser-Tools GitHub repo](https://github.com/dptech-corp/UniParser-Tools); it is separate from this CLI workflow.
-Its `uniparser_parse` tool uses the same direct local-PDF upload, server-generated token, failure-without-token
-contract, and three-check `undefined` limit as the CLI.
+Its `uniparser_parse` tool uses the same direct local-PDF upload, server-generated token, successful-trigger-only
+token use, and three-check `undefined` limit as the CLI.
 
 ## Reference documents
 

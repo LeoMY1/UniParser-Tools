@@ -14,7 +14,7 @@ def test_failed_trigger_does_not_attempt_token_recovery(tmp_path: Path):
     client = MagicMock()
     client.trigger_file.return_value = {
         "status": "error",
-        "token": "must-not-leak",
+        "token": "diagnostic-token",
         "message": "trigger failed",
     }
 
@@ -24,9 +24,9 @@ def test_failed_trigger_does_not_attempt_token_recovery(tmp_path: Path):
 
     assert result.ok is False
     assert result.error.code == "PARSE_ERROR"
-    assert "token" not in result.model_dump()
+    assert result.error.token == "diagnostic-token"
     saved_error = json.loads((out / "trigger_error.json").read_text(encoding="utf-8"))
-    assert "token" not in saved_error
+    assert saved_error["token"] == "diagnostic-token"
     client.trigger_file.assert_called_once()
     client.get_result.assert_not_called()
     client.get_formatted.assert_not_called()
@@ -56,6 +56,7 @@ def test_success_parse_writes_trigger_meta(tmp_path: Path):
     assert Path(result.trigger_meta_path).is_file()
     trigger_args, trigger_kwargs = client.trigger_file.call_args
     assert trigger_args == (str(pdf.resolve()),)
+    assert trigger_kwargs["token"] is None
     assert trigger_kwargs["server_generated_token"] is True
     assert trigger_kwargs["http_timeout"] == (60.0, 1860.0)
 
@@ -71,6 +72,7 @@ def test_async_local_pdf_uses_direct_upload_timeout(tmp_path: Path):
 
     assert result.ok is False
     _, trigger_kwargs = client.trigger_file.call_args
+    assert trigger_kwargs["token"] is None
     assert trigger_kwargs["server_generated_token"] is True
     assert trigger_kwargs["http_timeout"] == (60.0, 60.0)
     assert trigger_kwargs["sync"] is False
@@ -92,7 +94,7 @@ def test_direct_upload_transport_failure_uses_upload_error(tmp_path: Path):
     assert result.ok is False
     assert result.error.code == "UPLOAD_ERROR"
     assert result.error.stage == "trigger_file"
-    assert "token" not in result.model_dump()
+    assert result.error.token is None
 
 
 def test_url_trigger_uses_server_generated_token(tmp_path: Path):
@@ -104,6 +106,7 @@ def test_url_trigger_uses_server_generated_token(tmp_path: Path):
 
     assert result.ok is False
     _, trigger_kwargs = client.trigger_url.call_args
+    assert trigger_kwargs["token"] is None
     assert trigger_kwargs["server_generated_token"] is True
 
 

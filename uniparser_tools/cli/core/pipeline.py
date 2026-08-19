@@ -33,6 +33,7 @@ def trigger_input(
     if resolved.kind is InputKind.FILE:
         trigger = client.trigger_file(
             file_path=str(resolved.path),
+            token=None,
             server_generated_token=True,
             http_timeout=(
                 DIRECT_SYNC_UPLOAD_REQUEST_TIMEOUT if kwargs.get("sync", True) else DIRECT_UPLOAD_REQUEST_TIMEOUT
@@ -48,12 +49,14 @@ def trigger_input(
     if resolved.kind is InputKind.IMAGE:
         trigger = client.trigger_snip(
             snip_path=str(resolved.path),
+            token=None,
             server_generated_token=True,
             **kwargs,
         )
         return trigger, "trigger_snip"
     trigger = client.trigger_url(
         pdf_url=resolved.raw,
+        token=None,
         server_generated_token=True,
         **kwargs,
     )
@@ -163,7 +166,6 @@ def run_parse(
     print_parsing_status(display_label_for_input(resolved))
     trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
     if trigger.get("status") != "success":
-        trigger.pop("token", None)
         save_stage_error(out_dir, "trigger_error.json", trigger)
         if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)

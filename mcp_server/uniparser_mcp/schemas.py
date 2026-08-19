@@ -70,6 +70,7 @@ class ErrorDetail(BaseModel):
     message: str
     stage: str | None = None
     output_dir: str | None = None
+    token: str | None = None
 
 
 class ParseSuccess(BaseModel):
@@ -90,7 +91,6 @@ class ParseSuccess(BaseModel):
 class ErrorResult(BaseModel):
     ok: Literal[False] = False
     error: ErrorDetail
-    unrecognized_token: str | None = None
 
 
 ParseResult = ParseSuccess | ErrorResult

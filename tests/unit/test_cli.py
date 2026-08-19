@@ -175,6 +175,7 @@ class TestParseCommand:
         assert (actual_out / "paper.md").is_file()
         _, trigger_kwargs = mock_client.trigger_file.call_args
         assert trigger_kwargs["file_path"] == str(pdf.resolve())
+        assert trigger_kwargs["token"] is None
         assert trigger_kwargs["server_generated_token"] is True
         assert trigger_kwargs["http_timeout"] == (60.0, 1860.0)
         mock_client.trigger_url.assert_not_called()
@@ -201,6 +202,7 @@ class TestParseCommand:
         )
 
         _, call_kwargs = mock_client.trigger_file.call_args
+        assert call_kwargs["token"] is None
         assert call_kwargs["server_generated_token"] is True
         assert call_kwargs["http_timeout"] == (60.0, 1860.0)
         assert call_kwargs["sync"] is True
@@ -237,7 +239,7 @@ class TestParseCommand:
         assert call_kwargs["molecule"] is ParseMode.Disable
         assert call_kwargs["table"] is ParseMode.OCRHighQuality
 
-    def test_parse_transport_failure_does_not_write_task_token(
+    def test_parse_transport_failure_does_not_recover_error_token(
         self,
         runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
@@ -249,7 +251,7 @@ class TestParseCommand:
         mock_client = MagicMock()
         mock_client.trigger_file.return_value = {
             "status": "error",
-            "token": "must-not-leak",
+            "token": "diagnostic-token",
             "description": "The write operation timed out",
             "error_type": "WriteTimeout",
         }
@@ -266,11 +268,12 @@ class TestParseCommand:
         payload = json.loads(result.stderr.strip().splitlines()[-1])
         assert payload["error"]["code"] == "UPLOAD_ERROR"
         assert payload["error"]["stage"] == "trigger_file"
-        assert "token" not in payload
+        assert payload["token"] == "diagnostic-token"
         assert not (out / "trigger_meta.json").exists()
         saved_error = json.loads((out / "trigger_error.json").read_text(encoding="utf-8"))
         assert saved_error["error_type"] == "WriteTimeout"
-        assert "token" not in saved_error
+        assert saved_error["token"] == "diagnostic-token"
+        mock_client.get_result.assert_not_called()
 
     def test_parse_direct_upload_failure_uses_upload_error(
         self,
@@ -301,6 +304,7 @@ class TestParseCommand:
         assert payload["error"]["stage"] == "trigger_file"
         mock_client.trigger_url.assert_not_called()
         _, direct_kwargs = mock_client.trigger_file.call_args
+        assert direct_kwargs["token"] is None
         assert direct_kwargs["server_generated_token"] is True
         assert direct_kwargs["http_timeout"] == (60.0, 1860.0)
 

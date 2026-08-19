@@ -19,6 +19,7 @@ def _operation_error(code: str, stage: str, result: dict) -> ErrorResult:
             code=code,
             message=result.get("description") or result.get("message") or str(result),
             stage=stage,
+            token=result.get("token"),
         )
     )
 
@@ -37,6 +38,6 @@ def token_not_found_error(token: str, *, attempts: int) -> ErrorResult:
             code="TOKEN_NOT_FOUND",
             message=f"The service did not recognize this token after {attempts} checks.",
             stage="get_result_poll",
+            token=token,
         ),
-        unrecognized_token=token,
     )

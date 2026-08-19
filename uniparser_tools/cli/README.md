@@ -343,7 +343,9 @@ uniparser parse paper.pdf -o ./out/paper
 uniparser fetch --token YOUR_TOKEN
 ```
 
-token 只能从成功 `parse` 的 JSON 输出或 `trigger_meta.json` 中获取。失败的触发请求不会提供可用于恢复的 token。
+CLI 触发时固定发送 `token=None` 和 `server_generated_token=True`。可用于恢复的 token 只能从成功
+`parse` 的 JSON 输出或 `trigger_meta.json` 中获取。失败 JSON 可能保留标准 `token` 字段用于诊断，但不得
+将它传给 `fetch`。
 
 | 选项 | 说明 |
 |------|------|
@@ -435,7 +437,8 @@ Parsing... report.pdf
 uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['markdown_path'])"
 ```
 
-失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。触发失败时不会输出任务 token。
+失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。失败 JSON 中的
+`token` 仅用于诊断；只有成功 `parse` 输出或 `trigger_meta.json` 中的 token 可用于 `fetch`。
 
 ---
 
@@ -463,7 +466,7 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 **提示 `UPLOAD_ERROR` / write timeout**
 
-本次直传没有成功返回服务端任务 token，不能执行 `fetch`，可以重新运行 `parse`。
+本次直传失败。请重新运行 `parse`；错误结果中的 token 即使存在也仅供诊断，不能用于 `fetch`。
 
 **提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
 

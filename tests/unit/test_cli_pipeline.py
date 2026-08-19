@@ -29,6 +29,7 @@ def test_local_pdf_uses_direct_upload_with_server_token(tmp_path: Path) -> None:
     assert stage == "trigger_file"
     client.trigger_file.assert_called_once_with(
         file_path=str(pdf),
+        token=None,
         server_generated_token=True,
         http_timeout=(60.0, 1860.0),
         sync=True,
@@ -48,6 +49,7 @@ def test_async_local_pdf_uses_direct_upload_timeout(tmp_path: Path) -> None:
     assert stage == "trigger_file"
     client.trigger_file.assert_called_once_with(
         file_path=str(pdf),
+        token=None,
         server_generated_token=True,
         http_timeout=(60.0, 60.0),
         sync=False,
@@ -66,7 +68,7 @@ def test_undefined_token_stops_after_bounded_checks(monkeypatch, capsys) -> None
     assert client.get_result.call_count == 3
     payload = json.loads(capsys.readouterr().err)
     assert payload["error"]["code"] == "TOKEN_NOT_FOUND"
-    assert payload["unrecognized_token"] == "missing-token"
+    assert payload["token"] == "missing-token"
 
 
 def test_pending_statuses_still_reach_success(monkeypatch) -> None:

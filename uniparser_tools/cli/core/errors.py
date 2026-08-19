@@ -34,6 +34,7 @@ def missing_token_error() -> int:
 def _operation_error(code: str, stage: str, result: dict) -> int:
     payload = {
         "ok": False,
+        "token": result.get("token"),
         "error": {
             "code": code,
             "message": result.get("description") or result.get("message") or str(result),
@@ -56,12 +57,12 @@ def token_not_found_error(token: str, *, attempts: int) -> int:
     emit_json_stderr(
         {
             "ok": False,
+            "token": token,
             "error": {
                 "code": "TOKEN_NOT_FOUND",
                 "message": f"The service did not recognize this token after {attempts} checks.",
                 "stage": "get_result_poll",
             },
-            "unrecognized_token": token,
         }
     )
     return 1

@@ -21,16 +21,17 @@
 成功返回 JSON（Pydantic）：`markdown_path`、`pages_tree_path`、`content_preview`（默认 2000 字）、`message` 等。
 调用方应以返回的 `output_dir` 为准；服务不会复用或删除已有目录。
 
-本地 PDF 固定通过 `trigger_file` 直接 multipart 上传，不使用 TOS 或自动回退。MCP 要求服务端生成
-token；同步请求使用 `(60, 1860)`，异步请求使用 `(60, 60)`，只有服务端确认的 token 才能进入结果轮询。
+本地 PDF 固定通过 `trigger_file` 直接 multipart 上传，不使用 TOS 或自动回退。MCP 触发时固定发送
+`token=None` 和 `server_generated_token=True`；同步请求使用 `(60, 1860)`，异步请求使用 `(60, 60)`，
+只有服务端确认的 token 才能进入结果轮询。
 
 > 出于安全原因，根目录、HOME、当前工作目录及 Git 元数据目录不能作为首选输出目录。
 
 健康检查、版本查询、按 token 手动恢复请使用 CLI：`uniparser health`、`uniparser version`、`uniparser fetch`。
 
 失败返回的 `error.code` 可能为 `CONFIG_ERROR`、`INPUT_ERROR`、`UPLOAD_ERROR`、`PARSE_ERROR` 或
-`TOKEN_NOT_FOUND`。触发失败不会返回任务 token，也不会进入恢复流程；`undefined` 最多检查三次，
-不会持续等待 1800 秒。
+`TOKEN_NOT_FOUND`。触发失败时可能保留标准 `token` 供诊断，但 MCP 不会使用它或进入恢复流程；只有
+成功触发返回的 token 才会被轮询。`undefined` 最多检查三次，不会持续等待 1800 秒。
 
 ## 环境变量
 
