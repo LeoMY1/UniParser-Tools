@@ -47,6 +47,8 @@ uniparser auth
 uniparser parse /path/to/report.pdf
 ```
 
+本地 PDF 使用 multipart 直传，上传窗口为 60 秒，并要求服务端生成 token。只有服务端成功接收文件并创建任务后，CLI 才会记录可恢复 token。
+
 默认把结果保存到：
 
 ```text
@@ -341,7 +343,9 @@ uniparser parse paper.pdf -o ./out/paper
 uniparser fetch --token YOUR_TOKEN
 ```
 
-token 可在上次 `parse` 输出目录的 `trigger_meta.json` 中找到。
+CLI 触发时固定发送 `token=None` 和 `server_generated_token=True`。可用于恢复的 token 只能从成功
+`parse` 的 JSON 输出或 `trigger_meta.json` 中获取。失败 JSON 可能保留标准 `token` 字段用于诊断，但不得
+将它传给 `fetch`。
 
 | 选项 | 说明 |
 |------|------|
@@ -433,7 +437,8 @@ Parsing... report.pdf
 uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['markdown_path'])"
 ```
 
-失败时仍为 **stderr 单行 JSON**（`ok: false`），见上文 parse「常见错误」；exit code 为 1。
+失败时仍为 **stderr 单行 JSON**（`ok: false`），见下方「常见问题」；exit code 为 1。失败 JSON 中的
+`token` 仅用于诊断；只有成功 `parse` 输出或 `trigger_meta.json` 中的 token 可用于 `fetch`。
 
 ---
 
@@ -458,6 +463,14 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 **解析时间较长**
 
 属正常现象；请等待 `Parsing...` 出现后保持终端不要关闭。若中断，用 `trigger_meta.json` 中的 token 执行 `uniparser fetch`。
+
+**提示 `UPLOAD_ERROR` / write timeout**
+
+本次直传失败。请重新运行 `parse`；错误结果中的 token 即使存在也仅供诊断，不能用于 `fetch`。
+
+**提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
+
+CLI 会在三次检查后停止，不会继续等待 1800 秒。请确认 token 来自成功输出或 `trigger_meta.json`，并检查任务结果是否仍在 24 小时保留期内。
 
 ---
 
