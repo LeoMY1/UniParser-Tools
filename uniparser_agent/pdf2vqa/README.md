@@ -23,7 +23,7 @@
 - Python 3.11+
 - 已安装 `uniparser-agent`
 - 输入原始文档时，需要 UniParser API Key
-- OpenAI 兼容的 LLM 服务
+- 使用一步式 `vqa` 模式时，需要 OpenAI 兼容的 LLM 服务
 
 安装项目依赖：
 
@@ -52,6 +52,13 @@ export OPENAI_BASE_URL="https://example.com/v1"
 export OPENAI_MODEL="your-model"
 ```
 
+CLI 不会自动读取 `.env`。如果配置保存在 `.env` 中，请先将变量加载到当前终端，例如：
+
+```bash
+set -a
+source .env
+set +a
+```
 
 | 变量                   | 是否必填               | 用途                 |
 | -------------------- | ------------------ | ------------------ |
@@ -155,6 +162,8 @@ uniparser-agent vqa-finalize ./vqa_out --json
 
 `vqa-prepare`、`vqa-validate` 和 `vqa-finalize` 不读取 LLM API Key、地址或模型名。安装 `uniparser-agent` 后，可以使用仓库中的 [`skills/pdf2vqa`](../skills/pdf2vqa/) 让 Codex 等 Agent 直接使用当前模型完成中间推理。
 
+安装 CLI 不会自动注册 Skill。要通过 `$pdf2vqa` 调用，请将整个 `skills/pdf2vqa` 目录安装到 Agent 的 Skills 目录，重启 Agent，并确认 Skill 列表中出现 `pdf2vqa`。
+
 ## 常用参数
 
 ```text
@@ -250,6 +259,7 @@ vqa_out/
   "question_chapter_title": "第一章",
   "answer_chapter_title": "第一章答案",
   "label": 1,
+  "question_type": "multiple_choice",
   "question": "题干内容",
   "answer": "A",
   "solution": "详细解析"
@@ -264,6 +274,7 @@ vqa_out/
 | `question_chapter_title` | 题目所在章节或栏目         |
 | `answer_chapter_title`   | 答案所在章节或栏目         |
 | `label`                  | 题号                |
+| `question_type`          | 规范化英文题型：`true_false`、`fill_in_the_blank`、`multiple_choice`、`calculation`、`proof` 或 `other` |
 | `question`               | 题干，可包含公式和图片引用     |
 | `answer`                 | 短答案，如选项字母、数值或填空结果 |
 | `solution`               | 解题过程或详细解析         |
