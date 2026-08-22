@@ -183,13 +183,16 @@ def patent_general_formulas_cmd(
     )
     payload = {
         "doc_id": resolved_doc_id,
+        "structure_count": outputs.structure_count,
         "formula_count": outputs.formula_count,
         "occurrence_count": outputs.occurrence_count,
         "image_count": outputs.image_count,
-        "chunk_count": outputs.chunk_count,
+        "packet_count": outputs.packet_count,
         "llm_call_count": outputs.llm_call_count,
         "inventory_path": str(outputs.inventory_path),
-        "context_chunks_path": str(outputs.context_chunks_path),
+        "task_packets_path": str(outputs.task_packets_path),
+        "evidence_ledger_path": str(outputs.evidence_ledger_path),
+        "agent_contexts_path": str(outputs.agent_contexts_path),
         "analysis_path": str(outputs.analysis_path),
         "excel_path": str(outputs.excel_path),
         "summary_path": str(outputs.summary_path),
@@ -202,7 +205,7 @@ def patent_general_formulas_cmd(
     typer.echo(f"General formula Excel: {outputs.excel_path}")
     typer.echo(
         f"Markush formulas: {outputs.formula_count}; occurrences: {outputs.occurrence_count}; "
-        f"images: {outputs.image_count}; chunks: {outputs.chunk_count}; LLM calls: {outputs.llm_call_count}"
+        f"images: {outputs.image_count}; packets: {outputs.packet_count}; LLM calls: {outputs.llm_call_count}"
     )
 
 
@@ -641,7 +644,7 @@ def _print_patent_summary(payload: dict[str, Any]) -> None:
     typer.echo(
         "General formulas: "
         f"{payload['formula_count']}; occurrences: {payload['formula_occurrence_count']}; "
-        f"images: {payload['formula_image_count']}; chunks: {payload['formula_context_chunk_count']}; "
+        f"images: {payload['formula_image_count']}; packets: {payload['formula_task_packet_count']}; "
         f"LLM calls: {payload['formula_llm_call_count']}"
     )
     typer.echo(f"skip_llm: {payload['skip_llm']}")

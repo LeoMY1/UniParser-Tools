@@ -14,14 +14,12 @@ from typing import Any, Callable, Iterator
 from PIL import Image, ImageChops, ImageOps
 
 from uniparser_agent.chemistry.patent_structure import BlockResolver
-from uniparser_agent.llm import LLMConfig, OpenAICompatLLM, resolve_llm_config
+from uniparser_agent.llm import LLMConfig, OpenAICompatLLM
 
 
-SCHEMA_VERSION = "2.1"
+SCHEMA_VERSION = "3.0"
 TABLE_NAME = "general_formula_analysis"
 CONTEXT_NODE_ID = "description"
-CHUNK_TARGET_CHARS = 12_000
-CHUNK_OVERLAP_CHARS = 800
 
 TABLE_COLUMNS = (
     "doc_id",
@@ -35,7 +33,6 @@ TABLE_COLUMNS = (
     "evidence_locations",
 )
 
-FORMULA_ROLES = frozenset({"target_compound", "starting_material", "intermediate", "unknown"})
 _TEXT_TYPES = frozenset(
     {
         "documenttitle",
@@ -50,38 +47,6 @@ _TEXT_TYPES = frozenset(
 )
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
-
-GENERAL_FORMULA_SYSTEM_PROMPT = """You extract Markush general-formula facts from the description section of a chemistry patent.
-Return STRICT JSON only, without markdown fences:
-{
-  "results": [
-    {
-      "formula_id": "F001",
-      "formula_name": "string or empty",
-      "formula_role": "target_compound|starting_material|intermediate|unknown",
-      "evidence_unit_ids": ["p8_b13"],
-      "definition_fragments": [
-        {
-          "text": "plain-text variable or parameter definition",
-          "evidence_unit_ids": ["p8_b18"]
-        }
-      ]
-    }
-  ]
-}
-Rules:
-- Use only the supplied description context chunk.
-- Treat any structure notation from UniParser as read-only evidence.
-- Never generate, repair, normalize, or return SMILES.
-- Return a formula only when the chunk contains supporting evidence for it.
-- Keep formula_id exactly as supplied. Never create formula ids.
-- Preserve general, preferred, and more-preferred definition levels when present.
-- Include R/Ar/X variables and m/n parameters in definition_fragments.
-- evidence_unit_ids must be selected from allowed_unit_ids.
-- Claims are outside the supplied context. Do not invent specific example compounds that are not in the supplied formula inventory.
-"""
-
-
 ChatFn = Callable[[str, str], str]
 
 
@@ -112,12 +77,11 @@ class FormulaOccurrence:
 
 
 @dataclass
-class MarkushFormula:
+class MarkushStructure:
     doc_id: str
-    formula_id: str
+    structure_id: str
     smi: str
     occurrences: list[FormulaOccurrence] = field(default_factory=list)
-    formula_label: str | None = None
     structure_image: str | None = None
 
     @property
@@ -127,12 +91,28 @@ class MarkushFormula:
     def public_inventory_row(self) -> dict[str, Any]:
         return {
             "doc_id": self.doc_id,
-            "formula_id": self.formula_id,
-            "formula_label": self.formula_label,
+            "structure_id": self.structure_id,
             "markush_smiles": self.smi,
             "structure_image": self.structure_image,
-            "occurrences": [occurrence.public_location() for occurrence in self.occurrences],
+            "occurrences": [
+                {**occurrence.public_location(), "formula_label": occurrence.label} for occurrence in self.occurrences
+            ],
         }
+
+
+@dataclass
+class FormulaRecord:
+    doc_id: str
+    formula_id: str
+    structure_id: str
+    smi: str
+    occurrences: list[FormulaOccurrence] = field(default_factory=list)
+    formula_label: str | None = None
+    structure_image: str | None = None
+
+    @property
+    def first_location(self) -> tuple[int, int, int]:
+        return min(occurrence.location_key for occurrence in self.occurrences)
 
 
 @dataclass(frozen=True)
@@ -159,37 +139,19 @@ class ContextUnit:
 
 
 @dataclass(frozen=True)
-class ContextChunk:
-    chunk_id: str
-    char_start: int
-    char_end: int
-    overlap_chars: int
-    unit_ids: tuple[str, ...]
-    text: str
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "chunk_id": self.chunk_id,
-            "char_start": self.char_start,
-            "char_end": self.char_end,
-            "char_count": len(self.text),
-            "overlap_chars": self.overlap_chars,
-            "unit_ids": list(self.unit_ids),
-            "text": self.text,
-        }
-
-
-@dataclass(frozen=True)
 class GeneralFormulaOutputs:
     inventory_path: Path
-    context_chunks_path: Path
+    task_packets_path: Path
+    evidence_ledger_path: Path
+    agent_contexts_path: Path
     analysis_path: Path
     excel_path: Path
     summary_path: Path
+    structure_count: int
     formula_count: int
     occurrence_count: int
     image_count: int
-    chunk_count: int
+    packet_count: int
     llm_call_count: int
 
 
@@ -258,10 +220,10 @@ def _located_blocks(resolver: BlockResolver, node_id: str) -> list[dict[str, Any
     return located
 
 
-def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[MarkushFormula]:
+def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[MarkushStructure]:
     """Collect and raw-SMI deduplicate all ``markush=true`` molecules in description."""
     description = _located_blocks(resolver, "description")
-    by_dedup_key: dict[str, MarkushFormula] = {}
+    by_dedup_key: dict[str, MarkushStructure] = {}
 
     for located in description:
         locator = located["locator"]
@@ -289,26 +251,63 @@ def build_markush_inventory(resolver: BlockResolver, doc_id: str) -> list[Markus
             )
             formula = by_dedup_key.setdefault(
                 dedup_key,
-                MarkushFormula(doc_id=doc_id, formula_id="", smi=smi),
+                MarkushStructure(doc_id=doc_id, structure_id="", smi=smi),
             )
             formula.occurrences.append(occurrence)
 
-    formulas = sorted(by_dedup_key.values(), key=lambda formula: formula.first_location)
-    for index, formula in enumerate(formulas, start=1):
-        formula.formula_id = f"F{index:03d}"
-        labels = [occurrence for occurrence in formula.occurrences if occurrence.label]
-        if labels:
-            best_label = max(
-                labels,
-                key=lambda occurrence: (
-                    _label_score(occurrence.label),
-                    -occurrence.page_index,
-                    -occurrence.block_index,
-                ),
+    structures = sorted(by_dedup_key.values(), key=lambda structure: structure.first_location)
+    for index, structure in enumerate(structures, start=1):
+        structure.structure_id = f"S{index:03d}"
+        structure.occurrences.sort(key=lambda occurrence: occurrence.location_key)
+    return structures
+
+
+def build_formula_records(structures: list[MarkushStructure]) -> list[FormulaRecord]:
+    """Create conservative disclosure records without merging different labels."""
+    provisional: list[FormulaRecord] = []
+    for structure in structures:
+        labeled: dict[str, list[FormulaOccurrence]] = {}
+        unlabeled: list[FormulaOccurrence] = []
+        for occurrence in structure.occurrences:
+            if occurrence.label:
+                labeled.setdefault(occurrence.label, []).append(occurrence)
+            else:
+                unlabeled.append(occurrence)
+
+        if len(labeled) == 1:
+            only_label = next(iter(labeled))
+            labeled[only_label].extend(unlabeled)
+            unlabeled = []
+
+        for label, occurrences in labeled.items():
+            provisional.append(
+                FormulaRecord(
+                    doc_id=structure.doc_id,
+                    formula_id="",
+                    structure_id=structure.structure_id,
+                    smi=structure.smi,
+                    occurrences=sorted(occurrences, key=lambda item: item.location_key),
+                    formula_label=label,
+                    structure_image=structure.structure_image,
+                )
             )
-            formula.formula_label = best_label.label
-        formula.occurrences.sort(key=lambda occurrence: occurrence.location_key)
-    return formulas
+        if unlabeled or not labeled:
+            occurrences = unlabeled or list(structure.occurrences)
+            provisional.append(
+                FormulaRecord(
+                    doc_id=structure.doc_id,
+                    formula_id="",
+                    structure_id=structure.structure_id,
+                    smi=structure.smi,
+                    occurrences=sorted(occurrences, key=lambda item: item.location_key),
+                    structure_image=structure.structure_image,
+                )
+            )
+
+    records = sorted(provisional, key=lambda formula: formula.first_location)
+    for index, formula in enumerate(records, start=1):
+        formula.formula_id = f"F{index:03d}"
+    return records
 
 
 def _normalized_text(value: Any) -> str:
@@ -325,10 +324,9 @@ def _table_text(value: Any) -> str:
 
 def build_description_context_units(
     resolver: BlockResolver,
-    formulas: list[MarkushFormula],
+    formulas: list[FormulaRecord],
 ) -> list[ContextUnit]:
     """Build compact text/structure-anchor units from the complete description."""
-    formula_by_smi = {formula.smi: formula for formula in formulas if formula.smi}
     formula_by_occurrence = {
         (
             occurrence.page_index,
@@ -367,7 +365,7 @@ def build_description_context_units(
                     node.get("block"),
                     int(node.get("order") or 0),
                 )
-            ) or formula_by_smi.get(smi)
+            )
             if node.get("markush") is True and formula is not None:
                 label = formula.formula_label or ""
                 parts.append(f"[FORMULA formula_id={formula.formula_id} label={label}]")
@@ -390,275 +388,6 @@ def build_description_context_units(
             )
         )
     return units
-
-
-def chunk_context_units(
-    units: list[ContextUnit],
-    *,
-    target_chars: int = CHUNK_TARGET_CHARS,
-    overlap_chars: int = CHUNK_OVERLAP_CHARS,
-) -> list[ContextChunk]:
-    """Cut rendered context at about 12k characters with 800-character overlap."""
-    if target_chars <= 0:
-        raise ValueError("target_chars must be positive")
-    if overlap_chars < 0 or overlap_chars >= target_chars:
-        raise ValueError("overlap_chars must be between 0 and target_chars")
-    if not units:
-        return []
-
-    rendered_parts: list[str] = []
-    spans: list[tuple[int, int, str]] = []
-    cursor = 0
-    for unit in units:
-        rendered = unit.render()
-        rendered_parts.append(rendered)
-        spans.append((cursor, cursor + len(rendered), unit.unit_id))
-        cursor += len(rendered)
-    text = "".join(rendered_parts)
-
-    chunks: list[ContextChunk] = []
-    start = 0
-    previous_end = 0
-    while start < len(text):
-        ideal_end = min(start + target_chars, len(text))
-        end = ideal_end
-        if ideal_end < len(text):
-            boundary = text.rfind("\n\n[", start + target_chars // 2, ideal_end)
-            if boundary > start:
-                end = boundary + 2
-        if end <= start:
-            end = ideal_end
-
-        unit_ids = tuple(unit_id for left, right, unit_id in spans if left < end and right > start)
-        chunks.append(
-            ContextChunk(
-                chunk_id=f"C{len(chunks) + 1:03d}",
-                char_start=start,
-                char_end=end,
-                overlap_chars=max(0, previous_end - start),
-                unit_ids=unit_ids,
-                text=text[start:end],
-            )
-        )
-        if end >= len(text):
-            break
-
-        next_start = max(start + 1, end - overlap_chars)
-        containing_span = next(
-            ((left, right) for left, right, _ in spans if left <= next_start < right),
-            None,
-        )
-        if containing_span is not None and containing_span[0] > start:
-            next_start = containing_span[0]
-        previous_end = end
-        start = next_start
-    return chunks
-
-
-def _strip_fences(value: str) -> str:
-    text = (value or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    return text.strip()
-
-
-def parse_general_formula_response(raw: str) -> list[dict[str, Any]]:
-    payload = json.loads(_strip_fences(raw))
-    if isinstance(payload, dict):
-        results = payload.get("results")
-    elif isinstance(payload, list):
-        results = payload
-    else:
-        results = None
-    if not isinstance(results, list):
-        raise ValueError("LLM response must be a list or {results: [...]} object")
-    return [item for item in results if isinstance(item, dict)]
-
-
-def build_general_formula_prompt(
-    doc_id: str,
-    formulas: list[MarkushFormula],
-    chunk: ContextChunk,
-) -> tuple[str, str]:
-    inventory = [
-        {
-            "formula_id": formula.formula_id,
-            "formula_label": formula.formula_label,
-            "occurrence_pages": sorted({occurrence.page_index + 1 for occurrence in formula.occurrences}),
-        }
-        for formula in formulas
-    ]
-    payload = {
-        "document": doc_id,
-        "context_scope": CONTEXT_NODE_ID,
-        "chunk_id": chunk.chunk_id,
-        "allowed_unit_ids": list(chunk.unit_ids),
-        "formula_inventory": inventory,
-        "context": chunk.text,
-    }
-    return GENERAL_FORMULA_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False, indent=2)
-
-
-def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
-
-
-def _normalize_fragment(value: Any) -> str:
-    if not isinstance(value, str):
-        return ""
-    return _WHITESPACE_RE.sub(" ", value).strip(" ;；。")
-
-
-def _context_location(unit: ContextUnit) -> dict[str, Any]:
-    return {
-        "kind": "context",
-        "page_index": unit.page_index,
-        "block_index": unit.block_index,
-        "block": unit.block,
-    }
-
-
-def analyze_general_formulas(
-    doc_id: str,
-    formulas: list[MarkushFormula],
-    units: list[ContextUnit],
-    chunks: list[ContextChunk],
-    *,
-    llm_config: LLMConfig | None = None,
-    llm_client: OpenAICompatLLM | None = None,
-    chat_fn: ChatFn | None = None,
-    skip_llm: bool = False,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Analyze chunks and deterministically merge partial formula evidence."""
-    valid_ids = {formula.formula_id for formula in formulas}
-    unit_by_id = {unit.unit_id: unit for unit in units}
-    unit_order = {unit.unit_id: index for index, unit in enumerate(units)}
-    accumulators: dict[str, dict[str, Any]] = {
-        formula.formula_id: {
-            "names": [],
-            "roles": [],
-            "fragments": [],
-            "evidence_unit_ids": [],
-        }
-        for formula in formulas
-    }
-    errors: list[dict[str, str]] = []
-    llm_call_count = 0
-    resolved_client = llm_client
-
-    def chat(system_prompt: str, user_content: str) -> str:
-        nonlocal resolved_client
-        if chat_fn is not None:
-            return chat_fn(system_prompt, user_content)
-        if resolved_client is None:
-            resolved_client = OpenAICompatLLM(config=llm_config or resolve_llm_config())
-        return resolved_client.chat(system_prompt=system_prompt, user_content=user_content)
-
-    llm_enabled = not skip_llm and bool(formulas) and bool(chunks)
-    if llm_enabled:
-        for chunk_index, chunk in enumerate(chunks):
-            system_prompt, user_content = build_general_formula_prompt(doc_id, formulas, chunk)
-            llm_call_count += 1
-            try:
-                raw = chat(system_prompt, user_content)
-                items = parse_general_formula_response(raw)
-            except Exception as exc:  # noqa: BLE001 - one invalid chunk must not discard the inventory
-                errors.append({"chunk_id": chunk.chunk_id, "error": str(exc)})
-                continue
-
-            allowed_units = set(chunk.unit_ids)
-            for result_index, item in enumerate(items):
-                formula_id = str(item.get("formula_id") or "").strip()
-                if formula_id not in valid_ids:
-                    continue
-                accumulator = accumulators[formula_id]
-                formula_name = _normalized_text(item.get("formula_name"))
-                if formula_name:
-                    accumulator["names"].append((chunk_index, result_index, formula_name))
-                role = str(item.get("formula_role") or "unknown").strip()
-                if role not in FORMULA_ROLES:
-                    role = "unknown"
-                accumulator["roles"].append((chunk_index, result_index, role))
-
-                result_evidence = [
-                    unit_id for unit_id in _string_list(item.get("evidence_unit_ids")) if unit_id in allowed_units
-                ]
-                accumulator["evidence_unit_ids"].extend(result_evidence)
-                fragments = item.get("definition_fragments")
-                if isinstance(fragments, list):
-                    for fragment_index, fragment in enumerate(fragments):
-                        if not isinstance(fragment, dict):
-                            continue
-                        text = _normalize_fragment(fragment.get("text"))
-                        if not text:
-                            continue
-                        evidence_ids = [
-                            unit_id
-                            for unit_id in _string_list(fragment.get("evidence_unit_ids"))
-                            if unit_id in allowed_units
-                        ]
-                        accumulator["evidence_unit_ids"].extend(evidence_ids)
-                        accumulator["fragments"].append(
-                            {
-                                "text": text,
-                                "evidence_unit_ids": evidence_ids,
-                                "sort_key": (
-                                    min((unit_order.get(unit_id, 10**9) for unit_id in evidence_ids), default=10**9),
-                                    chunk_index,
-                                    result_index,
-                                    fragment_index,
-                                ),
-                            }
-                        )
-
-    rows: list[dict[str, Any]] = []
-    for formula in formulas:
-        accumulator = accumulators[formula.formula_id]
-        names = sorted(accumulator["names"])
-        roles = sorted(accumulator["roles"])
-        formula_name = names[0][2] if names else None
-        formula_role = next((role for _, _, role in roles if role != "unknown"), "unknown")
-
-        fragments = sorted(accumulator["fragments"], key=lambda item: item["sort_key"])
-        unique_fragments: list[str] = []
-        seen_fragments: set[str] = set()
-        for fragment in fragments:
-            normalized_key = _WHITESPACE_RE.sub("", fragment["text"]).lower()
-            if normalized_key in seen_fragments:
-                continue
-            seen_fragments.add(normalized_key)
-            unique_fragments.append(fragment["text"])
-
-        evidence_ids = sorted(
-            set(accumulator["evidence_unit_ids"]),
-            key=lambda unit_id: unit_order.get(unit_id, 10**9),
-        )
-        evidence_locations = [{"kind": "formula", **occurrence.public_location()} for occurrence in formula.occurrences]
-        evidence_locations.extend(
-            _context_location(unit_by_id[unit_id]) for unit_id in evidence_ids if unit_id in unit_by_id
-        )
-        rows.append(
-            {
-                "doc_id": doc_id,
-                "formula_id": formula.formula_id,
-                "formula_label": formula.formula_label,
-                "formula_name": formula_name,
-                "formula_role": formula_role,
-                "structure_image": formula.structure_image,
-                "markush_smiles": formula.smi,
-                "variable_definition_text": "；".join(unique_fragments),
-                "evidence_locations": evidence_locations,
-            }
-        )
-
-    return rows, {
-        "uses_llm": llm_enabled,
-        "llm_call_count": llm_call_count,
-        "llm_errors": errors,
-    }
 
 
 def _decode_source(source: str) -> bytes:
@@ -691,14 +420,14 @@ def _source_area(source: str | None) -> int:
 
 
 def write_structure_images(
-    formulas: list[MarkushFormula],
+    structures: list[MarkushStructure],
     output_dir: Path,
 ) -> dict[str, dict[str, int]]:
-    """Write one original UniParser molecule crop per unique formula."""
+    """Write one original UniParser molecule crop per raw-SMI structure."""
     image_meta: dict[str, dict[str, int]] = {}
-    for formula in formulas:
+    for structure in structures:
         ranked = sorted(
-            (occurrence for occurrence in formula.occurrences if occurrence.source),
+            (occurrence for occurrence in structure.occurrences if occurrence.source),
             key=lambda occurrence: (
                 -_label_score(occurrence.label),
                 -_source_area(occurrence.source),
@@ -708,13 +437,13 @@ def write_structure_images(
             ),
         )
         for occurrence in ranked:
-            image_path = output_dir / formula.doc_id / f"{formula.formula_id}.png"
+            image_path = output_dir / structure.doc_id / f"{structure.structure_id}.png"
             try:
                 width, height = _save_structure_image(occurrence.source or "", image_path)
             except Exception:  # noqa: BLE001 - try another parsed occurrence of the same formula
                 continue
-            formula.structure_image = str(image_path)
-            image_meta[formula.formula_id] = {"width": width, "height": height}
+            structure.structure_image = str(image_path)
+            image_meta[structure.structure_id] = {"width": width, "height": height}
             break
     return image_meta
 
@@ -723,8 +452,8 @@ def build_general_formula_analysis_payload(
     doc_id: str,
     rows: list[dict[str, Any]],
     *,
-    chunk_count: int,
-    llm_meta: dict[str, Any],
+    packet_count: int,
+    agent_meta: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -734,10 +463,12 @@ def build_general_formula_analysis_payload(
             "inventory_navigation_node": "description",
             "inventory_filter": {"type": "molecule", "markush": True},
             "context_navigation_node": CONTEXT_NODE_ID,
-            "chunk_target_chars": CHUNK_TARGET_CHARS,
-            "chunk_overlap_chars": CHUNK_OVERLAP_CHARS,
-            "chunk_count": chunk_count,
-            "uses_llm": llm_meta["uses_llm"],
+            "agent": "formula_anchor_retrieval_v1_1",
+            "classification": "same_llm_call",
+            "table_object_types": ["general_formula", "scheme_generic_structure"],
+            "other_candidates": "retained_in_evidence_ledger",
+            "task_packet_count": packet_count,
+            "uses_llm": agent_meta["uses_llm"],
         },
         "columns": list(TABLE_COLUMNS),
         "rows": rows,
@@ -754,18 +485,31 @@ def write_general_formula_outputs(
     chat_fn: ChatFn | None = None,
     skip_llm: bool = False,
 ) -> GeneralFormulaOutputs:
-    """Run the complete V2 Markush table flow and write JSON, images, and Excel."""
+    """Run the bounded Markush retrieval agent and write its structured artifacts."""
+    from uniparser_agent.chemistry.general_formula_agent import (
+        AGENT_SCHEMA_VERSION,
+        CONTEXT_TARGET_CHARS,
+        JSON_RETRY_COUNT,
+        MAX_AGENT_ROUNDS,
+        MAX_ANCHOR_GAP_CHARS,
+        MAX_ANCHOR_SPAN_CHARS,
+        MAX_PACKET_FORMULAS,
+        PACKET_OVERLAP_CHARS,
+        SEARCH_MAX_PAGES,
+        SEARCH_PAGE_SIZE,
+        run_formula_agent,
+    )
+
     target_dir = Path(output_dir).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
-    formulas = build_markush_inventory(resolver, doc_id)
-    image_meta = write_structure_images(formulas, target_dir / "structure_images")
+    structures = build_markush_inventory(resolver, doc_id)
+    image_meta = write_structure_images(structures, target_dir / "structure_images")
+    formulas = build_formula_records(structures)
     units = build_description_context_units(resolver, formulas)
-    chunks = chunk_context_units(units)
-    rows, llm_meta = analyze_general_formulas(
+    agent_result = run_formula_agent(
         doc_id,
         formulas,
         units,
-        chunks,
         llm_config=llm_config,
         llm_client=llm_client,
         chat_fn=chat_fn,
@@ -773,7 +517,9 @@ def write_general_formula_outputs(
     )
 
     inventory_path = target_dir / "markush_inventory.json"
-    context_chunks_path = target_dir / "formula_context_chunks.json"
+    task_packets_path = target_dir / "formula_task_packets.json"
+    evidence_ledger_path = target_dir / "formula_evidence_ledger.json"
+    agent_contexts_path = target_dir / "formula_agent_contexts.json"
     analysis_path = target_dir / "general_formula_analysis.json"
     excel_path = target_dir / "general_formula_analysis.xlsx"
     summary_path = target_dir / "general_formula_extraction_summary.json"
@@ -786,23 +532,72 @@ def write_general_formula_outputs(
         "deduplication": {
             "method": "raw_smi_exact",
             "missing_smi": "keep_each_occurrence",
+            "semantic_records": "split_different_labels",
         },
-        "formulas": [formula.public_inventory_row() for formula in formulas],
+        "structures": [structure.public_inventory_row() for structure in structures],
+        "formula_records": [
+            {
+                "formula_id": formula.formula_id,
+                "structure_id": formula.structure_id,
+                "formula_label": formula.formula_label,
+                "occurrences": [occurrence.public_location() for occurrence in formula.occurrences],
+            }
+            for formula in formulas
+        ],
     }
     inventory_path.write_text(
         json.dumps(inventory_payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    context_chunks_path.write_text(
+    task_packets_path.write_text(
         json.dumps(
             {
                 "schema_version": SCHEMA_VERSION,
+                "agent_schema_version": AGENT_SCHEMA_VERSION,
                 "doc_id": doc_id,
                 "navigation_node": CONTEXT_NODE_ID,
-                "target_chars": CHUNK_TARGET_CHARS,
-                "overlap_chars": CHUNK_OVERLAP_CHARS,
+                "parameters": {
+                    "context_target_chars": CONTEXT_TARGET_CHARS,
+                    "packet_overlap_chars": PACKET_OVERLAP_CHARS,
+                    "max_packet_formulas": MAX_PACKET_FORMULAS,
+                    "max_anchor_gap_chars": MAX_ANCHOR_GAP_CHARS,
+                    "max_anchor_span_chars": MAX_ANCHOR_SPAN_CHARS,
+                    "max_agent_rounds": MAX_AGENT_ROUNDS,
+                    "search_page_size": SEARCH_PAGE_SIZE,
+                    "search_max_pages": SEARCH_MAX_PAGES,
+                    "json_retry_count": JSON_RETRY_COUNT,
+                },
+                "packets": [packet.to_dict() for packet in agent_result.packets],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    evidence_ledger_path.write_text(
+        json.dumps(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "agent_schema_version": AGENT_SCHEMA_VERSION,
+                "doc_id": doc_id,
+                "ledger": list(agent_result.ledger.values()),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    agent_contexts_path.write_text(
+        json.dumps(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "agent_schema_version": AGENT_SCHEMA_VERSION,
+                "doc_id": doc_id,
                 "units": [unit.to_dict() for unit in units],
-                "chunks": [chunk.to_dict() for chunk in chunks],
+                "contexts": [context.to_dict() for context in agent_result.contexts],
+                "trace": agent_result.meta["trace"],
             },
             ensure_ascii=False,
             indent=2,
@@ -812,9 +607,9 @@ def write_general_formula_outputs(
     )
     analysis_payload = build_general_formula_analysis_payload(
         doc_id,
-        rows,
-        chunk_count=len(chunks),
-        llm_meta=llm_meta,
+        agent_result.rows,
+        packet_count=len(agent_result.packets),
+        agent_meta=agent_result.meta,
     )
     analysis_path.write_text(
         json.dumps(analysis_payload, ensure_ascii=False, indent=2) + "\n",
@@ -823,21 +618,32 @@ def write_general_formula_outputs(
 
     from uniparser_agent.chemistry.general_formula_excel import write_general_formula_excel
 
-    write_general_formula_excel(rows, excel_path)
-    occurrence_count = sum(len(formula.occurrences) for formula in formulas)
+    write_general_formula_excel(agent_result.rows, excel_path)
+    occurrence_count = sum(len(structure.occurrences) for structure in structures)
     summary_payload = {
         "schema_version": SCHEMA_VERSION,
         "doc_id": doc_id,
-        "formula_count": len(formulas),
+        "structure_count": len(structures),
+        "formula_record_count": len(formulas),
         "occurrence_count": occurrence_count,
         "structure_image_count": len(image_meta),
         "context_unit_count": len(units),
-        "chunk_count": len(chunks),
-        "llm_call_count": llm_meta["llm_call_count"],
-        "llm_errors": llm_meta["llm_errors"],
+        "task_packet_count": len(agent_result.packets),
+        "agent_context_count": len(agent_result.contexts),
+        "complete_formula_count": agent_result.meta["complete_formula_count"],
+        "insufficient_formula_count": agent_result.meta["insufficient_formula_count"],
+        "output_formula_count": agent_result.meta["output_formula_count"],
+        "excluded_formula_count": agent_result.meta["excluded_formula_count"],
+        "review_formula_count": agent_result.meta["review_formula_count"],
+        "merged_formula_count": agent_result.meta["merged_formula_count"],
+        "object_type_counts": agent_result.meta["object_type_counts"],
+        "llm_call_count": agent_result.meta["llm_call_count"],
+        "llm_errors": agent_result.meta["llm_errors"],
         "outputs": {
             "inventory": str(inventory_path),
-            "context_chunks": str(context_chunks_path),
+            "task_packets": str(task_packets_path),
+            "evidence_ledger": str(evidence_ledger_path),
+            "agent_contexts": str(agent_contexts_path),
             "analysis": str(analysis_path),
             "excel": str(excel_path),
         },
@@ -848,13 +654,16 @@ def write_general_formula_outputs(
     )
     return GeneralFormulaOutputs(
         inventory_path=inventory_path,
-        context_chunks_path=context_chunks_path,
+        task_packets_path=task_packets_path,
+        evidence_ledger_path=evidence_ledger_path,
+        agent_contexts_path=agent_contexts_path,
         analysis_path=analysis_path,
         excel_path=excel_path,
         summary_path=summary_path,
+        structure_count=len(structures),
         formula_count=len(formulas),
         occurrence_count=occurrence_count,
         image_count=len(image_meta),
-        chunk_count=len(chunks),
-        llm_call_count=int(llm_meta["llm_call_count"]),
+        packet_count=len(agent_result.packets),
+        llm_call_count=int(agent_result.meta["llm_call_count"]),
     )

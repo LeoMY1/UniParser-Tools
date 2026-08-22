@@ -71,8 +71,8 @@ def write_general_formula_excel(rows: list[dict[str, Any]], output_path: str | P
     workbook.set_properties(
         {
             "title": "Markush通式结构分析表",
-            "subject": "CN专利说明书发明内容中的Markush通式",
-            "comments": "结构图来自UniParser molecule.source；文本上下文仅来自说明书-发明内容。",
+            "subject": "CN专利说明书中的Markush通式",
+            "comments": "结构图来自UniParser molecule.source；文本证据由说明书锚点检索Agent按需获取。",
         }
     )
     worksheet = workbook.add_worksheet(SHEET_NAME)
