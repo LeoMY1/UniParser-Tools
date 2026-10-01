@@ -77,6 +77,8 @@ $env:UNIPARSER_API_KEY="your-api-key"
 
 ### CLI reference
 
+**Async submission:** A transport-successful response containing a non-empty token and `undefined`, `waiting`, or `processing` enters polling directly. Pending states are not saved as trigger errors. The token and submit options are saved in the same result directory before polling. No second upload or `fetch` command is started.
+
 **Pipeline:** every trigger sends `token=None` with `server_generated_token=True`. Local PDFs use direct multipart upload with a 60-second upload window. Images use `trigger_snip`; public URLs use `trigger_url`. The CLI then polls `get_result` only with the token from a successful trigger, fetches `pages_tree` + Markdown, and saves them. Default `sync=true`; `--async` uses `sync=false` on the trigger only.
 
 **Input:** one positional `INPUT` per run—the CLI detects type by path suffix or `http(s)://` URL:
@@ -186,7 +188,7 @@ If the preferred output directory already exists, the CLI creates an available s
 
 Failure JSON may carry the standard `token` field for diagnostics. Never pass that value to `fetch`; use `fetch` only with a token from successful parse output or `trigger_meta.json`.
 
-**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `UPLOAD_ERROR`, `PARSE_ERROR`, `TOKEN_NOT_FOUND`.
+**Common error codes** (stderr JSON): `CONFIG_ERROR`, `INPUT_ERROR`, `UPLOAD_ERROR`, `PARSE_ERROR`.
 
 ## Common issues
 
@@ -197,7 +199,7 @@ On failure, show stderr JSON `error.message`. Do not substitute vision-only read
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_ERROR`                                                           | No API key or `uniparser` not installed                                         | **Configuration** + `pip install "git+https://github.com/dptech-corp/UniParser-Tools.git"`; `uniparser auth --verify`                                                                                  |
 | `UPLOAD_ERROR` / write timeout                                           | Direct file upload failed; any token in the error is diagnostic only            | Re-run `uniparser parse`; the failed trigger cannot be resumed with `fetch`                                                                                  |
-| `TOKEN_NOT_FOUND` / `status: undefined`                                  | The service did not recognize the token after three checks                      | Stop fetching; verify that the token came from successful output or `trigger_meta.json` and is still within the retention period                            |
+| Persistent `status: undefined` | Task state is not available yet | CLI waits 3 seconds between checks until success, error, or its 1800-second polling deadline; it never resubmits the file. |
 | Job not done / long wait / CLI interrupted / `processing` / poll timeout | Sync or poll still running; or local process stopped while server job continues | Wait; do **not** start a second `uniparser parse` for the same input. Use saved `token` with `uniparser fetch --token TOKEN`; files appear only after exit 0  |
 | `502 Bad Gateway` on URL input                                           | Server failed fetching or processing remote PDF                                 | Retry `uniparser parse "same url"` once; or download and `uniparser parse local.pdf`; or `uniparser fetch --token TOKEN` if a prior job exists                |
 | `PARSE_ERROR`                                                            | Server `status: error` at trigger / poll / fetch                                | Read `error.message` and `stage`; match rows above; check `trigger_error.json` / `pages_tree_error.json` / `formatted_error.json` under output dir if present |
@@ -212,8 +214,7 @@ For callbacks, custom `ParseMode`, or SDK examples, see [Common patterns](./refe
 Full CLI reference (flags, examples, JSON details): [CLI README](../../uniparser_tools/cli/README.md) in this repository.
 
 Optional MCP server setup is in the [UniParser-Tools GitHub repo](https://github.com/dptech-corp/UniParser-Tools); it is separate from this CLI workflow.
-Its `uniparser_parse` tool uses the same direct local-PDF upload, server-generated token, successful-trigger-only
-token use, and three-check `undefined` limit as the CLI.
+Its `uniparser_parse` tool still has an independent three-check `undefined` limit; this CLI change does not alter MCP polling.
 
 ## Reference documents
 

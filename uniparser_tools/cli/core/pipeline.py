@@ -11,9 +11,8 @@ from uniparser_tools.cli.core.defaults import (
     PENDING_STATUSES,
     POLL_INTERVAL_SEC,
     POLL_TIMEOUT_SEC,
-    UNDEFINED_MAX_POLLS,
 )
-from uniparser_tools.cli.core.errors import parse_error, token_not_found_error, upload_error
+from uniparser_tools.cli.core.errors import parse_error, upload_error
 from uniparser_tools.cli.core.input import InputKind, ResolvedInput, display_label_for_input
 from uniparser_tools.cli.core.output import print_parsing_status, save_parse_results, write_trigger_meta
 from uniparser_tools.cli.core.parse_options import resolve_trigger_kwargs, serialize_trigger_kwargs
@@ -66,7 +65,6 @@ def trigger_input(
 def poll_until_success(client, token: str) -> dict | int:
     deadline = time.monotonic() + POLL_TIMEOUT_SEC
     last: dict[str, Any] = {}
-    undefined_polls = 0
 
     while time.monotonic() < deadline:
         last = client.get_result(
@@ -81,14 +79,7 @@ def poll_until_success(client, token: str) -> dict | int:
             return last
         if status == "error":
             return parse_error("get_result_poll", last)
-        if status == "undefined":
-            undefined_polls += 1
-            if undefined_polls >= UNDEFINED_MAX_POLLS:
-                return token_not_found_error(token, attempts=undefined_polls)
-            time.sleep(POLL_INTERVAL_SEC)
-            continue
-        if status in PENDING_STATUSES:
-            undefined_polls = 0
+        if status in PENDING_STATUSES or status is None:
             time.sleep(POLL_INTERVAL_SEC)
             continue
         return parse_error("get_result_poll", last)
@@ -165,14 +156,18 @@ def run_parse(
 ) -> dict[str, Any] | int:
     print_parsing_status(display_label_for_input(resolved))
     trigger, stage = trigger_input(client, resolved, trigger_kwargs=trigger_kwargs)
-    if trigger.get("status") != "success":
+    status = trigger.get("status")
+    async_pending = trigger_kwargs.get("sync") is False and status in PENDING_STATUSES
+    http_status = trigger.get("http_status", 200)
+    transport_failed = trigger.get("error_type") or (isinstance(http_status, int) and http_status >= 400)
+    if transport_failed or (status != "success" and not async_pending):
         save_stage_error(out_dir, "trigger_error.json", trigger)
         if stage == "trigger_file" and trigger.get("error_type"):
             return upload_error(stage, trigger)
         return parse_error(stage, trigger)
 
     token = trigger.get("token")
-    if not token:
+    if not isinstance(token, str) or not token.strip():
         return parse_error(stage, {"status": "error", "message": "trigger response missing token"})
 
     meta_path = write_trigger_meta(

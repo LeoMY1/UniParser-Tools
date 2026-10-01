@@ -468,9 +468,9 @@ uniparser --json parse paper.pdf 2>/dev/null | python3 -c "import sys,json; prin
 
 本次直传失败。请重新运行 `parse`；错误结果中的 token 即使存在也仅供诊断，不能用于 `fetch`。
 
-**提示 `TOKEN_NOT_FOUND` 或持续 `status: undefined`**
+**持续 `status: undefined`**
 
-CLI 会在三次检查后停止，不会继续等待 1800 秒。请确认 token 来自成功输出或 `trigger_meta.json`，并检查任务结果是否仍在 24 小时保留期内。
+异步触发返回非空 token 和 `undefined`、`waiting`、`processing` 时，CLI 在同一目录保存提交元数据并直接轮询，不生成触发错误副本。查询每隔3秒进行；连续超过三次 `undefined` 仍等待，直至成功、明确错误或1800秒轮询期限。不会自动重新上传。单次HTTP请求仍受客户端超时约束，轮询期限在请求之间检查。
 
 ---
 
